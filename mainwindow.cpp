@@ -479,19 +479,19 @@ static QWidget* createMaintenancePage(QStackedWidget* &outNestedStack) {
     return page;
 }
 
-static QWidget* createQualityPage(QStackedWidget* &outNestedStack) {
+static QWidget* createProductPage(QStackedWidget* &outNestedStack) {
     QWidget *page = new QWidget();
     QVBoxLayout *layout = new QVBoxLayout(page);
     layout->setContentsMargins(40, 40, 40, 40);
     layout->setSpacing(25);
-    layout->addWidget(new QLabel("Quality Control"));
+    layout->addWidget(new QLabel("Product Management"));
 
     QWidget *actionBar = new QWidget();
     QHBoxLayout *actionLayout = new QHBoxLayout(actionBar);
     actionLayout->setSpacing(12);
 
     outNestedStack = new QStackedWidget();
-    QStringList tabNames = {"Inspection Records", "Non-Conformance Reports", "Audit Management", "Quality Metrics"};
+    QStringList tabNames = {"Product List", "Add Item", "Remove Item"};
     QList<QPushButton*> tabButtons;
 
     for (const auto &name : tabNames) {
@@ -504,21 +504,41 @@ static QWidget* createQualityPage(QStackedWidget* &outNestedStack) {
         QWidget *content = new QWidget();
         QVBoxLayout *cLayout = new QVBoxLayout(content);
         
-        if (name == "Inspection Records") {
-             cLayout->addWidget(createStyledTable("Daily Inspection Records", {"Date", "Batch ID", "Product", "Result"}, {
-                 {"2023-10-25", "B-1001", "Widget A", "PASS"},
-                 {"2023-10-25", "B-1002", "Widget B", "PASS"}
-             }, false));
-        } else if (name == "Non-Conformance Reports") {
-             cLayout->addWidget(createStyledForm("Log Non-Conformance", {{"Report Date:", "YYYY-MM-DD"}, {"Defect Type:", "Dimension / Material"}}, "Submit Report"));
-        } else if (name == "Audit Management") {
-             cLayout->addWidget(createStyledTable("Quality Audits", {"Audit ID", "Area", "Type", "Score"}, {
-                 {"AUD-23-04", "Production Line", "Internal", "98%"}
-             }, true));
-        } else {
-             cLayout->addWidget(createStyledTable("Key Quality Indicators (KQI)", {"Metric", "Target", "Current", "Trend"}, {
-                 {"Defect Rate", "< 1%", "0.8%", "Stable"}
-             }));
+        if (name == "Product List") {
+             cLayout->addWidget(createStyledTable("Current Product Catalog", {"Product Name", "ID", "Category", "Price", "Stock"}, {
+                 {"Widget A", "P-1001", "Components", "$25.00", "150"},
+                 {"Widget B", "P-1002", "Components", "$30.00", "85"},
+                 {"Gadget X", "P-2001", "Electronics", "$199.99", "45"},
+                 {"Gadget Y", "P-2002", "Electronics", "$249.99", "30"},
+                 {"Tool Set", "P-3001", "Tools", "$45.50", "200"},
+                 {"Safety Gear", "P-4001", "Safety", "$15.00", "500"}
+             }, true)); // Actions enabled
+        } else if (name == "Add Item") {
+             cLayout->addWidget(createStyledForm("Add New Product", {
+                 {"Product Name:", "Enter product name"},
+                 {"Product ID / SKU:", "e.g., P-5001"},
+                 {"Category:", "Select Category"},
+                 {"Price:", "0.00"},
+                 {"Description:", "Brief product description"}
+             }, "Add Product"));
+        } else if (name == "Remove Item") {
+             QWidget *removeContainer = new QWidget();
+             QVBoxLayout *rLayout = new QVBoxLayout(removeContainer);
+             rLayout->setContentsMargins(0,0,0,0);
+             
+             // Reuse createStyledForm for consistency
+             rLayout->addWidget(createStyledForm("Remove Product from Inventory", {
+                 {"Product ID to Remove:", "Enter Product ID"},
+                 {"Reason for Removal:", "Obsolescence / Defect / Other"}
+             }, "Delete Product Permanently"));
+             
+             // Add a warning label separately if needed
+             QLabel *warning = new QLabel("Warning: This action cannot be undone.");
+             warning->setStyleSheet("color: #e74c3c; font-style: italic; margin-top: 10px; margin-left: 30px;");
+             rLayout->addWidget(warning);
+             rLayout->addStretch();
+             
+             cLayout->addWidget(removeContainer);
         }
         cLayout->addStretch();
         outNestedStack->addWidget(content);
@@ -617,10 +637,10 @@ MainWindow::MainWindow(QWidget *parent)
     QPushButton *btnFinance = addNav("Financial Management");
     QPushButton *btnInventory = addNav("Inventory Management");
     QPushButton *btnMaintenance = addNav("Maintenance");
-    QPushButton *btnQuality = addNav("Quality Control");
+    QPushButton *btnProduct = addNav("Product");
 
     sidebarLayout->addStretch();
-    sidebarLayout->addWidget(new QLabel("v1.1.0")); // Update version
+    sidebarLayout->addWidget(new QLabel("v1.2.0")); 
 
     stackedWidget = new QStackedWidget();
 
@@ -691,13 +711,13 @@ MainWindow::MainWindow(QWidget *parent)
     stackedWidget->addWidget(homePage);
 
     // --- SUB PAGES & Internal Logic ---
-    QStackedWidget *stackClient, *stackFinance, *stackInventory, *stackMaintenance, *stackQuality;
+    QStackedWidget *stackClient, *stackFinance, *stackInventory, *stackMaintenance, *stackProduct;
     
     stackedWidget->addWidget(createClientPage(stackClient));
     stackedWidget->addWidget(createFinancePage(stackFinance));
     stackedWidget->addWidget(createInventoryPage(stackInventory));
     stackedWidget->addWidget(createMaintenancePage(stackMaintenance));
-    stackedWidget->addWidget(createQualityPage(stackQuality));
+    stackedWidget->addWidget(createProductPage(stackProduct));
 
     // Finish Root Layout
     QWidget *contentArea = new QWidget();
@@ -719,7 +739,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(btnFinance, &QPushButton::clicked, this, [=](){ setActive(2, btnFinance); });
     connect(btnInventory, &QPushButton::clicked, this, [=](){ setActive(3, btnInventory); });
     connect(btnMaintenance, &QPushButton::clicked, this, [=](){ setActive(4, btnMaintenance); });
-    connect(btnQuality, &QPushButton::clicked, this, [=](){ setActive(5, btnQuality); });
+    connect(btnProduct, &QPushButton::clicked, this, [=](){ setActive(5, btnProduct); });
 
     // Quick Action Signal Connections
     connect(btnQClient, &QPushButton::clicked, this, [=](){ 
