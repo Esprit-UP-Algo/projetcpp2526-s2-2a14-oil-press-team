@@ -469,14 +469,15 @@ static QWidget* createMaintenancePage(QStackedWidget* &outNestedStack) {
     QVBoxLayout *layout = new QVBoxLayout(page);
     layout->setContentsMargins(40, 40, 40, 40);
     layout->setSpacing(25);
-    layout->addWidget(new QLabel("Maintenance Management"));
+    layout->addWidget(new QLabel("Maintenance Management - Machines"));
 
     QWidget *actionBar = new QWidget();
     QHBoxLayout *actionLayout = new QHBoxLayout(actionBar);
     actionLayout->setSpacing(12);
 
     outNestedStack = new QStackedWidget();
-    QStringList tabNames = {"Schedule Maintenance", "Work Orders", "Equipment Status", "Maintenance Logs"};
+    // Updated tab names for Machine Management (English)
+    QStringList tabNames = {"Add Machine", "Machine List", "Maintenance History", "Statistics"};
     QList<QPushButton*> tabButtons;
 
     for (const auto &name : tabNames) {
@@ -489,22 +490,33 @@ static QWidget* createMaintenancePage(QStackedWidget* &outNestedStack) {
         QWidget *content = new QWidget();
         QVBoxLayout *cLayout = new QVBoxLayout(content);
         
-        if (name == "Schedule Maintenance") {
-             cLayout->addWidget(createStyledForm("Schedule Maintenance Task", {{"Equipment Name:", "Conveyor Belt A"}, {"Scheduled Date:", "YYYY-MM-DD"}}, "Schedule Task"));
-        } else if (name == "Work Orders") {
-             cLayout->addWidget(createStyledTable("Active Work Orders", {"Order ID", "Equipment", "Issue", "Status"}, {
-                 {"WO-101", "Hydraulic Press", "Oil Leak", "In Progress"},
-                 {"WO-102", "Forklift 3", "Battery Replace", "Pending"}
+        if (name == "Add Machine") {
+             // Form for adding a new machine with the 4 specific fields
+             cLayout->addWidget(createStyledForm("New Machine", {
+                 {"Machine ID:", "Ex: MAC-001"},
+                 {"Machine Name:", "Ex: Hydraulic Press"},
+                 {"Machine Type:", "Ex: Press, Motor, Filter..."},
+                 {"Machine Status:", "Ex: Normal, Broken, Maintenance"}
+             }, "Add Machine"));
+        } else if (name == "Machine List") {
+             // Table listing the machines with the 4 columns + Actions
+             cLayout->addWidget(createStyledTable("Machine List", {"ID", "Name", "Type", "Status"}, {
+                 {"MAC-001", "Press Alpha", "Press", "Normal"},
+                 {"MAC-002", "Motor Beta", "Motor", "Broken"},
+                 {"MAC-003", "Filter Gamma", "Filter", "Maintenance"}
              }, true));
-        } else if (name == "Equipment Status") {
-             cLayout->addWidget(createStyledTable("Equipment Status Overview", {"Equipment ID", "Name", "Location", "Status"}, {
-                 {"EQ-001", "CNC Machine", "Floor 1", "Operational"},
-                 {"EQ-002", "Lathe A", "Floor 1", "Maintenance"}
+        } else if (name == "Maintenance History") {
+             // Keep historical logs
+             cLayout->addWidget(createStyledTable("Intervention History", {"Date", "Machine", "Action", "Result"}, {
+                 {"2023-09-01", "MAC-001", "Belt Replacement", "Success"}
              }, true));
         } else {
-             cLayout->addWidget(createStyledTable("Historical Maintenance Logs", {"Date", "Equipment", "Action", "Result"}, {
-                 {"2023-09-01", "EQ-001", "Belt Replacement", "Fixed"}
-             }, true));
+             // Statistics placeholder
+             cLayout->addWidget(createStyledTable("Machine Statistics", {"Category", "Count", "Percentage"}, {
+                 {"Operational", "15", "75%"},
+                 {"Broken", "2", "10%"},
+                 {"In Maintenance", "3", "15%"}
+             }));
         }
         cLayout->addStretch();
         outNestedStack->addWidget(content);
