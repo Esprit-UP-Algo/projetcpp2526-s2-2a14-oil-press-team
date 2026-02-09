@@ -14,7 +14,14 @@
 #include <QHeaderView>
 #include <QMessageBox>
 #include <QDate>
+#include <QDate>
 #include <QDateTime>
+#include <QScrollArea>
+#include <QPrinter>
+#include <QPainter>
+#include <QFileDialog>
+#include <QDir>
+#include <QFileInfo>
 
 // --- Style Helpers ---
 
@@ -118,17 +125,32 @@ static QWidget* createStatCard(const QString &title, const QString &value, const
     return card;
 }
 
-static QWidget* createStyledForm(const QString &title, const QList<QPair<QString, QString>> &fields, const QString &submitText) {
+static QWidget* createStyledForm(const QString &title, const QList<QPair<QString, QString>> &fields, const QString &submitText, int spacing = 15) {
     QWidget *formContainer = new QWidget();
+    formContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     formContainer->setStyleSheet(".QWidget { background-color: #ffffff; border-radius: 10px; border: 1px solid #eee; }");
     
     QVBoxLayout *outerLayout = new QVBoxLayout(formContainer);
     outerLayout->setContentsMargins(30, 30, 30, 30);
     
+    // --- Scroll Area Setup ---
+    QScrollArea *scrollArea = new QScrollArea();
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setStyleSheet(
+        "QScrollArea { background: transparent; border: none; }"
+        "QWidget { background: transparent; }"
+        "QScrollBar:vertical { border: none; background: #f0f0f0; width: 10px; margin: 0px 0px 0px 0px; border-radius: 5px; }"
+        "QScrollBar::handle:vertical { background: #cdcdcd; min-height: 20px; border-radius: 5px; }"
+        "QScrollBar::handle:vertical:hover { background: #3DDC84; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }"
+        "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }"
+    );
+
     QWidget *formContent = new QWidget();
     QVBoxLayout *layout = new QVBoxLayout(formContent);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(15); 
+    layout->setContentsMargins(0, 0, 10, 0); // Right padding for scrollbar
+    layout->setSpacing(spacing); 
 
     if (!title.isEmpty()) {
         QLabel *titleLabel = new QLabel(title);
@@ -160,7 +182,10 @@ static QWidget* createStyledForm(const QString &title, const QList<QPair<QString
     }
 
     layout->addStretch();
-    outerLayout->addWidget(formContent);
+    
+    scrollArea->setWidget(formContent);
+    outerLayout->addWidget(scrollArea);
+
     return formContainer;
 }
 
@@ -505,29 +530,79 @@ static QWidget* createProductPage(QStackedWidget* &outNestedStack) {
         QVBoxLayout *cLayout = new QVBoxLayout(content);
         
         if (name == "Product List") {
-             cLayout->addWidget(createStyledTable("Current Product Catalog", {"Product Name", "ID", "Category", "Price", "Stock"}, {
-                 {"Widget A", "P-1001", "Components", "$25.00", "150"},
-                 {"Widget B", "P-1002", "Components", "$30.00", "85"},
-                 {"Gadget X", "P-2001", "Electronics", "$199.99", "45"},
-                 {"Gadget Y", "P-2002", "Electronics", "$249.99", "30"},
-                 {"Tool Set", "P-3001", "Tools", "$45.50", "200"},
-                 {"Safety Gear", "P-4001", "Safety", "$15.00", "500"}
-             }, true)); 
+             // Container for list page to hold button + table
+             QWidget *listPageWidget = new QWidget();
+             QVBoxLayout *listPageLayout = new QVBoxLayout(listPageWidget);
+             listPageLayout->setContentsMargins(0,0,0,0);
+             listPageLayout->setSpacing(10);
+
+             // Add "PRINT PDF" button aligned to right
+             QPushButton *btnPrint = new QPushButton("PRINT PDF");
+             btnPrint->setStyleSheet(getButtonStyle());
+             btnPrint->setCursor(Qt::PointingHandCursor);
+             btnPrint->setFixedWidth(150);
+             listPageLayout->addWidget(btnPrint, 0, Qt::AlignRight);
+
+             // Create table
+             QWidget *tableWidget = createStyledTable("Current Product Catalog", 
+                {"ID Container", "Date Pressage", "Capacité", "Ref Testeur", "Qualité", "Viscosity", "Color", "Ref Press"}, {
+                 {"CONT-001", "2023-10-25", "500L", "TEST-A1", "Premium", "0.85", "Golden", "PRESS-X1"},
+                 {"CONT-002", "2023-10-26", "200L", "TEST-B2", "Standard", "0.90", "Yellow", "PRESS-X2"},
+                 {"CONT-003", "2023-10-27", "1000L", "TEST-A1", "Premium", "0.84", "Golden", "PRESS-X1"}
+             }, true);
+             
+             listPageLayout->addWidget(tableWidget);
+
+             // Connect print button
+             QObject::connect(btnPrint, &QPushButton::clicked, [=]() {
+                 QString fileName = QFileDialog::getSaveFileName(nullptr, "Export PDF", "", "PDF Files (*.pdf)");
+                 if (fileName.isEmpty()) return;
+                 if (QFileInfo(fileName).suffix().isEmpty()) fileName.append(".pdf");
+
+                 QPrinter printer(QPrinter::HighResolution);
+                 printer.setOutputFormat(QPrinter::PdfFormat);
+                 printer.setPageSize(QPageSize(QPageSize::A4));
+                 printer.setOutputFileName(fileName);
+
+                 QPainter painter;
+                 if (!painter.begin(&printer)) {
+                     QMessageBox::warning(nullptr, "Error", "Failed to open PDF for writing.");
+                     return;
+                 }
+
+                 // Simple scaling to fit width
+                 double xscale = printer.pageRect(QPrinter::DevicePixel).width() / double(tableWidget->width());
+                 double yscale = printer.pageRect(QPrinter::DevicePixel).height() / double(tableWidget->height());
+                 double scale = qMin(xscale, yscale);
+                 
+                 // If the table is smaller than the page, don't scale up too much, but always scale down
+                 if (scale > 1.0) scale = 1.0; 
+
+                 painter.scale(scale, scale);
+                 tableWidget->render(&painter);
+                 painter.end();
+                 
+                 QMessageBox::information(nullptr, "Success", "PDF Exported Successfully!");
+             });
+
+             cLayout->addWidget(listPageWidget); 
         } else if (name == "Add Item") {
              cLayout->addWidget(createStyledForm("Add New Product", {
-                 {"Product Name:", "Enter product name"},
-                 {"Product ID / SKU:", "e.g., P-5001"},
-                 {"Category:", "Select Category"},
-                 {"Price:", "0.00"},
-                 {"Description:", "Brief product description"}
-             }, "Add Product"));
+                 {"ID Container:", "Enter Container ID"},
+                 {"Date Pressage:", "YYYY-MM-DD"},
+                 {"Capacité:", "e.g., 500L"},
+                 {"Ref Testeur:", "Enter Tester Ref"},
+                 {"Qualité:", "Enter Quality Grade"},
+                 {"Viscosity:", "Enter Viscosity"},
+                 {"Color:", "Enter Color"},
+                 {"Ref Press:", "Enter Press Ref"}
+             }, "Add Product", 25));
         } else if (name == "Remove Item") {
              QWidget *removeContainer = new QWidget();
              QVBoxLayout *rLayout = new QVBoxLayout(removeContainer);
              rLayout->setContentsMargins(0,0,0,0);
              rLayout->addWidget(createStyledForm("Remove Product from Inventory", {
-                 {"Product ID to Remove:", "Enter Product ID"},
-                 {"Reason for Removal:", "Obsolescence / Defect / Other"}
+                 {"ID Container:", "Enter Container ID to Remove"}
              }, "Delete Product Permanently"));
              QLabel *warning = new QLabel("Warning: This action cannot be undone.");
              warning->setStyleSheet("color: #e74c3c; font-style: italic; margin-top: 10px; margin-left: 30px;");
