@@ -232,15 +232,12 @@ static QWidget* createStyledTable(const QString &title, const QStringList &heade
             actionLayout->setContentsMargins(4, 4, 4, 4);
             actionLayout->setSpacing(8);
             
-            QPushButton *btnEdit = new QPushButton("Edit");
-            btnEdit->setCursor(Qt::PointingHandCursor);
-            btnEdit->setStyleSheet("QPushButton { background-color: #3498db; color: white; border: none; border-radius: 4px; padding: 6px 10px; font-size: 11px; font-weight: bold; } QPushButton:hover { background-color: #2980b9; }");
             
             QPushButton *btnDelete = new QPushButton("Delete");
             btnDelete->setCursor(Qt::PointingHandCursor);
             btnDelete->setStyleSheet("QPushButton { background-color: #e74c3c; color: white; border: none; border-radius: 4px; padding: 6px 10px; font-size: 11px; font-weight: bold; } QPushButton:hover { background-color: #c0392b; }");
 
-            actionLayout->addWidget(btnEdit);
+            // actionLayout->addWidget(btnEdit); // Removed Edit button as requested
             actionLayout->addWidget(btnDelete);
             actionLayout->addStretch();
             
@@ -270,14 +267,14 @@ static QWidget* createClientPage(QStackedWidget* &outNestedStack) {
     layout->setContentsMargins(40, 40, 40, 40);
     layout->setSpacing(25);
     
-    layout->addWidget(new QLabel("Client Management")); 
+    layout->addWidget(new QLabel("Order Management")); 
     
     QWidget *actionBar = new QWidget();
     QHBoxLayout *actionLayout = new QHBoxLayout(actionBar);
     actionLayout->setSpacing(12);
 
     outNestedStack = new QStackedWidget();
-    QStringList tabNames = {"Add New Client", "Edit Client Profile", "Client History", "Client Reports"};
+    QStringList tabNames = {"Add Order", "Edit Order", "Order History", "Statistics"};
     QList<QPushButton*> tabButtons;
 
     for (const auto &name : tabNames) {
@@ -290,15 +287,15 @@ static QWidget* createClientPage(QStackedWidget* &outNestedStack) {
         QWidget *content = new QWidget();
         QVBoxLayout *cLayout = new QVBoxLayout(content);
         
-        if (name == "Add New Client") {
-             cLayout->addWidget(createStyledForm("New Client Registration", {
+        if (name == "Add Order") {
+             cLayout->addWidget(createStyledForm("New Order Registration", {
                 {"Company Name:", "Enter company name"},
                 {"Contact Person:", "Enter contact person name"},
                 {"Email Address:", "email@example.com"},
                 {"Phone Number:", "+1 (555) ..."},
                 {"Address:", "Street, City, Zip"}
             }, "Register Client"));
-        } else if (name == "Edit Client Profile") {
+        } else if (name == "Edit Order") {
             QWidget *searchBar = new QWidget();
             searchBar->setStyleSheet(getCardStyle());
             QHBoxLayout *sLayout = new QHBoxLayout(searchBar);
@@ -313,7 +310,7 @@ static QWidget* createClientPage(QStackedWidget* &outNestedStack) {
             cLayout->addWidget(searchBar);
             cLayout->addSpacing(15);
             cLayout->addWidget(createStyledForm("Edit Details", {{"Company Name:", "Acme Corp"}, {"Email:", "contact@acme.com"}}, "Update Profile"));
-        } else if (name == "Client History") {
+        } else if (name == "Order History") {
             cLayout->addWidget(createStyledTable("Client Interaction History", {"Date", "Client", "Action", "Notes"}, {
                 {"2023-10-25", "Acme Corp", "Meeting", "Discussed Q4 Renewal"},
                 {"2023-10-24", "Globex Inc", "Support", "Fixed login API issue"},
@@ -321,10 +318,28 @@ static QWidget* createClientPage(QStackedWidget* &outNestedStack) {
                 {"2023-10-20", "Umbrella Corp", "Call", "Security audit check"}
             }, true)); // Actions enabled
         } else {
-             cLayout->addWidget(createStyledTable("Client Growth Reports", {"Period", "New Clients", "Churn Rate", "Revenue"}, {
+             // Container for statistics page to hold button + table
+             QWidget *statsPageWidget = new QWidget();
+             QVBoxLayout *statsPageLayout = new QVBoxLayout(statsPageWidget);
+             statsPageLayout->setContentsMargins(0,0,0,0);
+             statsPageLayout->setSpacing(10);
+
+             // Add "PRINT PDF" button aligned to right (Inactive/Non-functional as requested)
+             QPushButton *btnPrint = new QPushButton("PRINT PDF");
+             btnPrint->setStyleSheet(getButtonStyle());
+             // btnPrint->setCursor(Qt::PointingHandCursor); // Removed to signify inactivity if needed, but keeping style uniform
+             btnPrint->setFixedWidth(150);
+             // btnPrint->setEnabled(false); // Can uncomment if "inactif" meant disabled. For now, just non-functional.
+             
+             statsPageLayout->addWidget(btnPrint, 0, Qt::AlignRight);
+
+             QWidget *tableWidget = createStyledTable("Statistics", {"Period", "New Clients", "Churn Rate", "Revenue"}, {
                  {"Q3 2023", "45", "2.1%", "$120,000"},
                  {"Q2 2023", "52", "1.5%", "$145,000"}
-             }));
+             });
+             
+             statsPageLayout->addWidget(tableWidget);
+             cLayout->addWidget(statsPageWidget);
         }
         cLayout->addStretch();
         outNestedStack->addWidget(content);
@@ -554,36 +569,8 @@ static QWidget* createProductPage(QStackedWidget* &outNestedStack) {
              listPageLayout->addWidget(tableWidget);
 
              // Connect print button
-             QObject::connect(btnPrint, &QPushButton::clicked, [=]() {
-                 QString fileName = QFileDialog::getSaveFileName(nullptr, "Export PDF", "", "PDF Files (*.pdf)");
-                 if (fileName.isEmpty()) return;
-                 if (QFileInfo(fileName).suffix().isEmpty()) fileName.append(".pdf");
-
-                 QPrinter printer(QPrinter::HighResolution);
-                 printer.setOutputFormat(QPrinter::PdfFormat);
-                 printer.setPageSize(QPageSize(QPageSize::A4));
-                 printer.setOutputFileName(fileName);
-
-                 QPainter painter;
-                 if (!painter.begin(&printer)) {
-                     QMessageBox::warning(nullptr, "Error", "Failed to open PDF for writing.");
-                     return;
-                 }
-
-                 // Simple scaling to fit width
-                 double xscale = printer.pageRect(QPrinter::DevicePixel).width() / double(tableWidget->width());
-                 double yscale = printer.pageRect(QPrinter::DevicePixel).height() / double(tableWidget->height());
-                 double scale = qMin(xscale, yscale);
-                 
-                 // If the table is smaller than the page, don't scale up too much, but always scale down
-                 if (scale > 1.0) scale = 1.0; 
-
-                 painter.scale(scale, scale);
-                 tableWidget->render(&painter);
-                 painter.end();
-                 
-                 QMessageBox::information(nullptr, "Success", "PDF Exported Successfully!");
-             });
+             // PDF Export functionality removed as per request
+             // The button remains visible but inactive
 
              cLayout->addWidget(listPageWidget); 
         } else if (name == "Add Item") {
@@ -767,7 +754,7 @@ MainWindow::MainWindow(QWidget *parent)
     menuLabel->setStyleSheet("color: #444; font-weight: bold; font-size: 10px; margin-top: 10px; margin-bottom: 5px; padding-left: 10px;");
     sidebarLayout->addWidget(menuLabel);
 
-    QPushButton *btnClient = addNav("Client Management");
+    QPushButton *btnClient = addNav("Order Management");
     QPushButton *btnFinance = addNav("Financial Management");
     QPushButton *btnInventory = addNav("Inventory Management");
     QPushButton *btnMaintenance = addNav("Maintenance");
