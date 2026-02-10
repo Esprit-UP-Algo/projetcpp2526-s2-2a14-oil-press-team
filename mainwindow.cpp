@@ -22,147 +22,6 @@
 #include <QFileDialog>
 #include <QDir>
 #include <QFileInfo>
-#include <QDialog>
-#include <QFormLayout>
-#include <QDialogButtonBox>
-#include <QPainter>
-
-// --- Custom Bar Chart Widget (No Dependencies) ---
-// --- Custom Bar Chart Widget (No Dependencies) ---
-class GenericBarChart : public QWidget {
-
-public:
-    struct BarData {
-        QString label;
-        double value;
-        QColor color;
-    };
-
-    GenericBarChart(const QString &title, QWidget *parent = nullptr) : QWidget(parent), m_title(title) {
-        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-        setMinimumHeight(300);
-    }
-
-    void addBar(const QString &label, double value, const QColor &color) {
-        m_bars.append({label, value, color});
-        update();
-    }
-
-protected:
-    void paintEvent(QPaintEvent *event) override {
-        Q_UNUSED(event);
-        QPainter painter(this);
-        painter.setRenderHint(QPainter::Antialiasing);
-
-        // Background
-        painter.fillRect(rect(), Qt::white); // White background for clarity
-
-        if (m_bars.isEmpty()) return;
-
-        // --- Layout Constants ---
-        int leftMargin = 80;  // Space for Y-axis labels
-        int bottomMargin = 50; // Space for X-axis labels
-        int topMargin = 60;   // Space for Title
-        int rightMargin = 20;
-
-        int chartWidth = width() - leftMargin - rightMargin;
-        int chartHeight = height() - topMargin - bottomMargin;
-
-        // --- Calculate Range ---
-        double maxVal = 0;
-        for(const auto &bar : m_bars) maxVal = qMax(maxVal, bar.value);
-        if (maxVal == 0) maxVal = 1;
-        // Round up to nice number for Y-axis
-        double niceMax = maxVal * 1.1; 
-
-        // --- Draw Y-Axis (Scales & Grid) ---
-        int gridLines = 5;
-        painter.setFont(QFont("Segoe UI", 9));
-        QPen gridPen(QColor("#e0e0e0")); // Light grey for grid
-        gridPen.setStyle(Qt::DashLine);
-        
-        for (int i = 0; i <= gridLines; ++i) {
-            double value = (niceMax / gridLines) * i;
-            int y = topMargin + chartHeight - (int)((value / niceMax) * chartHeight);
-
-            // Grid Line
-            painter.setPen(gridPen);
-            painter.drawLine(leftMargin, y, width() - rightMargin, y);
-
-            // Scale Label
-            painter.setPen(QColor("#666666"));
-            // Format number (k for thousands, M for millions if needed, or just standard)
-            QString label = QString::number(value, 'f', 0);
-            if (value >= 1000000) label = QString::number(value / 1000000.0, 'f', 1) + "M";
-            else if (value >= 1000) label = QString::number(value / 1000.0, 'f', 0) + "k";
-            
-            painter.drawText(QRect(0, y - 10, leftMargin - 10, 20), Qt::AlignRight | Qt::AlignVCenter, label);
-        }
-
-        // --- Draw X-Axis Line ---
-        painter.setPen(QPen(QColor("#333333"), 2));
-        painter.drawLine(leftMargin, topMargin + chartHeight, width() - rightMargin, topMargin + chartHeight);
-
-        // --- Draw Bars ---
-        int count = m_bars.size();
-        int availableSpace = chartWidth / count;
-        int barWidth = qMin(availableSpace - 20, 80); // Max width 80px
-        int spacing = (chartWidth - (count * barWidth)) / (count + 1);
-        if (count == 1) spacing = (chartWidth - barWidth) / 2;
-
-        for (int i = 0; i < count; ++i) {
-            const auto &bar = m_bars[i];
-            int barH = (int)((bar.value / niceMax) * chartHeight);
-            
-            // Distribute evenly
-            int x = leftMargin + (i * availableSpace) + (availableSpace - barWidth) / 2; 
-            int y = topMargin + chartHeight - barH;
-
-            QRect barRect(x, y, barWidth, barH);
-
-            // Draw Bar (Flat Color, No Gradient)
-            painter.setBrush(bar.color);
-            painter.setPen(Qt::NoPen);
-            painter.drawRect(barRect); // Sharp corners for technical look, or rounded if preferred
-
-            // Draw Value on Top
-            painter.setPen(QColor("#000000"));
-            painter.setFont(QFont("Segoe UI", 10, QFont::Bold));
-            
-            // Fix: Use 'f' format to avoid scientific notation (e.g., 1.25e+06)
-            // Precision 0 means no decimals (1250500)
-            QString valText = QString::number(bar.value, 'f', 0);
-            
-            // Format large numbers with commas for readability (manual poor-man's locale)
-            if (bar.value >= 1000) {
-                 // Insert commas every 3 digits from right
-                 int pos = valText.length() - 3;
-                 while (pos > 0) {
-                     valText.insert(pos, ",");
-                     pos -= 3;
-                 }
-            }
-
-            painter.drawText(QRect(x - 10, y - 25, barWidth + 20, 20), Qt::AlignCenter, valText);
-
-            // Draw X-Axis Label
-            painter.setPen(QColor("#333333"));
-            painter.setFont(QFont("Segoe UI", 10)); // Regular font for labels
-            QRect labelRect(x - 20, topMargin + chartHeight + 10, barWidth + 40, 40); // Allow wrapping
-            painter.drawText(labelRect, Qt::AlignCenter | Qt::TextWordWrap, bar.label);
-        }
-        
-        // --- Draw Title ---
-        painter.setFont(QFont("Segoe UI", 12, QFont::Bold));
-        painter.setPen(QColor("#1a1a1a"));
-        painter.drawText(QRect(0, 10, width(), 30), Qt::AlignCenter, m_title);
-    }
-
-private:
-    QString m_title;
-    QList<BarData> m_bars;
-};
-
 
 // --- Style Helpers ---
 
@@ -266,13 +125,32 @@ static QWidget* createStatCard(const QString &title, const QString &value, const
     return card;
 }
 
-static QWidget* createStyledForm(const QString &title, const QList<QPair<QString, QString>> &fields, const QString &submitText, int spacing = 15, bool useScroll = true) {
-    // 1. Create content widget
+static QWidget* createStyledForm(const QString &title, const QList<QPair<QString, QString>> &fields, const QString &submitText, int spacing = 15) {
+    QWidget *formContainer = new QWidget();
+    formContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    formContainer->setStyleSheet(".QWidget { background-color: #ffffff; border-radius: 10px; border: 1px solid #eee; }");
+    
+    QVBoxLayout *outerLayout = new QVBoxLayout(formContainer);
+    outerLayout->setContentsMargins(30, 30, 30, 30);
+    
+    // --- Scroll Area Setup ---
+    QScrollArea *scrollArea = new QScrollArea();
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setStyleSheet(
+        "QScrollArea { background: transparent; border: none; }"
+        "QWidget { background: transparent; }"
+        "QScrollBar:vertical { border: none; background: #f0f0f0; width: 10px; margin: 0px 0px 0px 0px; border-radius: 5px; }"
+        "QScrollBar::handle:vertical { background: #cdcdcd; min-height: 20px; border-radius: 5px; }"
+        "QScrollBar::handle:vertical:hover { background: #3DDC84; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }"
+        "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }"
+    );
+
     QWidget *formContent = new QWidget();
     QVBoxLayout *layout = new QVBoxLayout(formContent);
-    int rightMargin = useScroll ? 10 : 0;
-    layout->setContentsMargins(0, 0, rightMargin, 0); 
-    layout->setSpacing(spacing);
+    layout->setContentsMargins(0, 0, 10, 0); // Right padding for scrollbar
+    layout->setSpacing(spacing); 
 
     if (!title.isEmpty()) {
         QLabel *titleLabel = new QLabel(title);
@@ -304,35 +182,9 @@ static QWidget* createStyledForm(const QString &title, const QList<QPair<QString
     }
 
     layout->addStretch();
-
-    // 2. Create container
-    QWidget *formContainer = new QWidget();
-    formContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    formContainer->setStyleSheet(".QWidget { background-color: #ffffff; border-radius: 10px; border: 1px solid #eee; }");
     
-    QVBoxLayout *outerLayout = new QVBoxLayout(formContainer);
-    outerLayout->setContentsMargins(30, 30, 30, 30);
-
-    if (useScroll) {
-        QScrollArea *scrollArea = new QScrollArea();
-        scrollArea->setWidgetResizable(true);
-        scrollArea->setFrameShape(QFrame::NoFrame);
-        scrollArea->setStyleSheet(
-            "QScrollArea { background: transparent; border: none; }"
-            "QWidget { background: transparent; }"
-            "QScrollBar:vertical { border: none; background: #f0f0f0; width: 10px; margin: 0px 0px 0px 0px; border-radius: 5px; }"
-            "QScrollBar::handle:vertical { background: #cdcdcd; min-height: 20px; border-radius: 5px; }"
-            "QScrollBar::handle:vertical:hover { background: #3DDC84; }"
-            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }"
-            "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }"
-        );
-        scrollArea->setWidget(formContent);
-        outerLayout->addWidget(scrollArea);
-    } else {
-        formContent->setAttribute(Qt::WA_TranslucentBackground);
-        formContent->setStyleSheet("background: transparent;");
-        outerLayout->addWidget(formContent);
-    }
+    scrollArea->setWidget(formContent);
+    outerLayout->addWidget(scrollArea);
 
     return formContainer;
 }
@@ -357,12 +209,7 @@ static QWidget* createStyledTable(const QString &title, const QStringList &heade
     table->setColumnCount(finalHeaders.size());
     table->setHorizontalHeaderLabels(finalHeaders);
     table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    if (showActions) {
-        table->horizontalHeader()->setSectionResizeMode(finalHeaders.size() - 1, QHeaderView::ResizeToContents);
-    }
-    table->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     table->verticalHeader()->setVisible(false);
-    table->verticalHeader()->setDefaultSectionSize(60); // Increased height
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setAlternatingRowColors(true);
@@ -382,120 +229,17 @@ static QWidget* createStyledTable(const QString &title, const QStringList &heade
         if (showActions) {
             QWidget *actionWidget = new QWidget();
             QHBoxLayout *actionLayout = new QHBoxLayout(actionWidget);
-            // Increased right margin significantly to prevent clipping
-            actionLayout->setContentsMargins(2, 2, 30, 2); 
-            actionLayout->setSpacing(20); // Increased spacing
-            actionLayout->setAlignment(Qt::AlignCenter); // Ensure vertical centering
+            actionLayout->setContentsMargins(4, 4, 4, 4);
+            actionLayout->setSpacing(8);
             
-            QPushButton *btnModify = new QPushButton("Modify");
-            btnModify->setCursor(Qt::PointingHandCursor);
-            btnModify->setMinimumWidth(80);
-            btnModify->setFixedHeight(28); // Reduced height
-            btnModify->setStyleSheet(
-                "QPushButton {"
-                "background-color: #ffffff;"
-                "color: #333333;"
-                "border: 1px solid #cccccc;"
-                "border-radius: 6px;"
-                "padding: 0px 8px;"
-                "font-size: 13px;" // Matched to tab font size
-                "font-weight: 600;" // Matched to tab font weight
-                "} "
-                "QPushButton:hover { border-color: #aaaaaa; color: #000000; background-color: #f6f6f6; }"
-                "QPushButton:pressed { background-color: #e6e6e6; }"
-            );
-
+            
             QPushButton *btnDelete = new QPushButton("Delete");
             btnDelete->setCursor(Qt::PointingHandCursor);
-            btnDelete->setMinimumWidth(80);
-            btnDelete->setFixedHeight(28); // Reduced height
-            btnDelete->setStyleSheet(
-                "QPushButton {"
-                "background-color: #ffffff;"
-                "color: #d32f2f;"
-                "border: 1px solid #d32f2f;"
-                "border-radius: 6px;"
-                "padding: 0px 8px;"
-                "font-size: 13px;" // Matched to tab font size
-                "font-weight: 600;" // Matched to tab font weight
-                "} "
-                "QPushButton:hover { background-color: #ffebee; border-color: #b71c1c; color: #b71c1c; }"
-                "QPushButton:pressed { background-color: #ffcdd2; }"
-            );
+            btnDelete->setStyleSheet("QPushButton { background-color: #e74c3c; color: white; border: none; border-radius: 4px; padding: 6px 10px; font-size: 11px; font-weight: bold; } QPushButton:hover { background-color: #c0392b; }");
 
-            actionLayout->addWidget(btnModify);
+            // actionLayout->addWidget(btnEdit); // Removed Edit button as requested
             actionLayout->addWidget(btnDelete);
             actionLayout->addStretch();
-            
-            // Capture row data for the modify dialog
-            QStringList rowData = data[i];
-            QStringList colHeaders = headers;
-            QObject::connect(btnModify, &QPushButton::clicked, [rowData, colHeaders, table, i]() {
-                QDialog *dialog = new QDialog(table->window());
-                dialog->setWindowTitle("Modify Item");
-                dialog->setMinimumWidth(450);
-                dialog->setStyleSheet(
-                    "QDialog { background-color: #ffffff; }"
-                    "QLabel { font-size: 14px; font-weight: 700; color: #333; }"
-                    "QLineEdit { background-color: #fcfcfc; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px 14px; font-size: 14px; color: #333; min-height: 35px; }"
-                    "QLineEdit:focus { border: 2px solid #3DDC84; background-color: #ffffff; }"
-                );
-                
-                QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-                dialogLayout->setContentsMargins(30, 30, 30, 30);
-                dialogLayout->setSpacing(15);
-                
-                QLabel *titleLabel = new QLabel("Modify Item");
-                titleLabel->setStyleSheet("font-size: 22px; font-weight: 800; color: #1a1a1a; margin-bottom: 10px;");
-                dialogLayout->addWidget(titleLabel);
-                
-                QList<QLineEdit*> inputs;
-                for (int c = 0; c < rowData.size() && c < colHeaders.size(); ++c) {
-                    QLabel *lbl = new QLabel(colHeaders[c] + ":");
-                    QLineEdit *input = new QLineEdit(rowData[c]);
-                    dialogLayout->addWidget(lbl);
-                    dialogLayout->addWidget(input);
-                    inputs.append(input);
-                }
-                
-                dialogLayout->addSpacing(20);
-                
-                QHBoxLayout *btnLayout = new QHBoxLayout();
-                btnLayout->setSpacing(15);
-                
-                QPushButton *cancelBtn = new QPushButton("Cancel");
-                cancelBtn->setCursor(Qt::PointingHandCursor);
-                cancelBtn->setFixedHeight(45);
-                cancelBtn->setStyleSheet(
-                    "QPushButton { background-color: #ffffff; color: #555; border: 1px solid #ddd; border-radius: 8px; padding: 12px 24px; font-size: 14px; font-weight: 600; } "
-                    "QPushButton:hover { border-color: #bbb; color: #333; }"
-                );
-                
-                QPushButton *saveBtn = new QPushButton("Save Changes");
-                saveBtn->setCursor(Qt::PointingHandCursor);
-                saveBtn->setFixedHeight(45);
-                saveBtn->setStyleSheet(
-                    "QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3DDC84, stop:1 #2DB66F); color: #FFFFFF; border: none; border-radius: 8px; padding: 12px 24px; font-size: 14px; font-weight: 700; } "
-                    "QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4EED95, stop:1 #3DDC84); }"
-                    "QPushButton:pressed { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2DB66F, stop:1 #228B5A); }"
-                );
-                
-                btnLayout->addWidget(cancelBtn);
-                btnLayout->addWidget(saveBtn);
-                dialogLayout->addLayout(btnLayout);
-                
-                QObject::connect(cancelBtn, &QPushButton::clicked, dialog, &QDialog::reject);
-                QObject::connect(saveBtn, &QPushButton::clicked, [dialog, inputs, table, i]() {
-                    // Update the table with the new values
-                    for (int c = 0; c < inputs.size(); ++c) {
-                        table->setItem(i, c, new QTableWidgetItem(inputs[c]->text()));
-                    }
-                    dialog->accept();
-                });
-                
-                dialog->exec();
-                dialog->deleteLater();
-            });
             
             table->setCellWidget(i, finalHeaders.size() - 1, actionWidget);
         }
@@ -568,24 +312,34 @@ static QWidget* createClientPage(QStackedWidget* &outNestedStack) {
             cLayout->addWidget(createStyledForm("Edit Details", {{"Company Name:", "Acme Corp"}, {"Email:", "contact@acme.com"}}, "Update Profile"));
         } else if (name == "Order History") {
             cLayout->addWidget(createStyledTable("Client Interaction History", {"Date", "Client", "Action", "Notes"}, {
-                {"2023-10-25", "Trattoria Luigi", "Meeting", "Discussed Winter Supply"},
-                {"2023-10-24", "Oileria Bella", "Support", "Clarified acidity levels"},
-                {"2023-10-22", "Organic Market", "Order", "Placed bulk order #992"},
-                {"2023-10-20", "Gourmet Foods", "Call", "Quality check inquiry"}
+                {"2023-10-25", "Acme Corp", "Meeting", "Discussed Q4 Renewal"},
+                {"2023-10-24", "Globex Inc", "Support", "Fixed login API issue"},
+                {"2023-10-22", "Soylent Corp", "Order", "Placed bulk order #992"},
+                {"2023-10-20", "Umbrella Corp", "Call", "Security audit check"}
             }, true)); // Actions enabled
         } else {
-             // Client Statistics Chart
-             GenericBarChart *chart = new GenericBarChart("New Client Acquisition (Q2 vs Q3)");
-             chart->addBar("Q2 2023", 45, QColor(52, 152, 219)); // Blue
-             chart->addBar("Q3 2023", 52, QColor(61, 220, 132)); // Green
+             // Container for statistics page to hold button + table
+             QWidget *statsPageWidget = new QWidget();
+             QVBoxLayout *statsPageLayout = new QVBoxLayout(statsPageWidget);
+             statsPageLayout->setContentsMargins(0,0,0,0);
+             statsPageLayout->setSpacing(10);
 
-             QWidget *chartContainer = new QWidget();
-             chartContainer->setStyleSheet(getCardStyle());
-             QVBoxLayout *containerLayout = new QVBoxLayout(chartContainer);
-             containerLayout->setContentsMargins(20, 20, 20, 20);
-             containerLayout->addWidget(chart);
+             // Add "PRINT PDF" button aligned to right (Inactive/Non-functional as requested)
+             QPushButton *btnPrint = new QPushButton("PRINT PDF");
+             btnPrint->setStyleSheet(getButtonStyle());
+             // btnPrint->setCursor(Qt::PointingHandCursor); // Removed to signify inactivity if needed, but keeping style uniform
+             btnPrint->setFixedWidth(150);
+             // btnPrint->setEnabled(false); // Can uncomment if "inactif" meant disabled. For now, just non-functional.
+             
+             statsPageLayout->addWidget(btnPrint, 0, Qt::AlignRight);
 
-             cLayout->addWidget(chartContainer);
+             QWidget *tableWidget = createStyledTable("Statistics", {"Period", "New Clients", "Churn Rate", "Revenue"}, {
+                 {"Q3 2023", "45", "2.1%", "$120,000"},
+                 {"Q2 2023", "52", "1.5%", "$145,000"}
+             });
+             
+             statsPageLayout->addWidget(tableWidget);
+             cLayout->addWidget(statsPageWidget);
         }
         cLayout->addStretch();
         outNestedStack->addWidget(content);
@@ -626,59 +380,23 @@ static QWidget* createFinancePage(QStackedWidget* &outNestedStack) {
         QVBoxLayout *cLayout = new QVBoxLayout(content);
         
         if (name == "Create Invoice") {
-             // Add Print PDF Button
-             QPushButton *btnPrint = new QPushButton("PRINT PDF");
-             btnPrint->setStyleSheet(getButtonStyle());
-             btnPrint->setCursor(Qt::PointingHandCursor);
-             btnPrint->setFixedWidth(150);
-             cLayout->addWidget(btnPrint, 0, Qt::AlignRight);
-
              cLayout->addWidget(createStyledForm("Invoice Creation Form", {{"Customer Name:", "Enter customer name"}, {"Amount:", "0.00"}, {"Date:", "YYYY-MM-DD"}}, "Submit Invoice"));
         } else if (name == "View Transactions") {
-             // Add Print PDF Button
-             QPushButton *btnPrint = new QPushButton("PRINT PDF");
-             btnPrint->setStyleSheet(getButtonStyle());
-             btnPrint->setCursor(Qt::PointingHandCursor);
-             btnPrint->setFixedWidth(150);
-             cLayout->addWidget(btnPrint, 0, Qt::AlignRight);
-
              cLayout->addWidget(createStyledTable("Recent Transactions", {"ID", "Date", "Description", "Amount", "Status"}, {
-                 {"TRX-1024", "2023-10-25", "Packaging Supplies", "$150.00", "Completed"},
-                 {"TRX-1023", "2023-10-24", "Client Payment - Luigi", "$1,200.00", "Completed"},
-                 {"TRX-1022", "2023-10-24", "Organic Certification", "$340.50", "Pending"}
+                 {"TRX-1024", "2023-10-25", "Office Supplies", "$150.00", "Completed"},
+                 {"TRX-1023", "2023-10-24", "Client Payment - Acme", "$1,200.00", "Completed"},
+                 {"TRX-1022", "2023-10-24", "Server Hosting", "$340.50", "Pending"}
              }, true));
         } else if (name == "Expense Tracking") {
-             // Add Print PDF Button
-             QPushButton *btnPrint = new QPushButton("PRINT PDF");
-             btnPrint->setStyleSheet(getButtonStyle());
-             btnPrint->setCursor(Qt::PointingHandCursor);
-             btnPrint->setFixedWidth(150);
-             cLayout->addWidget(btnPrint, 0, Qt::AlignRight);
-
              cLayout->addWidget(createStyledTable("Expense Log", {"Date", "Category", "Description", "Amount"}, {
                  {"2023-10-25", "Travel", "Flight to NY Conference", "$450.00"},
                  {"2023-10-24", "Meals", "Team Lunch", "$125.00"}
              }, true));
         } else {
-             // Financial Chart Implementation
-             // Add Print PDF Button
-             QPushButton *btnPrint = new QPushButton("PRINT PDF");
-             btnPrint->setStyleSheet(getButtonStyle());
-             btnPrint->setCursor(Qt::PointingHandCursor);
-             btnPrint->setFixedWidth(150);
-             cLayout->addWidget(btnPrint, 0, Qt::AlignRight);
-
-             GenericBarChart *chart = new GenericBarChart("Financial Summary (YTD)");
-             chart->addBar("Revenue", 1250500, QColor(61, 220, 132)); // Brand Green
-             chart->addBar("Expenses", 850000, QColor(231, 76, 60));  // Red
-             
-             QWidget *chartContainer = new QWidget();
-             chartContainer->setStyleSheet(getCardStyle());
-             QVBoxLayout *containerLayout = new QVBoxLayout(chartContainer);
-             containerLayout->setContentsMargins(20, 20, 20, 20);
-             containerLayout->addWidget(chart);
-
-             cLayout->addWidget(chartContainer);
+             cLayout->addWidget(createStyledTable("Financial Summary (YTD)", {"Metric", "Value", "Change"}, {
+                 {"Total Revenue", "$1,250,500", "+15%"},
+                 {"Total Expenses", "$850,000", "+5%"}
+             }));
         }
         cLayout->addStretch();
         outNestedStack->addWidget(content);
@@ -698,14 +416,14 @@ static QWidget* createInventoryPage(QStackedWidget* &outNestedStack) {
     QVBoxLayout *layout = new QVBoxLayout(page);
     layout->setContentsMargins(40, 40, 40, 40);
     layout->setSpacing(25);
-    layout->addWidget(new QLabel("Stock Management"));
+    layout->addWidget(new QLabel("Inventory Management"));
 
     QWidget *actionBar = new QWidget();
     QHBoxLayout *actionLayout = new QHBoxLayout(actionBar);
     actionLayout->setSpacing(12);
 
     outNestedStack = new QStackedWidget();
-    QStringList tabNames = {"Add Stock Item", "Supplier Management", "Stock Reports"};
+    QStringList tabNames = {"Add Stock Item", "Update Stock Levels", "Supplier Management", "Inventory Reports"};
     QList<QPushButton*> tabButtons;
 
     for (const auto &name : tabNames) {
@@ -719,21 +437,19 @@ static QWidget* createInventoryPage(QStackedWidget* &outNestedStack) {
         QVBoxLayout *cLayout = new QVBoxLayout(content);
         
         if (name == "Add Stock Item") {
-             cLayout->addWidget(createStyledForm("Add New Stock Item", {
-                 {"Item Name:", "Extra Virgin 1L"}, 
-                 {"SKU:", "OIL-EV-001"}, 
-                 {"Quantity:", "0"}
-             }, "Add Item", 15, false));
+             cLayout->addWidget(createStyledForm("Add New Inventory Item", {{"Item Name:", "Widget A"}, {"SKU:", "WGT-001"}}, "Add Item"));
+        } else if (name == "Update Stock Levels") {
+             cLayout->addWidget(createStyledForm("Adjust Stock Quantity", {{"SKU / Item ID:", "Scan or type SKU"}, {"Quantity:", "0"}}, "Update Stock"));
         } else if (name == "Supplier Management") {
              cLayout->addWidget(createStyledTable("Supplier Directory", {"Supplier Name", "Contact", "Phone", "Rating"}, {
-                 {"Mediterranean Olives", "Maria Rossi", "(555) 123-4567", "5/5"},
-                 {"Glass Bottle Co.", "Bob Smith", "(555) 987-6543", "4/5"}
+                 {"Alpha Supplies", "Alice Johnson", "(555) 123-4567", "5/5"},
+                 {"Beta Logistics", "Bob Smith", "(555) 987-6543", "4/5"}
              }, true));
         } else {
-             cLayout->addWidget(createStyledTable("Stock Reports", {"Item Name", "SKU", "Current Qty", "Status"}, {
-                 {"Empty Bottles 500ml", "BTL-500", "50", "CRITICAL"},
-                 {"Labels - 'Gold'", "LBL-GLD", "120", "LOW"}
-             }, true));
+             cLayout->addWidget(createStyledTable("Low Stock Alert", {"Item Name", "SKU", "Current Qty", "Status"}, {
+                 {"Printer Paper", "OFF-001", "5", "CRITICAL"},
+                 {"HDMI Cables", "CBL-202", "12", "LOW"}
+             }));
         }
         cLayout->addStretch();
         outNestedStack->addWidget(content);
@@ -753,15 +469,14 @@ static QWidget* createMaintenancePage(QStackedWidget* &outNestedStack) {
     QVBoxLayout *layout = new QVBoxLayout(page);
     layout->setContentsMargins(40, 40, 40, 40);
     layout->setSpacing(25);
-    layout->addWidget(new QLabel("Maintenance Management - Machines"));
+    layout->addWidget(new QLabel("Maintenance Management"));
 
     QWidget *actionBar = new QWidget();
     QHBoxLayout *actionLayout = new QHBoxLayout(actionBar);
     actionLayout->setSpacing(12);
 
     outNestedStack = new QStackedWidget();
-    // Updated tab names for Machine Management (English)
-    QStringList tabNames = {"Add Machine", "Machine List", "Maintenance History", "Statistics"};
+    QStringList tabNames = {"Schedule Maintenance", "Work Orders", "Equipment Status", "Maintenance Logs"};
     QList<QPushButton*> tabButtons;
 
     for (const auto &name : tabNames) {
@@ -774,40 +489,22 @@ static QWidget* createMaintenancePage(QStackedWidget* &outNestedStack) {
         QWidget *content = new QWidget();
         QVBoxLayout *cLayout = new QVBoxLayout(content);
         
-        if (name == "Add Machine") {
-             // Form for adding a new machine with the 4 specific fields
-             cLayout->addWidget(createStyledForm("New Machine", {
-                 {"Machine ID:", "Ex: MAC-001"},
-                 {"Machine Name:", "Ex: Olive Press Alpha"},
-                 {"Machine Type:", "Ex: Press, Centrifuge, Filter..."},
-                 {"Machine Status:", "Ex: Normal, Broken, Maintenance"}
-             }, "Add Machine"));
-        } else if (name == "Machine List") {
-             // Table listing the machines with the 4 columns + Actions
-             cLayout->addWidget(createStyledTable("Machine List", {"ID", "Name", "Type", "Status"}, {
-                 {"MAC-001", "Press Alpha", "Press", "Normal"},
-                 {"MAC-002", "Centrifuge Beta", "Centrifuge", "Broken"},
-                 {"MAC-003", "Filter Gamma", "Filter", "Maintenance"}
+        if (name == "Schedule Maintenance") {
+             cLayout->addWidget(createStyledForm("Schedule Maintenance Task", {{"Equipment Name:", "Conveyor Belt A"}, {"Scheduled Date:", "YYYY-MM-DD"}}, "Schedule Task"));
+        } else if (name == "Work Orders") {
+             cLayout->addWidget(createStyledTable("Active Work Orders", {"Order ID", "Equipment", "Issue", "Status"}, {
+                 {"WO-101", "Hydraulic Press", "Oil Leak", "In Progress"},
+                 {"WO-102", "Forklift 3", "Battery Replace", "Pending"}
              }, true));
-        } else if (name == "Maintenance History") {
-             // Keep historical logs
-             cLayout->addWidget(createStyledTable("Intervention History", {"Date", "Machine", "Action", "Result"}, {
-                 {"2023-09-01", "MAC-001", "Belt Replacement", "Success"}
+        } else if (name == "Equipment Status") {
+             cLayout->addWidget(createStyledTable("Equipment Status Overview", {"Equipment ID", "Name", "Location", "Status"}, {
+                 {"EQ-001", "CNC Machine", "Floor 1", "Operational"},
+                 {"EQ-002", "Lathe A", "Floor 1", "Maintenance"}
              }, true));
         } else {
-             // Maintenance Statistics Chart
-             GenericBarChart *chart = new GenericBarChart("Machine Status Overview");
-             chart->addBar("Operational", 15, QColor(46, 204, 113)); // Green
-             chart->addBar("Broken", 2, QColor(231, 76, 60));        // Red
-             chart->addBar("Maintenance", 3, QColor(241, 196, 15));  // Orange
-
-             QWidget *chartContainer = new QWidget();
-             chartContainer->setStyleSheet(getCardStyle());
-             QVBoxLayout *containerLayout = new QVBoxLayout(chartContainer);
-             containerLayout->setContentsMargins(20, 20, 20, 20);
-             containerLayout->addWidget(chart);
-
-             cLayout->addWidget(chartContainer);
+             cLayout->addWidget(createStyledTable("Historical Maintenance Logs", {"Date", "Equipment", "Action", "Result"}, {
+                 {"2023-09-01", "EQ-001", "Belt Replacement", "Fixed"}
+             }, true));
         }
         cLayout->addStretch();
         outNestedStack->addWidget(content);
@@ -834,7 +531,7 @@ static QWidget* createProductPage(QStackedWidget* &outNestedStack) {
     actionLayout->setSpacing(12);
 
     outNestedStack = new QStackedWidget();
-    QStringList tabNames = {"Product List", "Add Item", "Remove Item"};
+    QStringList tabNames = {"Product List", "Add Item", "Edit Item", "Remove Item"};
     QList<QPushButton*> tabButtons;
 
     for (const auto &name : tabNames) {
@@ -887,6 +584,31 @@ static QWidget* createProductPage(QStackedWidget* &outNestedStack) {
                  {"Color:", "Enter Color"},
                  {"Ref Press:", "Enter Press Ref"}
              }, "Add Product", 25));
+        } else if (name == "Edit Item") {
+             QWidget *searchBar = new QWidget();
+             searchBar->setStyleSheet(getCardStyle());
+             QHBoxLayout *sLayout = new QHBoxLayout(searchBar);
+             QLineEdit *searchInp = new QLineEdit();
+             searchInp->setStyleSheet("border: none; font-size: 14px;");
+             searchInp->setPlaceholderText("Search Product ID...");
+             QPushButton *sBtn = new QPushButton("Search");
+             sBtn->setStyleSheet(getButtonStyle());
+             sBtn->setFixedWidth(100);
+             sLayout->addWidget(searchInp);
+             sLayout->addWidget(sBtn);
+             cLayout->addWidget(searchBar);
+             cLayout->addSpacing(15);
+             
+             cLayout->addWidget(createStyledForm("Edit Product Details", {
+                 {"ID Container:", "CONT-001"}, 
+                 {"Date Pressage:", "2023-10-25"},
+                 {"Capacité:", "500L"},
+                 {"Ref Testeur:", "TEST-A1"},
+                 {"Qualité:", "Premium"},
+                 {"Viscosity:", "0.85"},
+                 {"Color:", "Golden"},
+                 {"Ref Press:", "PRESS-X1"}
+             }, "Update Product", 25));
         } else if (name == "Remove Item") {
              QWidget *removeContainer = new QWidget();
              QVBoxLayout *rLayout = new QVBoxLayout(removeContainer);
@@ -1004,9 +726,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     // LOGO INTEGRATION
     QLabel *brand = new QLabel();
-    QPixmap logoPixmap("C:/Users/Samik/OneDrive/Dokumente/untitled/logo.png");
+    QPixmap logoPixmap(":/logo.png");
     if(!logoPixmap.isNull()) {
-        brand->setPixmap(logoPixmap.scaledToHeight(45, Qt::SmoothTransformation));
+        brand->setPixmap(logoPixmap.scaledToHeight(54, Qt::SmoothTransformation));
         brand->setAlignment(Qt::AlignCenter);
     } else {
         brand->setText("NEXUS ERP"); 
@@ -1059,7 +781,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     QPushButton *btnClient = addNav("Order Management");
     QPushButton *btnFinance = addNav("Financial Management");
-    QPushButton *btnInventory = addNav("Stock Management");
+    QPushButton *btnInventory = addNav("Inventory Management");
     QPushButton *btnMaintenance = addNav("Maintenance");
     QPushButton *btnProduct = addNav("Product");
     QPushButton *btnPersonnel = addNav("Personnel Management"); // NEW BUTTON
