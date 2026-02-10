@@ -25,6 +25,144 @@
 #include <QDialog>
 #include <QFormLayout>
 #include <QDialogButtonBox>
+#include <QPainter>
+
+// --- Custom Bar Chart Widget (No Dependencies) ---
+// --- Custom Bar Chart Widget (No Dependencies) ---
+class GenericBarChart : public QWidget {
+
+public:
+    struct BarData {
+        QString label;
+        double value;
+        QColor color;
+    };
+
+    GenericBarChart(const QString &title, QWidget *parent = nullptr) : QWidget(parent), m_title(title) {
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        setMinimumHeight(300);
+    }
+
+    void addBar(const QString &label, double value, const QColor &color) {
+        m_bars.append({label, value, color});
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event) override {
+        Q_UNUSED(event);
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+
+        // Background
+        painter.fillRect(rect(), Qt::white); // White background for clarity
+
+        if (m_bars.isEmpty()) return;
+
+        // --- Layout Constants ---
+        int leftMargin = 80;  // Space for Y-axis labels
+        int bottomMargin = 50; // Space for X-axis labels
+        int topMargin = 60;   // Space for Title
+        int rightMargin = 20;
+
+        int chartWidth = width() - leftMargin - rightMargin;
+        int chartHeight = height() - topMargin - bottomMargin;
+
+        // --- Calculate Range ---
+        double maxVal = 0;
+        for(const auto &bar : m_bars) maxVal = qMax(maxVal, bar.value);
+        if (maxVal == 0) maxVal = 1;
+        // Round up to nice number for Y-axis
+        double niceMax = maxVal * 1.1; 
+
+        // --- Draw Y-Axis (Scales & Grid) ---
+        int gridLines = 5;
+        painter.setFont(QFont("Segoe UI", 9));
+        QPen gridPen(QColor("#e0e0e0")); // Light grey for grid
+        gridPen.setStyle(Qt::DashLine);
+        
+        for (int i = 0; i <= gridLines; ++i) {
+            double value = (niceMax / gridLines) * i;
+            int y = topMargin + chartHeight - (int)((value / niceMax) * chartHeight);
+
+            // Grid Line
+            painter.setPen(gridPen);
+            painter.drawLine(leftMargin, y, width() - rightMargin, y);
+
+            // Scale Label
+            painter.setPen(QColor("#666666"));
+            // Format number (k for thousands, M for millions if needed, or just standard)
+            QString label = QString::number(value, 'f', 0);
+            if (value >= 1000000) label = QString::number(value / 1000000.0, 'f', 1) + "M";
+            else if (value >= 1000) label = QString::number(value / 1000.0, 'f', 0) + "k";
+            
+            painter.drawText(QRect(0, y - 10, leftMargin - 10, 20), Qt::AlignRight | Qt::AlignVCenter, label);
+        }
+
+        // --- Draw X-Axis Line ---
+        painter.setPen(QPen(QColor("#333333"), 2));
+        painter.drawLine(leftMargin, topMargin + chartHeight, width() - rightMargin, topMargin + chartHeight);
+
+        // --- Draw Bars ---
+        int count = m_bars.size();
+        int availableSpace = chartWidth / count;
+        int barWidth = qMin(availableSpace - 20, 80); // Max width 80px
+        int spacing = (chartWidth - (count * barWidth)) / (count + 1);
+        if (count == 1) spacing = (chartWidth - barWidth) / 2;
+
+        for (int i = 0; i < count; ++i) {
+            const auto &bar = m_bars[i];
+            int barH = (int)((bar.value / niceMax) * chartHeight);
+            
+            // Distribute evenly
+            int x = leftMargin + (i * availableSpace) + (availableSpace - barWidth) / 2; 
+            int y = topMargin + chartHeight - barH;
+
+            QRect barRect(x, y, barWidth, barH);
+
+            // Draw Bar (Flat Color, No Gradient)
+            painter.setBrush(bar.color);
+            painter.setPen(Qt::NoPen);
+            painter.drawRect(barRect); // Sharp corners for technical look, or rounded if preferred
+
+            // Draw Value on Top
+            painter.setPen(QColor("#000000"));
+            painter.setFont(QFont("Segoe UI", 10, QFont::Bold));
+            
+            // Fix: Use 'f' format to avoid scientific notation (e.g., 1.25e+06)
+            // Precision 0 means no decimals (1250500)
+            QString valText = QString::number(bar.value, 'f', 0);
+            
+            // Format large numbers with commas for readability (manual poor-man's locale)
+            if (bar.value >= 1000) {
+                 // Insert commas every 3 digits from right
+                 int pos = valText.length() - 3;
+                 while (pos > 0) {
+                     valText.insert(pos, ",");
+                     pos -= 3;
+                 }
+            }
+
+            painter.drawText(QRect(x - 10, y - 25, barWidth + 20, 20), Qt::AlignCenter, valText);
+
+            // Draw X-Axis Label
+            painter.setPen(QColor("#333333"));
+            painter.setFont(QFont("Segoe UI", 10)); // Regular font for labels
+            QRect labelRect(x - 20, topMargin + chartHeight + 10, barWidth + 40, 40); // Allow wrapping
+            painter.drawText(labelRect, Qt::AlignCenter | Qt::TextWordWrap, bar.label);
+        }
+        
+        // --- Draw Title ---
+        painter.setFont(QFont("Segoe UI", 12, QFont::Bold));
+        painter.setPen(QColor("#1a1a1a"));
+        painter.drawText(QRect(0, 10, width(), 30), Qt::AlignCenter, m_title);
+    }
+
+private:
+    QString m_title;
+    QList<BarData> m_bars;
+};
+
 
 // --- Style Helpers ---
 
@@ -436,28 +574,18 @@ static QWidget* createClientPage(QStackedWidget* &outNestedStack) {
                 {"2023-10-20", "Gourmet Foods", "Call", "Quality check inquiry"}
             }, true)); // Actions enabled
         } else {
-             // Container for statistics page to hold button + table
-             QWidget *statsPageWidget = new QWidget();
-             QVBoxLayout *statsPageLayout = new QVBoxLayout(statsPageWidget);
-             statsPageLayout->setContentsMargins(0,0,0,0);
-             statsPageLayout->setSpacing(10);
+             // Client Statistics Chart
+             GenericBarChart *chart = new GenericBarChart("New Client Acquisition (Q2 vs Q3)");
+             chart->addBar("Q2 2023", 45, QColor(52, 152, 219)); // Blue
+             chart->addBar("Q3 2023", 52, QColor(61, 220, 132)); // Green
 
-             // Add "PRINT PDF" button aligned to right (Inactive/Non-functional as requested)
-             QPushButton *btnPrint = new QPushButton("PRINT PDF");
-             btnPrint->setStyleSheet(getButtonStyle());
-             // btnPrint->setCursor(Qt::PointingHandCursor); // Removed to signify inactivity if needed, but keeping style uniform
-             btnPrint->setFixedWidth(150);
-             // btnPrint->setEnabled(false); // Can uncomment if "inactif" meant disabled. For now, just non-functional.
-             
-             statsPageLayout->addWidget(btnPrint, 0, Qt::AlignRight);
+             QWidget *chartContainer = new QWidget();
+             chartContainer->setStyleSheet(getCardStyle());
+             QVBoxLayout *containerLayout = new QVBoxLayout(chartContainer);
+             containerLayout->setContentsMargins(20, 20, 20, 20);
+             containerLayout->addWidget(chart);
 
-             QWidget *tableWidget = createStyledTable("Statistics", {"Period", "New Clients", "Churn Rate", "Revenue"}, {
-                 {"Q3 2023", "45", "2.1%", "$120,000"},
-                 {"Q2 2023", "52", "1.5%", "$145,000"}
-             });
-             
-             statsPageLayout->addWidget(tableWidget);
-             cLayout->addWidget(statsPageWidget);
+             cLayout->addWidget(chartContainer);
         }
         cLayout->addStretch();
         outNestedStack->addWidget(content);
@@ -498,23 +626,59 @@ static QWidget* createFinancePage(QStackedWidget* &outNestedStack) {
         QVBoxLayout *cLayout = new QVBoxLayout(content);
         
         if (name == "Create Invoice") {
+             // Add Print PDF Button
+             QPushButton *btnPrint = new QPushButton("PRINT PDF");
+             btnPrint->setStyleSheet(getButtonStyle());
+             btnPrint->setCursor(Qt::PointingHandCursor);
+             btnPrint->setFixedWidth(150);
+             cLayout->addWidget(btnPrint, 0, Qt::AlignRight);
+
              cLayout->addWidget(createStyledForm("Invoice Creation Form", {{"Customer Name:", "Enter customer name"}, {"Amount:", "0.00"}, {"Date:", "YYYY-MM-DD"}}, "Submit Invoice"));
         } else if (name == "View Transactions") {
+             // Add Print PDF Button
+             QPushButton *btnPrint = new QPushButton("PRINT PDF");
+             btnPrint->setStyleSheet(getButtonStyle());
+             btnPrint->setCursor(Qt::PointingHandCursor);
+             btnPrint->setFixedWidth(150);
+             cLayout->addWidget(btnPrint, 0, Qt::AlignRight);
+
              cLayout->addWidget(createStyledTable("Recent Transactions", {"ID", "Date", "Description", "Amount", "Status"}, {
                  {"TRX-1024", "2023-10-25", "Packaging Supplies", "$150.00", "Completed"},
                  {"TRX-1023", "2023-10-24", "Client Payment - Luigi", "$1,200.00", "Completed"},
                  {"TRX-1022", "2023-10-24", "Organic Certification", "$340.50", "Pending"}
              }, true));
         } else if (name == "Expense Tracking") {
+             // Add Print PDF Button
+             QPushButton *btnPrint = new QPushButton("PRINT PDF");
+             btnPrint->setStyleSheet(getButtonStyle());
+             btnPrint->setCursor(Qt::PointingHandCursor);
+             btnPrint->setFixedWidth(150);
+             cLayout->addWidget(btnPrint, 0, Qt::AlignRight);
+
              cLayout->addWidget(createStyledTable("Expense Log", {"Date", "Category", "Description", "Amount"}, {
                  {"2023-10-25", "Travel", "Flight to NY Conference", "$450.00"},
                  {"2023-10-24", "Meals", "Team Lunch", "$125.00"}
              }, true));
         } else {
-             cLayout->addWidget(createStyledTable("Financial Summary (YTD)", {"Metric", "Value", "Change"}, {
-                 {"Total Revenue", "$1,250,500", "+15%"},
-                 {"Total Expenses", "$850,000", "+5%"}
-             }));
+             // Financial Chart Implementation
+             // Add Print PDF Button
+             QPushButton *btnPrint = new QPushButton("PRINT PDF");
+             btnPrint->setStyleSheet(getButtonStyle());
+             btnPrint->setCursor(Qt::PointingHandCursor);
+             btnPrint->setFixedWidth(150);
+             cLayout->addWidget(btnPrint, 0, Qt::AlignRight);
+
+             GenericBarChart *chart = new GenericBarChart("Financial Summary (YTD)");
+             chart->addBar("Revenue", 1250500, QColor(61, 220, 132)); // Brand Green
+             chart->addBar("Expenses", 850000, QColor(231, 76, 60));  // Red
+             
+             QWidget *chartContainer = new QWidget();
+             chartContainer->setStyleSheet(getCardStyle());
+             QVBoxLayout *containerLayout = new QVBoxLayout(chartContainer);
+             containerLayout->setContentsMargins(20, 20, 20, 20);
+             containerLayout->addWidget(chart);
+
+             cLayout->addWidget(chartContainer);
         }
         cLayout->addStretch();
         outNestedStack->addWidget(content);
@@ -631,12 +795,19 @@ static QWidget* createMaintenancePage(QStackedWidget* &outNestedStack) {
                  {"2023-09-01", "MAC-001", "Belt Replacement", "Success"}
              }, true));
         } else {
-             // Statistics placeholder
-             cLayout->addWidget(createStyledTable("Machine Statistics", {"Category", "Count", "Percentage"}, {
-                 {"Operational", "15", "75%"},
-                 {"Broken", "2", "10%"},
-                 {"In Maintenance", "3", "15%"}
-             }));
+             // Maintenance Statistics Chart
+             GenericBarChart *chart = new GenericBarChart("Machine Status Overview");
+             chart->addBar("Operational", 15, QColor(46, 204, 113)); // Green
+             chart->addBar("Broken", 2, QColor(231, 76, 60));        // Red
+             chart->addBar("Maintenance", 3, QColor(241, 196, 15));  // Orange
+
+             QWidget *chartContainer = new QWidget();
+             chartContainer->setStyleSheet(getCardStyle());
+             QVBoxLayout *containerLayout = new QVBoxLayout(chartContainer);
+             containerLayout->setContentsMargins(20, 20, 20, 20);
+             containerLayout->addWidget(chart);
+
+             cLayout->addWidget(chartContainer);
         }
         cLayout->addStretch();
         outNestedStack->addWidget(content);
