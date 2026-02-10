@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include <QWidget>
+#include <QComboBox>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGridLayout>
@@ -107,8 +108,7 @@ protected:
         int count = m_bars.size();
         int availableSpace = chartWidth / count;
         int barWidth = qMin(availableSpace - 20, 80); // Max width 80px
-        int spacing = (chartWidth - (count * barWidth)) / (count + 1);
-        if (count == 1) spacing = (chartWidth - barWidth) / 2;
+        // Spacing calculation removed as it was unused and causing warnings/errors
 
         for (int i = 0; i < count; ++i) {
             const auto &bar = m_bars[i];
@@ -567,7 +567,7 @@ static QWidget* createClientPage(QStackedWidget* &outNestedStack) {
             cLayout->addSpacing(15);
             cLayout->addWidget(createStyledForm("Edit Details", {{"Company Name:", "Acme Corp"}, {"Email:", "contact@acme.com"}}, "Update Profile"));
         } else if (name == "Order History") {
-            cLayout->addWidget(createStyledTable("Client Interaction History", {"Date", "Client", "Action", "Notes"}, {
+            cLayout->addWidget(createStyledTable("Order Interaction History", {"Date", "Client", "Action", "Notes"}, {
                 {"2023-10-25", "Trattoria Luigi", "Meeting", "Discussed Winter Supply"},
                 {"2023-10-24", "Oileria Bella", "Support", "Clarified acidity levels"},
                 {"2023-10-22", "Organic Market", "Order", "Placed bulk order #992"},
@@ -575,7 +575,7 @@ static QWidget* createClientPage(QStackedWidget* &outNestedStack) {
             }, true)); // Actions enabled
         } else {
              // Client Statistics Chart
-             GenericBarChart *chart = new GenericBarChart("New Client Acquisition (Q2 vs Q3)");
+             GenericBarChart *chart = new GenericBarChart("New Order Acquisition (Q2 vs Q3)");
              chart->addBar("Q2 2023", 45, QColor(52, 152, 219)); // Blue
              chart->addBar("Q3 2023", 52, QColor(61, 220, 132)); // Green
 
@@ -635,18 +635,138 @@ static QWidget* createFinancePage(QStackedWidget* &outNestedStack) {
 
              cLayout->addWidget(createStyledForm("Invoice Creation Form", {{"Customer Name:", "Enter customer name"}, {"Amount:", "0.00"}, {"Date:", "YYYY-MM-DD"}}, "Submit Invoice"));
         } else if (name == "View Transactions") {
-             // Add Print PDF Button
+             // --- Custom Transactions View ---
+             QWidget *transContainer = new QWidget();
+             QVBoxLayout *transLayout = new QVBoxLayout(transContainer);
+             transLayout->setContentsMargins(0,0,0,0);
+             transLayout->setSpacing(10);
+
+             // 1. Control Bar
+             QWidget *controlBar = new QWidget();
+             QHBoxLayout *controlLayout = new QHBoxLayout(controlBar);
+             controlLayout->setContentsMargins(0, 0, 0, 0);
+
+             QLineEdit *searchEdit = new QLineEdit();
+             searchEdit->setPlaceholderText("Search...");
+             searchEdit->setStyleSheet(getInputStyle());
+             searchEdit->setFixedWidth(150); // Reduced width
+
+             QComboBox *searchType = new QComboBox();
+             searchType->addItems({"Status", "ID"});
+             searchType->setStyleSheet(getInputStyle()); 
+             searchType->setFixedWidth(80); // Reduced width
+
+             // Removed Search Button
+
+             QLabel *lblSort = new QLabel("Sort by:");
+             lblSort->setStyleSheet(getLabelStyle());
+             
+             QComboBox *sortType = new QComboBox();
+             sortType->addItems({"Amt High-Low", "Amt Low-High"}); // Shortened text
+             sortType->setStyleSheet(getInputStyle());
+             sortType->setFixedWidth(130); // Reduced width
+
+             // Removed Sort Button
+
              QPushButton *btnPrint = new QPushButton("PRINT PDF");
              btnPrint->setStyleSheet(getButtonStyle());
              btnPrint->setCursor(Qt::PointingHandCursor);
-             btnPrint->setFixedWidth(150);
-             cLayout->addWidget(btnPrint, 0, Qt::AlignRight);
+             btnPrint->setFixedWidth(120);
 
-             cLayout->addWidget(createStyledTable("Recent Transactions", {"ID", "Date", "Description", "Amount", "Status"}, {
-                 {"TRX-1024", "2023-10-25", "Packaging Supplies", "$150.00", "Completed"},
-                 {"TRX-1023", "2023-10-24", "Client Payment - Luigi", "$1,200.00", "Completed"},
-                 {"TRX-1022", "2023-10-24", "Organic Certification", "$340.50", "Pending"}
-             }, true));
+             controlLayout->addWidget(searchEdit);
+             controlLayout->addWidget(searchType);
+             // controlLayout->addWidget(btnSearch); // Removed
+             controlLayout->addSpacing(15); // Reduced spacing
+             controlLayout->addWidget(lblSort);
+             controlLayout->addWidget(sortType);
+             // controlLayout->addWidget(btnSort); // Removed
+             controlLayout->addStretch();
+             controlLayout->addWidget(btnPrint);
+
+             transLayout->addWidget(controlBar);
+
+             // 2. Table
+             QStringList headers = {"ID", "Date", "Description", "Amount", "Status"};
+             QTableWidget *table = new QTableWidget();
+             table->setColumnCount(headers.size());
+             table->setHorizontalHeaderLabels(headers);
+             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+             table->verticalHeader()->setVisible(false);
+             table->setAlternatingRowColors(true);
+             table->setStyleSheet("QTableWidget { border: 1px solid #eaeaea; background-color: #ffffff; gridline-color: transparent; border-radius: 8px; alternate-background-color: #f9fafb; }"
+                                  "QHeaderView::section { background-color: #ffffff; padding: 12px; border: none; border-bottom: 2px solid #f0f0f0; font-weight: 700; color: #666; }");
+
+             // Data
+             struct Transaction { QString id; QString date; QString desc; double amount; QString status; };
+             QList<Transaction> transactions = {
+                 {"TRX-1024", "2023-10-25", "Packaging Supplies", 150.00, "Completed"},
+                 {"TRX-1023", "2023-10-24", "Client Payment - Luigi", 1200.00, "Completed"},
+                 {"TRX-1022", "2023-10-24", "Organic Certification", 340.50, "Pending"},
+                 {"TRX-1021", "2023-10-23", "Maintenance Parts", 850.00, "Completed"},
+                 {"TRX-1020", "2023-10-22", "Utility Bill", 210.75, "Pending"}
+             };
+
+             auto populateTable = [table](const QList<Transaction>& data) {
+                 table->setRowCount(0);
+                 table->setRowCount(data.size());
+                 for(int i=0; i<data.size(); ++i) {
+                     const auto& t = data[i];
+                     table->setItem(i, 0, new QTableWidgetItem(t.id));
+                     table->setItem(i, 1, new QTableWidgetItem(t.date));
+                     table->setItem(i, 2, new QTableWidgetItem(t.desc));
+                     // Format Amount
+                     QString amtStr = "$" + QString::number(t.amount, 'f', 2);
+                     if(t.amount >= 1000) {
+                         int pos = amtStr.length() - 6; 
+                         while(pos > 1) { amtStr.insert(pos, ","); pos-=3; }
+                     }
+                     table->setItem(i, 3, new QTableWidgetItem(amtStr));
+                     table->setItem(i, 4, new QTableWidgetItem(t.status));
+                 }
+             };
+
+             populateTable(transactions);
+             transLayout->addWidget(table);
+
+             // 3. Logic
+             // Define update function
+             auto updateView = [=]() {
+                 QString query = searchEdit->text().toLower();
+                 QString sType = searchType->currentText();
+                 QString sort = sortType->currentText();
+                 
+                 QList<Transaction> filtered;
+                 for(const auto& t : transactions) {
+                     bool match = false;
+                     if (sType == "Status") match = t.status.toLower().contains(query);
+                     else if (sType == "ID") match = t.id.toLower().contains(query);
+                     
+                     if (match) filtered.append(t);
+                 }
+
+                 // Sort
+                 std::sort(filtered.begin(), filtered.end(), [sort](const Transaction& a, const Transaction& b){
+                     if (sort == "Amt High-Low") return a.amount > b.amount;
+                     else return a.amount < b.amount;
+                 });
+                 
+                 populateTable(filtered);
+             };
+
+             // Initial Population
+             updateView();
+
+             // Connections - Auto Update
+             QObject::connect(searchEdit, &QLineEdit::textChanged, updateView);
+             QObject::connect(searchType, &QComboBox::currentTextChanged, updateView);
+             QObject::connect(sortType, &QComboBox::currentTextChanged, updateView);
+
+             // Print
+             QObject::connect(btnPrint, &QPushButton::clicked, [=]() {
+                 QMessageBox::information(table, "Print", "Generating Financial Report PDF...");
+             });
+
+             cLayout->addWidget(transContainer);
         } else if (name == "Expense Tracking") {
              // Add Print PDF Button
              QPushButton *btnPrint = new QPushButton("PRINT PDF");
@@ -730,10 +850,80 @@ static QWidget* createInventoryPage(QStackedWidget* &outNestedStack) {
                  {"Glass Bottle Co.", "Bob Smith", "(555) 987-6543", "4/5"}
              }, true));
         } else {
-             cLayout->addWidget(createStyledTable("Stock Reports", {"Item Name", "SKU", "Current Qty", "Status"}, {
-                 {"Empty Bottles 500ml", "BTL-500", "50", "CRITICAL"},
-                 {"Labels - 'Gold'", "LBL-GLD", "120", "LOW"}
-             }, true));
+             // --- Stock Reports with Search and Actions ---
+             QWidget *reportContainer = new QWidget();
+             QVBoxLayout *reportLayout = new QVBoxLayout(reportContainer);
+             reportLayout->setContentsMargins(0,0,0,0);
+             reportLayout->setSpacing(10);
+
+             // 1. Search Bar (Like Financial: Input + Type)
+             QWidget *controlBar = new QWidget();
+             QHBoxLayout *controlLayout = new QHBoxLayout(controlBar);
+             controlLayout->setContentsMargins(0, 0, 0, 0);
+
+             QLineEdit *searchEdit = new QLineEdit();
+             searchEdit->setPlaceholderText("Search...");
+             searchEdit->setStyleSheet(getInputStyle());
+             searchEdit->setFixedWidth(150); // Matches Financial Module
+
+             QComboBox *searchType = new QComboBox();
+             searchType->addItems({"Item", "Status"});
+             searchType->setStyleSheet(getInputStyle()); 
+             searchType->setFixedWidth(80); // Matches Financial Module
+
+             controlLayout->addWidget(searchEdit);
+             controlLayout->addWidget(searchType);
+             controlLayout->addStretch();
+             reportLayout->addWidget(controlBar);
+
+             // 2. Table with Actions (Modify/Delete) - Sorted by Quantity (Low -> High)
+             struct StockItem { QString name; QString sku; int qty; QString status; };
+             QList<StockItem> stockItems = {
+                 {"Empty Bottles 500ml", "BTL-500", 50, "CRITICAL"},
+                 {"Labels - 'Gold'", "LBL-GLD", 120, "LOW"},
+                 {"Extra Virgin 1L", "OIL-EV-001", 450, "NORMAL"},
+                 {"Caps - Black", "CAP-BLK", 2000, "NORMAL"}
+             };
+
+             // Sort by Quantity (Ascending: Low -> High)
+             std::sort(stockItems.begin(), stockItems.end(), [](const StockItem& a, const StockItem& b){
+                 return a.qty < b.qty;
+             });
+
+             // Convert to String List for createStyledTable
+             QVector<QStringList> tableData;
+             for(const auto& item : stockItems) {
+                 tableData.append({item.name, item.sku, QString::number(item.qty), item.status});
+             }
+
+             QWidget *tableWidgetWrapper = createStyledTable("Stock Reports", 
+                {"Item Name", "SKU", "Current Qty", "Status"}, tableData, true); // showActions = true
+
+             reportLayout->addWidget(tableWidgetWrapper);
+             cLayout->addWidget(reportContainer);
+
+             // 3. Search Logic
+             // We need to find the QTableWidget inside the wrapper to filter it
+             QTableWidget *table = tableWidgetWrapper->findChild<QTableWidget*>();
+             if (table) {
+                 auto updateFilter = [table, searchEdit, searchType]() {
+                     QString query = searchEdit->text().toLower();
+                     QString type = searchType->currentText();
+                     int colIndex = (type == "Item") ? 0 : 3; // Item Name matches col 0, Status matches col 3
+
+                     for(int i = 0; i < table->rowCount(); ++i) {
+                         bool match = false;
+                         if (table->item(i, colIndex)) {
+                             match = table->item(i, colIndex)->text().toLower().contains(query);
+                         }
+                         table->setRowHidden(i, !match);
+                     }
+                 };
+
+                 QObject::connect(searchEdit, &QLineEdit::textChanged, updateFilter);
+                 QObject::connect(searchType, &QComboBox::currentTextChanged, updateFilter);
+             }
+
         }
         cLayout->addStretch();
         outNestedStack->addWidget(content);
@@ -783,12 +973,131 @@ static QWidget* createMaintenancePage(QStackedWidget* &outNestedStack) {
                  {"Machine Status:", "Ex: Normal, Broken, Maintenance"}
              }, "Add Machine"));
         } else if (name == "Machine List") {
-             // Table listing the machines with the 4 columns + Actions
-             cLayout->addWidget(createStyledTable("Machine List", {"ID", "Name", "Type", "Status"}, {
-                 {"MAC-001", "Press Alpha", "Press", "Normal"},
-                 {"MAC-002", "Centrifuge Beta", "Centrifuge", "Broken"},
-                 {"MAC-003", "Filter Gamma", "Filter", "Maintenance"}
-             }, true));
+             // --- Enhanced Machine List ---
+             QWidget *listContainer = new QWidget();
+             QVBoxLayout *listLayout = new QVBoxLayout(listContainer);
+             listLayout->setContentsMargins(0,0,0,0);
+             listLayout->setSpacing(10);
+
+             // 1. Control Bar
+             QWidget *controlBar = new QWidget();
+             QHBoxLayout *controlLayout = new QHBoxLayout(controlBar);
+             controlLayout->setContentsMargins(0, 0, 0, 0);
+
+             // Removed Search Bar and Button as requested
+             // Kept Search Type ComboBox (though functionality is limited without input)
+             QComboBox *searchType = new QComboBox();
+             searchType->addItems({"Type", "Status"});
+             searchType->setStyleSheet(getInputStyle()); 
+             searchType->setFixedWidth(100);
+
+             QLabel *lblSort = new QLabel("Sort by:");
+             lblSort->setStyleSheet(getLabelStyle());
+             
+             QComboBox *sortType = new QComboBox();
+             sortType->addItems({"Status", "Hours"});
+             sortType->setStyleSheet(getInputStyle());
+             sortType->setFixedWidth(100);
+
+             // Removed Sort Button as requested
+
+             QPushButton *btnPrint = new QPushButton("PRINT PDF");
+             btnPrint->setStyleSheet(getButtonStyle());
+             btnPrint->setCursor(Qt::PointingHandCursor);
+             btnPrint->setFixedWidth(120);
+
+             controlLayout->addWidget(searchType); // Kept as requested
+             controlLayout->addSpacing(20);
+             controlLayout->addWidget(lblSort);
+             controlLayout->addWidget(sortType);
+             controlLayout->addStretch();
+             controlLayout->addWidget(btnPrint);
+
+             listLayout->addWidget(controlBar);
+
+             // 2. Table
+             QStringList headers = {"ID", "Name", "Type", "Status", "Hours", "Actions"};
+             QTableWidget *table = new QTableWidget();
+             table->setColumnCount(headers.size());
+             table->setHorizontalHeaderLabels(headers);
+             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+             table->horizontalHeader()->setSectionResizeMode(headers.size()-1, QHeaderView::ResizeToContents);
+             table->verticalHeader()->setVisible(false);
+             table->setAlternatingRowColors(true);
+             table->setStyleSheet("QTableWidget { border: 1px solid #eaeaea; background-color: #ffffff; gridline-color: transparent; border-radius: 8px; alternate-background-color: #f9fafb; }"
+                                  "QHeaderView::section { background-color: #ffffff; padding: 12px; border: none; border-bottom: 2px solid #f0f0f0; font-weight: 700; color: #666; }");
+
+             // Data
+             struct Machine { QString id; QString name; QString type; QString status; int hours; };
+             QList<Machine> machines = {
+                 {"MAC-001", "Press Alpha", "Press", "Normal", 1250},
+                 {"MAC-002", "Centrifuge Beta", "Centrifuge", "Broken", 800},
+                 {"MAC-003", "Filter Gamma", "Filter", "Maintenance", 3200},
+                 {"MAC-004", "Press Delta", "Press", "Normal", 450},
+                 {"MAC-005", "Bottler Epsilon", "Bottling", "Normal", 2100}
+             };
+
+             auto populateTable = [table, headers](const QList<Machine>& data) {
+                 table->setRowCount(0);
+                 table->setRowCount(data.size());
+                 for(int i=0; i<data.size(); ++i) {
+                     const auto& m = data[i];
+                     table->setItem(i, 0, new QTableWidgetItem(m.id));
+                     table->setItem(i, 1, new QTableWidgetItem(m.name));
+                     table->setItem(i, 2, new QTableWidgetItem(m.type));
+                     table->setItem(i, 3, new QTableWidgetItem(m.status));
+                     // Hours (sortable number)
+                     QTableWidgetItem *hItem = new QTableWidgetItem();
+                     hItem->setData(Qt::DisplayRole, m.hours);
+                     table->setItem(i, 4, hItem);
+
+                     // Actions
+                     QWidget *actionWidget = new QWidget();
+                     QHBoxLayout *al = new QHBoxLayout(actionWidget);
+                     al->setContentsMargins(2,2,2,2);
+                     QPushButton *btnMod = new QPushButton("Edit");
+                     QPushButton *btnDel = new QPushButton("Del");
+                     btnMod->setStyleSheet("border: 1px solid #ccc; border-radius: 4px; padding: 2px 8px; background: #eee;");
+                     btnDel->setStyleSheet("border: 1px solid #d32f2f; color: #d32f2f; border-radius: 4px; padding: 2px 8px; background: #fff;");
+                     al->addWidget(btnMod);
+                     al->addWidget(btnDel);
+                     table->setCellWidget(i, 5, actionWidget);
+                 }
+             };
+
+             populateTable(machines);
+             listLayout->addWidget(table);
+
+             // 3. Logic
+             // Auto-Sort on ComboBox Change
+             auto sortTable = [=]() {
+                QString type = sortType->currentText();
+                table->setSortingEnabled(false); 
+                if (type == "Status") {
+                    table->sortItems(3, Qt::AscendingOrder); // Column 3 = Status
+                } else if (type == "Hours") {
+                    table->sortItems(4, Qt::AscendingOrder); // Column 4 = Hours
+                }
+             };
+
+             // Connect Sort Type
+             QObject::connect(sortType, &QComboBox::currentTextChanged, sortTable);
+            
+             // Connect Search Type (for future use or as a secondary sort trigger if desired)
+             QObject::connect(searchType, &QComboBox::currentTextChanged, [=](const QString &text) {
+                 // For now, maybe just sort by that column type?
+                 // Let's implement basic sort by column if user selects Type/Status in search combo
+                 table->setSortingEnabled(false);
+                 if (text == "Type") table->sortItems(2, Qt::AscendingOrder);
+                 else if (text == "Status") table->sortItems(3, Qt::AscendingOrder);
+             });
+
+             // Print
+             QObject::connect(btnPrint, &QPushButton::clicked, [=]() {
+                 QMessageBox::information(table, "Print", "Geneating PDF report for Maintenance List...");
+             });
+             
+             cLayout->addWidget(listContainer);
         } else if (name == "Maintenance History") {
              // Keep historical logs
              cLayout->addWidget(createStyledTable("Intervention History", {"Date", "Machine", "Action", "Result"}, {
@@ -834,7 +1143,7 @@ static QWidget* createProductPage(QStackedWidget* &outNestedStack) {
     actionLayout->setSpacing(12);
 
     outNestedStack = new QStackedWidget();
-    QStringList tabNames = {"Product List", "Add Item", "Remove Item"};
+    QStringList tabNames = {"Product List", "Add Item", "Edit Item", "Remove Item"};
     QList<QPushButton*> tabButtons;
 
     for (const auto &name : tabNames) {
@@ -887,6 +1196,30 @@ static QWidget* createProductPage(QStackedWidget* &outNestedStack) {
                  {"Color:", "Enter Color"},
                  {"Ref Press:", "Enter Press Ref"}
              }, "Add Product", 25));
+        } else if (name == "Edit Item") {
+            QWidget *searchBar = new QWidget();
+            searchBar->setStyleSheet(getCardStyle());
+            QHBoxLayout *sLayout = new QHBoxLayout(searchBar);
+            QLineEdit *searchInp = new QLineEdit();
+            searchInp->setStyleSheet("border: none; font-size: 14px;");
+            searchInp->setPlaceholderText("Search Product ID...");
+            QPushButton *sBtn = new QPushButton("Search");
+            sBtn->setStyleSheet(getButtonStyle());
+            sBtn->setFixedWidth(100);
+            sLayout->addWidget(searchInp);
+            sLayout->addWidget(sBtn);
+            cLayout->addWidget(searchBar);
+            cLayout->addSpacing(15);
+            cLayout->addWidget(createStyledForm("Edit Product Details", {
+                 {"ID Container:", "CONT-001"},
+                 {"Date Pressage:", "2023-10-25"},
+                 {"Capacité:", "500L"},
+                 {"Ref Testeur:", "TEST-A1"},
+                 {"Qualité:", "Premium"},
+                 {"Viscosity:", "0.85"},
+                 {"Color:", "Golden"},
+                 {"Ref Press:", "PRESS-X1"}
+            }, "Save Changes"));
         } else if (name == "Remove Item") {
              QWidget *removeContainer = new QWidget();
              QVBoxLayout *rLayout = new QVBoxLayout(removeContainer);
@@ -1004,7 +1337,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     // LOGO INTEGRATION
     QLabel *brand = new QLabel();
-    QPixmap logoPixmap("C:/Users/Samik/OneDrive/Dokumente/untitled/logo.png");
+    QPixmap logoPixmap(":/logo.png");
     if(!logoPixmap.isNull()) {
         brand->setPixmap(logoPixmap.scaledToHeight(45, Qt::SmoothTransformation));
         brand->setAlignment(Qt::AlignCenter);
