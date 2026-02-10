@@ -14,6 +14,7 @@
 #include <QHeaderView>
 #include <QMessageBox>
 #include <QDate>
+#include <QComboBox>
 #include <QDate>
 #include <QDateTime>
 #include <QScrollArea>
@@ -22,6 +23,8 @@
 #include <QFileDialog>
 #include <QDir>
 #include <QFileInfo>
+#include <QTextDocument>
+#include <QPageSize>
 
 // --- Style Helpers ---
 
@@ -497,10 +500,128 @@ static QWidget* createMaintenancePage(QStackedWidget* &outNestedStack) {
                  {"WO-102", "Forklift 3", "Battery Replace", "Pending"}
              }, true));
         } else if (name == "Equipment Status") {
-             cLayout->addWidget(createStyledTable("Equipment Status Overview", {"Equipment ID", "Name", "Location", "Status"}, {
-                 {"EQ-001", "CNC Machine", "Floor 1", "Operational"},
-                 {"EQ-002", "Lathe A", "Floor 1", "Maintenance"}
-             }, true));
+             // Control Bar
+             QWidget *controls = new QWidget();
+             QHBoxLayout *ctrlLayout = new QHBoxLayout(controls);
+             ctrlLayout->setContentsMargins(0,0,0,0);
+             ctrlLayout->setSpacing(10);
+             
+             // Search
+             
+             QComboBox *searchType = new QComboBox();
+             searchType->addItems({"All", "Type", "State"});
+             searchType->setStyleSheet(getInputStyle());
+             
+             // Sort
+             QLabel *sortLabel = new QLabel("Sort by:");
+             sortLabel->setStyleSheet(getLabelStyle());
+             QComboBox *sortCombo = new QComboBox();
+             sortCombo->addItems({"Default", "State", "Hours"});
+             sortCombo->setStyleSheet(getInputStyle());
+             
+             // PDF Button
+             QPushButton *pdfBtn = new QPushButton("Export PDF");
+             pdfBtn->setStyleSheet(getButtonStyle());
+             pdfBtn->setFixedWidth(120);
+
+             ctrlLayout->addWidget(searchType);
+             ctrlLayout->addSpacing(20);
+             ctrlLayout->addWidget(sortLabel);
+             ctrlLayout->addWidget(sortCombo);
+             ctrlLayout->addStretch();
+             ctrlLayout->addWidget(pdfBtn);
+
+             cLayout->addWidget(controls);
+
+             // Table
+             QStringList headers = {"ID", "Nom", "Type", "Etat", "Heures", "Date Maint", "Seuil"};
+             QTableWidget *table = new QTableWidget();
+             table->setColumnCount(headers.size());
+             table->setHorizontalHeaderLabels(headers);
+             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+             table->verticalHeader()->setVisible(false);
+             table->setAlternatingRowColors(true);
+             table->setStyleSheet(
+                "QTableWidget { border: 1px solid #eaeaea; background-color: #ffffff; gridline-color: transparent; border-radius: 8px; alternate-background-color: #f9fafb; }"
+                "QHeaderView::section { background-color: #ffffff; padding: 12px; border: none; border-bottom: 2px solid #f0f0f0; font-weight: 700; color: #666; text-transform: uppercase; font-size: 12px; }"
+                "QTableWidget::item { padding: 12px; border-bottom: 1px solid #f5f5f5; color: #333; }"
+                "QTableWidget::item:selected { background-color: #e6f9ef; color: #1a1a1a; }"
+             );
+
+             // Dummy Data
+             QVector<QStringList> data = {
+                 {"EQ-001", "Presse A1", "Presse", "Normale", "1200", "2023-10-01", "2000"},
+                 {"EQ-002", "Moteur X", "Moteur", "En Panne", "5400", "2023-09-15", "5000"},
+                 {"EQ-003", "Filtre F1", "Filtre", "En Maintenance", "800", "2023-10-20", "1000"},
+                 {"EQ-004", "Presse B2", "Presse", "Normale", "300", "2023-11-01", "2000"},
+                 {"EQ-005", "Generateur", "Moteur", "Normale", "9500", "2023-08-10", "10000"}
+             };
+
+             table->setRowCount(data.size());
+             for(int i=0; i<data.size(); ++i) {
+                 for(int j=0; j<data[i].size(); ++j) {
+                     QTableWidgetItem *item = new QTableWidgetItem(data[i][j]);
+                     // For sorting numbers correctly (simple approach: pad with zeros or rely on Qt's default if it detects numbers, often mixed. 
+                     // For 'Heures' (col 4), strictly it should be numerical. I'll just set data role)
+                     if (j == 4 || j == 6) { // Heures or Seuil
+                          item->setData(Qt::DisplayRole, data[i][j].toInt());
+                     }
+                     table->setItem(i, j, item);
+                 }
+             }
+             
+             cLayout->addWidget(table);
+
+             // Logic (Lambdas)
+             
+             // Sort
+             QObject::connect(sortCombo, &QComboBox::currentTextChanged, [=](const QString &text){
+                 if (text == "State") table->sortItems(3, Qt::AscendingOrder);
+                 else if (text == "Hours") table->sortItems(4, Qt::DescendingOrder);
+                 else table->sortItems(0, Qt::AscendingOrder); // Default ID
+             });
+
+             // PDF Export
+             QObject::connect(pdfBtn, &QPushButton::clicked, [=](){
+                 QString fileName = QFileDialog::getSaveFileName(nullptr, "Export PDF", "", "PDF Files (*.pdf)");
+                 if (fileName.isEmpty()) return;
+                 if (QFileInfo(fileName).suffix().isEmpty()) fileName.append(".pdf");
+
+                 QPrinter printer(QPrinter::PrinterResolution);
+                 printer.setOutputFormat(QPrinter::PdfFormat);
+                 printer.setPageSize(QPageSize(QPageSize::A4));
+                 printer.setOutputFileName(fileName);
+
+                 QTextDocument doc;
+                 QString html = "<html><head><style>"
+                                "table { border-collapse: collapse; width: 100%; }"
+                                "th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }"
+                                "th { background-color: #f2f2f2; }"
+                                "</style></head><body>"
+                                "<h2>Equipment Status Report</h2>"
+                                "<table><thead><tr>";
+                 
+                 for(int j=0; j<table->columnCount(); ++j)
+                     html += "<th>" + headers[j] + "</th>";
+                 
+                 html += "</tr></thead><tbody>";
+
+                 for(int i=0; i<table->rowCount(); ++i) {
+                     if (table->isRowHidden(i)) continue; // Skip hidden rows (respect search)
+                     html += "<tr>";
+                     for(int j=0; j<table->columnCount(); ++j)
+                         html += "<td>" + table->item(i, j)->text() + "</td>";
+                     html += "</tr>";
+                 }
+                 html += "</tbody></table></body></html>";
+
+                 doc.setHtml(html);
+                 doc.setPageSize(printer.pageRect(QPrinter::DevicePixel).size()); 
+                 doc.print(&printer);
+                 
+                 QMessageBox::information(nullptr, "Success", "PDF exported successfully!");
+             });
+
         } else {
              cLayout->addWidget(createStyledTable("Historical Maintenance Logs", {"Date", "Equipment", "Action", "Result"}, {
                  {"2023-09-01", "EQ-001", "Belt Replacement", "Fixed"}
