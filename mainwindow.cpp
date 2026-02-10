@@ -531,7 +531,7 @@ static QWidget* createProductPage(QStackedWidget* &outNestedStack) {
     actionLayout->setSpacing(12);
 
     outNestedStack = new QStackedWidget();
-    QStringList tabNames = {"Product List", "Add Item", "Remove Item"};
+    QStringList tabNames = {"Product List", "Add Item", "Edit Item", "Remove Item"};
     QList<QPushButton*> tabButtons;
 
     for (const auto &name : tabNames) {
@@ -584,6 +584,31 @@ static QWidget* createProductPage(QStackedWidget* &outNestedStack) {
                  {"Color:", "Enter Color"},
                  {"Ref Press:", "Enter Press Ref"}
              }, "Add Product", 25));
+        } else if (name == "Edit Item") {
+             QWidget *searchBar = new QWidget();
+             searchBar->setStyleSheet(getCardStyle());
+             QHBoxLayout *sLayout = new QHBoxLayout(searchBar);
+             QLineEdit *searchInp = new QLineEdit();
+             searchInp->setStyleSheet("border: none; font-size: 14px;");
+             searchInp->setPlaceholderText("Search Product ID...");
+             QPushButton *sBtn = new QPushButton("Search");
+             sBtn->setStyleSheet(getButtonStyle());
+             sBtn->setFixedWidth(100);
+             sLayout->addWidget(searchInp);
+             sLayout->addWidget(sBtn);
+             cLayout->addWidget(searchBar);
+             cLayout->addSpacing(15);
+             
+             cLayout->addWidget(createStyledForm("Edit Product Details", {
+                 {"ID Container:", "CONT-001"}, 
+                 {"Date Pressage:", "2023-10-25"},
+                 {"Capacité:", "500L"},
+                 {"Ref Testeur:", "TEST-A1"},
+                 {"Qualité:", "Premium"},
+                 {"Viscosity:", "0.85"},
+                 {"Color:", "Golden"},
+                 {"Ref Press:", "PRESS-X1"}
+             }, "Update Product", 25));
         } else if (name == "Remove Item") {
              QWidget *removeContainer = new QWidget();
              QVBoxLayout *rLayout = new QVBoxLayout(removeContainer);
@@ -701,9 +726,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     // LOGO INTEGRATION
     QLabel *brand = new QLabel();
-    QPixmap logoPixmap("C:/Users/Samik/OneDrive/Dokumente/untitled/logo.png");
+    QPixmap logoPixmap(":/logo.png");
     if(!logoPixmap.isNull()) {
-        brand->setPixmap(logoPixmap.scaledToHeight(45, Qt::SmoothTransformation));
+        brand->setPixmap(logoPixmap.scaledToHeight(54, Qt::SmoothTransformation));
         brand->setAlignment(Qt::AlignCenter);
     } else {
         brand->setText("NEXUS ERP"); 
