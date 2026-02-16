@@ -904,7 +904,7 @@ static QWidget* createFinancePage(QStackedWidget* &outNestedStack) {
              searchEdit->setFixedWidth(150); // Reduced width
 
              QComboBox *searchType = new QComboBox();
-             searchType->addItems({"Status", "ID"});
+             searchType->addItems({"Status"});
              searchType->setStyleSheet(getInputStyle()); 
              searchType->setFixedWidth(80); // Reduced width
 
@@ -938,7 +938,7 @@ static QWidget* createFinancePage(QStackedWidget* &outNestedStack) {
              transLayout->addWidget(controlBar);
 
              // 2. Table
-             QStringList headers = {"ID", "Date", "Description", "Amount", "Status"};
+             QStringList headers = {"Date", "Description", "Amount", "Status"};
              QTableWidget *table = new QTableWidget();
              table->setColumnCount(headers.size());
              table->setHorizontalHeaderLabels(headers);
@@ -963,17 +963,16 @@ static QWidget* createFinancePage(QStackedWidget* &outNestedStack) {
                  table->setRowCount(data.size());
                  for(int i=0; i<data.size(); ++i) {
                      const auto& t = data[i];
-                     table->setItem(i, 0, new QTableWidgetItem(t.id));
-                     table->setItem(i, 1, new QTableWidgetItem(t.date));
-                     table->setItem(i, 2, new QTableWidgetItem(t.desc));
+                     table->setItem(i, 0, new QTableWidgetItem(t.date));
+                     table->setItem(i, 1, new QTableWidgetItem(t.desc));
                      // Format Amount
                      QString amtStr = "$" + QString::number(t.amount, 'f', 2);
                      if(t.amount >= 1000) {
                          int pos = amtStr.length() - 6; 
                          while(pos > 1) { amtStr.insert(pos, ","); pos-=3; }
                      }
-                     table->setItem(i, 3, new QTableWidgetItem(amtStr));
-                     table->setItem(i, 4, new QTableWidgetItem(t.status));
+                     table->setItem(i, 2, new QTableWidgetItem(amtStr));
+                     table->setItem(i, 3, new QTableWidgetItem(t.status));
                  }
              };
 
@@ -989,10 +988,7 @@ static QWidget* createFinancePage(QStackedWidget* &outNestedStack) {
                  
                  QList<Transaction> filtered;
                  for(const auto& t : transactions) {
-                     bool match = false;
-                     if (sType == "Status") match = t.status.toLower().contains(query);
-                     else if (sType == "ID") match = t.id.toLower().contains(query);
-                     
+                     bool match = t.status.toLower().contains(query);
                      if (match) filtered.append(t);
                  }
 
@@ -1077,7 +1073,7 @@ static QWidget* createInventoryPage(QStackedWidget* &outNestedStack) {
     actionLayout->setSpacing(12);
 
     outNestedStack = new QStackedWidget();
-    QStringList tabNames = {"Add Stock Item", "Supplier Management", "Stock Reports"};
+    QStringList tabNames = {"Add Stock Item", "Supplier Management", "Stock Reports", "Statistics"};
     QList<QPushButton*> tabButtons;
 
     for (const auto &name : tabNames) {
@@ -1101,7 +1097,7 @@ static QWidget* createInventoryPage(QStackedWidget* &outNestedStack) {
                  {"Mediterranean Olives", "Maria Rossi", "(555) 123-4567", "5/5"},
                  {"Glass Bottle Co.", "Bob Smith", "(555) 987-6543", "4/5"}
              }, true));
-        } else {
+        } else if (name == "Stock Reports") {
              // --- Stock Reports with Search and Actions ---
              QWidget *reportContainer = new QWidget();
              QVBoxLayout *reportLayout = new QVBoxLayout(reportContainer);
@@ -1176,6 +1172,21 @@ static QWidget* createInventoryPage(QStackedWidget* &outNestedStack) {
                  QObject::connect(searchType, &QComboBox::currentTextChanged, updateFilter);
              }
 
+        } else {
+             // Stock Statistics Chart
+             GenericBarChart *chart = new GenericBarChart("Stock Inventory Levels");
+             chart->addBar("Empty Bottles 500ml", 50, QColor(231, 76, 60));    // Red - Critical
+             chart->addBar("Labels - 'Gold'", 120, QColor(243, 156, 18));      // Orange - Low
+             chart->addBar("Extra Virgin 1L", 450, QColor(61, 220, 132));      // Green - Normal
+             chart->addBar("Caps - Black", 2000, QColor(61, 220, 132));        // Green - Normal
+
+             QWidget *chartContainer = new QWidget();
+             chartContainer->setStyleSheet(getCardStyle());
+             QVBoxLayout *containerLayout = new QVBoxLayout(chartContainer);
+             containerLayout->setContentsMargins(20, 20, 20, 20);
+             containerLayout->addWidget(chart);
+
+             cLayout->addWidget(chartContainer);
         }
         cLayout->addStretch();
         outNestedStack->addWidget(content);
