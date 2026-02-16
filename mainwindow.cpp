@@ -982,13 +982,126 @@ static QWidget* createMaintenancePage(QStackedWidget* &outNestedStack) {
         QVBoxLayout *cLayout = new QVBoxLayout(content);
         
         if (name == "Add Machine") {
-             // Form for adding a new machine with the 4 specific fields
-             cLayout->addWidget(createStyledForm("New Machine", {
-                 {"Machine ID:", "Ex: MAC-001"},
-                 {"Machine Name:", "Ex: Olive Press Alpha"},
-                 {"Machine Type:", "Ex: Press, Centrifuge, Filter..."},
-                 {"Machine Status:", "Ex: Normal, Broken, Maintenance"}
-             }, "Add Machine"));
+             // Manual form creation for Add Machine
+             QWidget *formContainer = new QWidget();
+             QVBoxLayout *formLayout = new QVBoxLayout(formContainer);
+             formLayout->setSpacing(15);
+             formLayout->setContentsMargins(0, 0, 10, 0);
+
+             // Title
+             QLabel *titleLabel = new QLabel("New Machine");
+             titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 25px; border: none;");
+             formLayout->addWidget(titleLabel);
+
+             QString labelStyle = getLabelStyle();
+             QString inputStyle = getInputStyle();
+
+             // Define fields (ID is auto-generated, so removed)
+             struct FieldInput { QString label; QString placeholder; QLineEdit *widget; };
+             // Use shared_ptr or similar if we were using sophisticated management, but here standard pointers in lambda with capture by value of the list of raw pointers is fine for this scope
+             // However, we need to capture specific widgets.
+             QLineEdit *nameInput = new QLineEdit();
+             QLineEdit *typeInput = new QLineEdit();
+             QLineEdit *statusInput = new QLineEdit();
+             
+             QList<QPair<QString, QLineEdit*>> inputs = {
+                 {"Machine Name:", nameInput},
+                 {"Machine Type:", typeInput},
+                 {"Machine Status:", statusInput}
+             };
+
+             for (auto &field : inputs) {
+                 QLabel *lbl = new QLabel(field.first);
+                 lbl->setStyleSheet(labelStyle);
+                 field.second->setStyleSheet(inputStyle);
+                 // field.second->setPlaceholderText(field.placeholder); // Simplified
+                 
+                 formLayout->addWidget(lbl);
+                 formLayout->addWidget(field.second);
+             }
+
+             formLayout->addSpacing(20);
+             QPushButton *btnAdd = new QPushButton("Add Machine");
+             btnAdd->setStyleSheet(getButtonStyle());
+             btnAdd->setCursor(Qt::PointingHandCursor);
+             btnAdd->setFixedHeight(45);
+             formLayout->addWidget(btnAdd);
+             formLayout->addStretch();
+             
+             // Wrap in scroll area
+             QScrollArea *scrolld = new QScrollArea();
+             scrolld->setWidgetResizable(true);
+             scrolld->setWidget(formContainer);
+             scrolld->setFrameShape(QFrame::NoFrame);
+             cLayout->addWidget(scrolld);
+
+             // Logic to Add Machine
+             // We need to capture outNestedStack to find the table later
+             QObject::connect(btnAdd, &QPushButton::clicked, [nameInput, typeInput, statusInput, outNestedStack, tabButtons]() {
+                 // Find the table in the "Machine List" page (which is index 1 of outNestedStack)
+                 QTableWidget *table = outNestedStack->findChild<QTableWidget*>("MaintenanceTable");
+                 if (!table) {
+                     QMessageBox::warning(nullptr, "Error", "Machine List table not found!");
+                     return;
+                 }
+
+                 if(nameInput->text().isEmpty() || typeInput->text().isEmpty()) {
+                     QMessageBox::warning(nullptr, "Error", "Please fill in Name and Type.");
+                     return;
+                 }
+
+                 // Generate ID
+                 int nextIdNum = table->rowCount() + 1;
+                 QString newId = QString("MAC-%1").arg(nextIdNum, 3, 10, QChar('0'));
+
+                 // Add Row
+                 int row = table->rowCount();
+                 table->insertRow(row);
+                 
+                 table->setItem(row, 0, new QTableWidgetItem(newId));
+                 table->setItem(row, 1, new QTableWidgetItem(nameInput->text()));
+                 table->setItem(row, 2, new QTableWidgetItem(typeInput->text()));
+                 table->setItem(row, 3, new QTableWidgetItem(statusInput->text().isEmpty() ? "Normal" : statusInput->text()));
+                 
+                 // Hours default 0
+                 QTableWidgetItem *hItem = new QTableWidgetItem();
+                 hItem->setData(Qt::DisplayRole, 0);
+                 table->setItem(row, 4, hItem);
+
+                 // Add Actions (Copy of Machine List logic)
+                 QWidget *actionWidget = new QWidget();
+                 QHBoxLayout *al = new QHBoxLayout(actionWidget);
+                 al->setContentsMargins(2,2,2,2);
+                 QPushButton *btnMod = new QPushButton("Edit");
+                 QPushButton *btnDel = new QPushButton("Del");
+                 btnMod->setStyleSheet("border: 1px solid #ccc; border-radius: 4px; padding: 2px 8px; background: #eee;");
+                 btnDel->setStyleSheet("border: 1px solid #d32f2f; color: #d32f2f; border-radius: 4px; padding: 2px 8px; background: #fff;");
+                 
+                 // Connect Delete Button
+                 QObject::connect(btnDel, &QPushButton::clicked, [table, btnDel]() {
+                    QPoint btnPos = btnDel->mapTo(table->viewport(), btnDel->rect().center());
+                    int r = table->rowAt(btnPos.y());
+                    if (r >= 0) {
+                        int ret = QMessageBox::warning(table, "Confirm Delete", 
+                                                       "Are you sure you want to delete this machine?", 
+                                                       QMessageBox::Yes | QMessageBox::No);
+                        if (ret == QMessageBox::Yes) table->removeRow(r);
+                    }
+                 });
+
+                 al->addWidget(btnMod);
+                 al->addWidget(btnDel);
+                 table->setCellWidget(row, 5, actionWidget);
+
+                 // Clear inputs
+                 nameInput->clear();
+                 typeInput->clear();
+                 statusInput->clear();
+
+                 // Switch to list
+                 if (outNestedStack) outNestedStack->setCurrentIndex(1); // Index 1 is Machine List
+                 if (tabButtons.size() > 1) tabButtons[1]->setChecked(true);
+             });
         } else if (name == "Machine List") {
              // --- Enhanced Machine List ---
              QWidget *listContainer = new QWidget();
@@ -1001,20 +1114,7 @@ static QWidget* createMaintenancePage(QStackedWidget* &outNestedStack) {
              QHBoxLayout *controlLayout = new QHBoxLayout(controlBar);
              controlLayout->setContentsMargins(0, 0, 0, 0);
 
-             // Removed Search Bar and Button as requested
-             // Kept Search Type ComboBox (though functionality is limited without input)
-             QComboBox *searchType = new QComboBox();
-             searchType->addItems({"Type", "Status"});
-             searchType->setStyleSheet(getInputStyle()); 
-             searchType->setFixedWidth(100);
 
-             QLabel *lblSort = new QLabel("Sort by:");
-             lblSort->setStyleSheet(getLabelStyle());
-             
-             QComboBox *sortType = new QComboBox();
-             sortType->addItems({"Status", "Hours"});
-             sortType->setStyleSheet(getInputStyle());
-             sortType->setFixedWidth(100);
 
              // Removed Sort Button as requested
 
@@ -1023,7 +1123,28 @@ static QWidget* createMaintenancePage(QStackedWidget* &outNestedStack) {
              btnPrint->setCursor(Qt::PointingHandCursor);
              btnPrint->setFixedWidth(120);
 
-             controlLayout->addWidget(searchType); // Kept as requested
+             // Added Search Bar
+             // QLineEdit *searchEdit = new QLineEdit(); 
+             // searchEdit->setPlaceholderText("Search...");
+             // searchEdit->setStyleSheet(getInputStyle());
+             // searchEdit->setFixedWidth(150);
+
+             QComboBox *searchType = new QComboBox();
+             searchType->addItems({"Type", "Status"}); 
+             searchType->setStyleSheet(getInputStyle()); 
+             searchType->setFixedWidth(100);
+
+             // Added Sort Controls (Replacing Search)
+             QLabel *lblSort = new QLabel("Sort by:");
+             lblSort->setStyleSheet(getLabelStyle());
+             
+             QComboBox *sortType = new QComboBox();
+             sortType->addItems({"Select...", "Status", "Hours"});
+             sortType->setStyleSheet(getInputStyle());
+             sortType->setFixedWidth(120);
+
+             // controlLayout->addWidget(searchEdit); // Removed
+             controlLayout->addWidget(searchType);
              controlLayout->addSpacing(20);
              controlLayout->addWidget(lblSort);
              controlLayout->addWidget(sortType);
@@ -1035,6 +1156,7 @@ static QWidget* createMaintenancePage(QStackedWidget* &outNestedStack) {
              // 2. Table
              QStringList headers = {"ID", "Name", "Type", "Status", "Hours", "Actions"};
              QTableWidget *table = new QTableWidget();
+             table->setObjectName("MaintenanceTable"); // Added ObjectName for finding it later
              table->setColumnCount(headers.size());
              table->setHorizontalHeaderLabels(headers);
              table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -1072,10 +1194,70 @@ static QWidget* createMaintenancePage(QStackedWidget* &outNestedStack) {
                      QWidget *actionWidget = new QWidget();
                      QHBoxLayout *al = new QHBoxLayout(actionWidget);
                      al->setContentsMargins(2,2,2,2);
-                     QPushButton *btnMod = new QPushButton("Edit");
+                     QPushButton *btnMod = new QPushButton("Modifier");
                      QPushButton *btnDel = new QPushButton("Del");
                      btnMod->setStyleSheet("border: 1px solid #ccc; border-radius: 4px; padding: 2px 8px; background: #eee;");
                      btnDel->setStyleSheet("border: 1px solid #d32f2f; color: #d32f2f; border-radius: 4px; padding: 2px 8px; background: #fff;");
+                     
+                     // Connect Modify Button
+                     QObject::connect(btnMod, &QPushButton::clicked, [table, btnMod]() {
+                        QPoint btnPos = btnMod->mapTo(table->viewport(), btnMod->rect().center());
+                        int row = table->rowAt(btnPos.y());
+                        if (row >= 0) {
+                            // Get current data
+                            QString id = table->item(row, 0)->text();
+                            QString name = table->item(row, 1)->text();
+                            QString type = table->item(row, 2)->text();
+                            QString status = table->item(row, 3)->text();
+
+                            // Create Dialog
+                            QDialog dlg(table);
+                            dlg.setWindowTitle("Modify Machine");
+                            dlg.setModal(true);
+                            dlg.setMinimumWidth(300);
+
+                            QFormLayout *form = new QFormLayout(&dlg);
+                            
+                            QLineEdit *edName = new QLineEdit(name);
+                            QLineEdit *edType = new QLineEdit(type);
+                            QLineEdit *edStatus = new QLineEdit(status);
+                            
+                            form->addRow("ID:", new QLabel(id)); // ID Read-only
+                            form->addRow("Name:", edName);
+                            form->addRow("Type:", edType);
+                            form->addRow("Status:", edStatus);
+
+                            QDialogButtonBox *bbox = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+                            form->addRow(bbox);
+
+                            QObject::connect(bbox, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+                            QObject::connect(bbox, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+                            if (dlg.exec() == QDialog::Accepted) {
+                                table->item(row, 1)->setText(edName->text());
+                                table->item(row, 2)->setText(edType->text());
+                                table->item(row, 3)->setText(edStatus->text());
+                                QMessageBox::information(table, "Success", "Machine updated successfully!");
+                            }
+                        }
+                     });
+                     
+                     // Connect Delete Button
+                     QObject::connect(btnDel, &QPushButton::clicked, [table, btnDel]() {
+                        // Find the row containing this button
+                        // We need to map the button position to the table coordinates
+                        QPoint btnPos = btnDel->mapTo(table->viewport(), btnDel->rect().center());
+                        int row = table->rowAt(btnPos.y());
+                        if (row >= 0) {
+                            int ret = QMessageBox::warning(table, "Confirm Delete", 
+                                                           "Are you sure you want to delete this machine?", 
+                                                           QMessageBox::Yes | QMessageBox::No);
+                            if (ret == QMessageBox::Yes) {
+                                table->removeRow(row);
+                            }
+                        }
+                     });
+
                      al->addWidget(btnMod);
                      al->addWidget(btnDel);
                      table->setCellWidget(i, 5, actionWidget);
@@ -1085,28 +1267,37 @@ static QWidget* createMaintenancePage(QStackedWidget* &outNestedStack) {
              populateTable(machines);
              listLayout->addWidget(table);
 
-             // 3. Logic
-             // Auto-Sort on ComboBox Change
-             auto sortTable = [=]() {
-                QString type = sortType->currentText();
-                table->setSortingEnabled(false); 
-                if (type == "Status") {
-                    table->sortItems(3, Qt::AscendingOrder); // Column 3 = Status
-                } else if (type == "Hours") {
-                    table->sortItems(4, Qt::AscendingOrder); // Column 4 = Hours
-                }
+
+            
+             // Connect Search Logic
+             /* 
+             auto filterTable = [=]() {
+                 QString query = searchEdit->text().toLower();
+                 QString type = searchType->currentText();
+                 int colIndex = (type == "Type") ? 2 : 3; // Type=2, Status=3
+
+                 for(int i = 0; i < table->rowCount(); ++i) {
+                     bool match = false;
+                     QTableWidgetItem *item = table->item(i, colIndex);
+                     if (item) {
+                         match = item->text().toLower().contains(query);
+                     }
+                     table->setRowHidden(i, !match);
+                 }
              };
 
-             // Connect Sort Type
-             QObject::connect(sortType, &QComboBox::currentTextChanged, sortTable);
-            
-             // Connect Search Type (for future use or as a secondary sort trigger if desired)
-             QObject::connect(searchType, &QComboBox::currentTextChanged, [=](const QString &text) {
-                 // For now, maybe just sort by that column type?
-                 // Let's implement basic sort by column if user selects Type/Status in search combo
-                 table->setSortingEnabled(false);
-                 if (text == "Type") table->sortItems(2, Qt::AscendingOrder);
-                 else if (text == "Status") table->sortItems(3, Qt::AscendingOrder);
+             QObject::connect(searchEdit, &QLineEdit::textChanged, filterTable);
+             QObject::connect(searchType, &QComboBox::currentTextChanged, filterTable);
+             */
+
+             // Connect Sort Logic
+             QObject::connect(sortType, &QComboBox::currentTextChanged, [table](const QString &text) {
+                 table->setSortingEnabled(false); // Disable default sorting to use ours or just set sort order
+                 if (text == "Status") {
+                     table->sortItems(3, Qt::AscendingOrder); // Column 3 = Status
+                 } else if (text == "Hours") {
+                     table->sortItems(4, Qt::AscendingOrder); // Column 4 = Hours
+                 }
              });
 
              // Print
