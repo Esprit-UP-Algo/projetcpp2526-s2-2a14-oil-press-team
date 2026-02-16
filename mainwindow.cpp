@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include <QWidget>
+#include <algorithm>
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -27,6 +28,8 @@
 #include <QFormLayout>
 #include <QDialogButtonBox>
 #include <QPainter>
+#include <QTextDocument>
+#include <QPageSize>
 
 // --- Custom Bar Chart Widget (No Dependencies) ---
 // --- Custom Bar Chart Widget (No Dependencies) ---
@@ -584,12 +587,244 @@ static QWidget* createClientPage(QStackedWidget* &outNestedStack) {
             cLayout->addSpacing(15);
             cLayout->addWidget(createStyledForm("Edit Details", {{"Company Name:", "Acme Corp"}, {"Email:", "contact@acme.com"}}, "Update Profile"));
         } else if (name == "Order History") {
-            cLayout->addWidget(createStyledTable("Order Interaction History", {"Date", "Client", "Action", "Notes"}, {
-                {"2023-10-25", "Trattoria Luigi", "Meeting", "Discussed Winter Supply"},
-                {"2023-10-24", "Oileria Bella", "Support", "Clarified acidity levels"},
-                {"2023-10-22", "Organic Market", "Order", "Placed bulk order #992"},
-                {"2023-10-20", "Gourmet Foods", "Call", "Quality check inquiry"}
-            }, true)); // Actions enabled
+            // --- Order History with Search & Sort ---
+
+            // Container
+            QWidget *historyContainer = new QWidget();
+            QVBoxLayout *histLayout = new QVBoxLayout(historyContainer);
+            histLayout->setContentsMargins(0, 0, 0, 0);
+            histLayout->setSpacing(10);
+
+            // 1. Controls (Search + Sort)
+            QWidget *controlBar = new QWidget();
+            QHBoxLayout *controlLayout = new QHBoxLayout(controlBar);
+            controlLayout->setContentsMargins(0, 0, 0, 0);
+
+            // Search
+            QLineEdit *searchEdit = new QLineEdit();
+            searchEdit->setPlaceholderText("Search Orders...");
+            searchEdit->setStyleSheet(getInputStyle());
+            searchEdit->setMinimumWidth(200);
+
+            // Sort
+            QLabel *lblSort = new QLabel("Sort by:");
+            lblSort->setStyleSheet(getLabelStyle());
+            lblSort->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed); // scanning fix
+
+            QComboBox *sortCombo = new QComboBox();
+            sortCombo->addItems({"Date (Newest)", "Date (Oldest)", "Amount (High-Low)", "Amount (Low-High)"});
+            sortCombo->setStyleSheet(getInputStyle());
+            sortCombo->setFixedWidth(180);
+
+            sortCombo->setFixedWidth(180);
+
+            // Print PDF Button
+            QPushButton *btnPrint = new QPushButton("Print PDF");
+            btnPrint->setCursor(Qt::PointingHandCursor);
+            btnPrint->setStyleSheet(getButtonStyle());
+            btnPrint->setFixedWidth(120);
+            
+            controlLayout->addWidget(searchEdit);
+            controlLayout->addSpacing(15);
+            controlLayout->addWidget(lblSort);
+            controlLayout->addWidget(sortCombo);
+            controlLayout->addSpacing(15);
+            controlLayout->addWidget(btnPrint);
+            controlLayout->addStretch();
+            
+            histLayout->addWidget(controlBar);
+
+            // 2. Table
+            QStringList headers = {"Date", "Client", "Type", "Amount", "Notes", "Action"};
+            QTableWidget *table = new QTableWidget();
+            table->setColumnCount(headers.size());
+            table->setHorizontalHeaderLabels(headers);
+            table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+            table->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
+            table->verticalHeader()->setVisible(false);
+            table->setAlternatingRowColors(true);
+            table->setStyleSheet(
+                "QTableWidget { border: 1px solid #eaeaea; background-color: #ffffff; gridline-color: transparent; border-radius: 8px; alternate-background-color: #f9fafb; }"
+                "QHeaderView::section { background-color: #ffffff; padding: 12px; border: none; border-bottom: 2px solid #f0f0f0; font-weight: 700; color: #666; }"
+                "QTableWidget::item { padding: 12px; border-bottom: 1px solid #f5f5f5; color: #333; }"
+            );
+
+            histLayout->addWidget(table);
+
+            // Connect Print (Moved here to capture 'table' correctly)
+            QObject::connect(btnPrint, &QPushButton::clicked, [table]() {
+                QString fileName = QFileDialog::getSaveFileName(table->window(), "Export Order History", QString(), "PDF Files (*.pdf)");
+                if (fileName.isEmpty()) return;
+                if (QFileInfo(fileName).suffix().isEmpty()) fileName.append(".pdf");
+
+                QPrinter printer(QPrinter::PrinterResolution);
+                printer.setOutputFormat(QPrinter::PdfFormat);
+                printer.setPageSize(QPageSize(QPageSize::A4)); // Updated for Qt6 compatibility
+                printer.setOutputFileName(fileName);
+
+                QTextDocument doc;
+                QString html = "<h1 style='text-align:center; color:#333;'>Order History Report</h1>";
+                html += "<h3 style='text-align:center; color:#666;'>" + QDate::currentDate().toString("dd MMMM yyyy") + "</h3><br>";
+                html += "<table border='1' cellspacing='0' cellpadding='6' width='100%' style='border-collapse:collapse; border-color:#ccc;'>";
+                
+                // Headers
+                html += "<thead style='background-color:#f2f2f2;'><tr>";
+                for(int c=0; c < table->columnCount() - 1; ++c) { // Skip 'Action' column (last one)
+                   html += "<th style='padding:8px;'>" + table->horizontalHeaderItem(c)->text() + "</th>";
+                }
+                html += "</tr></thead>";
+                
+                // Body
+                html += "<tbody>";
+                for(int r=0; r < table->rowCount(); ++r) {
+                    html += "<tr>";
+                    for(int c=0; c < table->columnCount() - 1; ++c) {
+                        QTableWidgetItem *item = table->item(r, c);
+                        html += "<td style='padding:8px;'>" + (item ? item->text() : "") + "</td>";
+                    }
+                    html += "</tr>";
+                }
+                html += "</tbody></table>";
+                
+                doc.setHtml(html);
+                doc.setPageSize(printer.pageRect(QPrinter::Point).size());
+                doc.print(&printer);
+                
+                QMessageBox::information(table->window(), "Success", "PDF Exported Successfully!");
+            });
+
+            // 3. Data & Logic
+            struct OrderItem {
+                QString date;
+                QString client;
+                QString action;
+                double amount;
+                QString notes;
+            };
+
+            // Mock Data
+            QList<OrderItem> allOrders = {
+                {"2023-10-25", "Trattoria Luigi", "Meeting", 0.0, "Discussed Winter Supply"},
+                {"2023-10-24", "Oileria Bella", "Support", 0.0, "Clarified acidity levels"},
+                {"2023-10-22", "Organic Market", "Order", 4500.50, "Placed bulk order #992"},
+                {"2023-10-20", "Gourmet Foods", "Call", 0.0, "Quality check inquiry"},
+                {"2023-10-18", "Pasta Place", "Order", 1200.00, "Regular monthly supply"},
+                {"2023-10-15", "Pizza House", "Order", 320.75, "Emergency restock"}
+            };
+
+            auto updateTable = [table, allOrders, searchEdit, sortCombo]() {
+                QString query = searchEdit->text().toLower();
+                QString sortMode = sortCombo->currentText();
+
+                // 1. Filter
+                QList<OrderItem> filtered;
+                for (const auto &item : allOrders) {
+                    bool match = item.client.toLower().contains(query) || 
+                                 item.notes.toLower().contains(query) ||
+                                 item.action.toLower().contains(query);
+                    if (match) filtered.append(item);
+                }
+
+                // 2. Sort
+                std::sort(filtered.begin(), filtered.end(), [sortMode](const OrderItem &a, const OrderItem &b) {
+                    if (sortMode == "Date (Newest)") return a.date > b.date;
+                    if (sortMode == "Date (Oldest)") return a.date < b.date;
+                    if (sortMode == "Amount (High-Low)") return a.amount > b.amount;
+                    if (sortMode == "Amount (Low-High)") return a.amount < b.amount;
+                    return false;
+                });
+
+                // 3. Populate
+                table->setRowCount(0);
+                table->setRowCount(filtered.size());
+                for (int i = 0; i < filtered.size(); ++i) {
+                    const auto &item = filtered[i];
+                    table->setItem(i, 0, new QTableWidgetItem(item.date));
+                    table->setItem(i, 1, new QTableWidgetItem(item.client));
+                    table->setItem(i, 2, new QTableWidgetItem(item.action));
+                    
+                    QString amtStr = (item.amount > 0) ? QString::number(item.amount, 'f', 2) + " €" : "-";
+                    table->setItem(i, 3, new QTableWidgetItem(amtStr));
+                    
+                    table->setItem(i, 4, new QTableWidgetItem(item.notes));
+
+                    // Action Column
+                    QWidget *actionWidget = new QWidget();
+                    QHBoxLayout *actionLayout = new QHBoxLayout(actionWidget);
+                    actionLayout->setContentsMargins(5, 2, 5, 2);
+                    actionLayout->setSpacing(5);
+                    
+                    QPushButton *btnModify = new QPushButton("Modify");
+                    btnModify->setCursor(Qt::PointingHandCursor);
+                    btnModify->setStyleSheet("QPushButton { background-color: #ffffff; border: 1px solid #cccccc; border-radius: 6px; padding: 6px 12px; font-weight: 600; font-size: 13px; color: #333333; } QPushButton:hover { background-color: #f6f6f6; border-color: #bbbbbb; }");
+                    
+                    QPushButton *btnDelete = new QPushButton("Delete");
+                    btnDelete->setCursor(Qt::PointingHandCursor);
+                    btnDelete->setStyleSheet("QPushButton { background-color: #ffffff; border: 1px solid #d32f2f; color: #d32f2f; border-radius: 6px; padding: 6px 12px; font-weight: 600; font-size: 13px; } QPushButton:hover { background-color: #ffebee; border-color: #b71c1c; color: #b71c1c; }");
+
+                    actionLayout->addWidget(btnModify);
+                    actionLayout->addWidget(btnDelete);
+                    table->setCellWidget(i, 5, actionWidget);
+
+                    // Connect Modify
+                    QObject::connect(btnModify, &QPushButton::clicked, [table, i]() {
+                        QDialog *dialog = new QDialog(table->window());
+                        dialog->setWindowTitle("Modify Order");
+                        QFormLayout *form = new QFormLayout(dialog);
+                        
+                        QLineEdit *dateEdit = new QLineEdit(table->item(i, 0)->text());
+                        QLineEdit *clientEdit = new QLineEdit(table->item(i, 1)->text());
+                        QLineEdit *typeEdit = new QLineEdit(table->item(i, 2)->text());
+                        QLineEdit *amountEdit = new QLineEdit(table->item(i, 3)->text());
+                        QLineEdit *notesEdit = new QLineEdit(table->item(i, 4)->text());
+                        
+                        form->addRow("Date:", dateEdit);
+                        form->addRow("Client:", clientEdit);
+                        form->addRow("Type:", typeEdit);
+                        form->addRow("Amount:", amountEdit);
+                        form->addRow("Notes:", notesEdit);
+                        
+                        QDialogButtonBox *btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dialog);
+                        form->addRow(btns);
+                        
+                        QObject::connect(btns, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
+                        QObject::connect(btns, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+                        
+                        if (dialog->exec() == QDialog::Accepted) {
+                            table->item(i, 0)->setText(dateEdit->text());
+                            table->item(i, 1)->setText(clientEdit->text());
+                            table->item(i, 2)->setText(typeEdit->text());
+                            table->item(i, 3)->setText(amountEdit->text());
+                            table->item(i, 4)->setText(notesEdit->text());
+                        }
+                        dialog->deleteLater(); 
+                    });
+
+                    // Connect Delete
+                    QObject::connect(btnDelete, &QPushButton::clicked, [table, btnDelete]() {
+                        QMessageBox::StandardButton reply;
+                        reply = QMessageBox::question(table->window(), "Delete Order", "Are you sure you want to delete this order?", QMessageBox::Yes|QMessageBox::No);
+                        if (reply == QMessageBox::Yes) {
+                            // Find row dynamically because removal changes indices
+                            QPoint btnPos = btnDelete->mapTo(table->viewport(), btnDelete->rect().center());
+                            int row = table->rowAt(btnPos.y());
+                            if (row >= 0) {
+                                table->removeRow(row);
+                                QMessageBox::information(table->window(), "Deleted", "Order deleted successfully.");
+                            }
+                        }
+                    });
+                }
+            };
+
+            // Connect
+            QObject::connect(searchEdit, &QLineEdit::textChanged, updateTable);
+            QObject::connect(sortCombo, &QComboBox::currentTextChanged, updateTable);
+
+            // Init
+            updateTable();
+
+            cLayout->addWidget(historyContainer);
         } else {
              // Client Statistics Chart
              GenericBarChart *chart = new GenericBarChart("New Order Acquisition (Q2 vs Q3)");
