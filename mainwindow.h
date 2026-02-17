@@ -3,14 +3,32 @@
 
 #include <QMainWindow>
 #include <QStackedWidget>
+#include <QPoint>
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 public:
     explicit MainWindow(QWidget *parent = nullptr);
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
+
+signals:
+    void logoutRequested();
+
 private:
     QStackedWidget *stackedWidget;
+    QPoint m_dragPosition;
+    bool m_isResizing = false;
+    bool m_isMoving = false;
+    int m_edgeMargin = 8;
+    
+    QWidget* createTitleBar();
+    Qt::Edges getEdge(const QPoint &pos);
 };
 
 #endif

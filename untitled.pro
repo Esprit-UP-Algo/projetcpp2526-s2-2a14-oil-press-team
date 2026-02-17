@@ -8,10 +8,14 @@ CONFIG += c++17
 
 SOURCES += \
     main.cpp \
-    mainwindow.cpp
+    mainwindow.cpp \
+    EyeSaverButton.cpp \
+    AuthWidgets.cpp
 
 HEADERS += \
-    mainwindow.h
+    mainwindow.h \
+    EyeSaverButton.h \
+    AuthWidgets.h
 
 FORMS += \
     mainwindow.ui

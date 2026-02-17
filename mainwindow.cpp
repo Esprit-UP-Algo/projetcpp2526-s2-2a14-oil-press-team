@@ -1,4 +1,7 @@
 #include "mainwindow.h"
+#include "EyeSaverButton.h"
+#include "AuthWidgets.h"
+#include <QResizeEvent>
 #include <QWidget>
 #include <algorithm>
 #include <QComboBox>
@@ -8,6 +11,8 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QStackedWidget>
+#include <QMenuBar>
+#include <QStatusBar>
 #include <QLineEdit>
 #include <QLinearGradient>
 #include <QPalette>
@@ -15,7 +20,6 @@
 #include <QTableWidget>
 #include <QHeaderView>
 #include <QMessageBox>
-#include <QDate>
 #include <QDate>
 #include <QDateTime>
 #include <QScrollArea>
@@ -30,6 +34,115 @@
 #include <QPainter>
 #include <QTextDocument>
 #include <QPageSize>
+#include <QMouseEvent>
+#include <QWindow>
+
+Qt::Edges MainWindow::getEdge(const QPoint &pos) {
+    int x = pos.x();
+    int y = pos.y();
+    int w = width();
+    int h = height();
+    int m = m_edgeMargin;
+
+    Qt::Edges edges = Qt::Edges();
+
+    if (x <= m) edges |= Qt::LeftEdge;
+    if (x >= w - m) edges |= Qt::RightEdge;
+    if (y <= m) edges |= Qt::TopEdge;
+    if (y >= h - m) edges |= Qt::BottomEdge;
+
+    return edges;
+}
+
+void MainWindow::mousePressEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton) {
+        Qt::Edges edges = getEdge(event->pos());
+        if (edges != 0) {
+            if (windowHandle()) {
+                windowHandle()->startSystemResize(edges);
+            }
+        } else if (event->pos().y() <= 35) { // Title Bar Height
+            if (windowHandle()) {
+                windowHandle()->startSystemMove();
+            }
+        }
+        event->accept();
+    }
+}
+
+void MainWindow::mouseMoveEvent(QMouseEvent *event) {
+    Qt::Edges edges = getEdge(event->pos());
+    
+    if ((edges & Qt::LeftEdge && edges & Qt::TopEdge) || (edges & Qt::RightEdge && edges & Qt::BottomEdge))
+        setCursor(Qt::SizeFDiagCursor);
+    else if ((edges & Qt::RightEdge && edges & Qt::TopEdge) || (edges & Qt::LeftEdge && edges & Qt::BottomEdge))
+        setCursor(Qt::SizeBDiagCursor);
+    else if (edges & Qt::LeftEdge || edges & Qt::RightEdge)
+        setCursor(Qt::SizeHorCursor);
+    else if (edges & Qt::TopEdge || edges & Qt::BottomEdge)
+        setCursor(Qt::SizeVerCursor);
+    else
+        setCursor(Qt::ArrowCursor);
+
+    QMainWindow::mouseMoveEvent(event);
+}
+
+void MainWindow::mouseReleaseEvent(QMouseEvent *event) {
+    m_isResizing = false;
+    m_isMoving = false;
+    QMainWindow::mouseReleaseEvent(event);
+}
+
+void MainWindow::mouseDoubleClickEvent(QMouseEvent *event) {
+    if (event->pos().y() <= 35) {
+        if (isMaximized()) showNormal();
+        else showMaximized();
+    }
+}
+
+QWidget* MainWindow::createTitleBar() {
+    QWidget *bar = new QWidget();
+    bar->setFixedHeight(35);
+    bar->setStyleSheet("background-color: #111; color: #999;");
+    
+    QHBoxLayout *layout = new QHBoxLayout(bar);
+    layout->setContentsMargins(15, 0, 0, 0);
+    layout->setSpacing(0);
+
+    QLabel *title = new QLabel("oil press manager");
+    title->setStyleSheet("font-weight: bold; font-size: 13px; color: #777;");
+    layout->addWidget(title);
+    layout->addStretch();
+
+    // Buttons on the RIGHT - Opposite size (Rectangular 45x35)
+    QPushButton *minBtn = new QPushButton("−");
+    minBtn->setFixedSize(45, 35);
+    minBtn->setCursor(Qt::PointingHandCursor);
+    minBtn->setStyleSheet("QPushButton { background: transparent; border: none; color: #999; font-size: 16px; } QPushButton:hover { background-color: #333; color: white; }");
+
+    QPushButton *maxBtn = new QPushButton("▢"); 
+    maxBtn->setFixedSize(45, 35);
+    maxBtn->setCursor(Qt::PointingHandCursor);
+    maxBtn->setStyleSheet("QPushButton { background: transparent; border: none; color: #999; font-size: 14px; } QPushButton:hover { background-color: #333; color: white; }");
+
+    QPushButton *closeBtn = new QPushButton("✕");
+    closeBtn->setFixedSize(45, 35);
+    closeBtn->setCursor(Qt::PointingHandCursor);
+    closeBtn->setStyleSheet("QPushButton { background: transparent; border: none; color: #999; font-size: 16px; } QPushButton:hover { background-color: #e74c3c; color: white; }");
+
+    layout->addWidget(minBtn);
+    layout->addWidget(maxBtn);
+    layout->addWidget(closeBtn);
+
+    connect(minBtn, &QPushButton::clicked, this, &QWidget::showMinimized);
+    connect(maxBtn, &QPushButton::clicked, this, [this]() {
+        if (isMaximized()) showNormal();
+        else showMaximized();
+    });
+    connect(closeBtn, &QPushButton::clicked, this, &QWidget::close);
+
+    return bar;
+}
 
 // --- Custom Bar Chart Widget (No Dependencies) ---
 // --- Custom Bar Chart Widget (No Dependencies) ---
@@ -340,7 +453,7 @@ static QWidget* createStyledForm(const QString &title, const QList<QPair<QString
     return formContainer;
 }
 
-static QWidget* createStyledTable(const QString &title, const QStringList &headers, const QVector<QStringList> &data, bool showActions = false) {
+static QWidget* createStyledTable(const QString &title, const QStringList &headers, const QVector<QStringList> &data, bool showActions = false, bool showQrAction = false, bool showViewAction = false) {
     QWidget *tableWidget = new QWidget();
     QVBoxLayout *layout = new QVBoxLayout(tableWidget);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -428,6 +541,43 @@ static QWidget* createStyledTable(const QString &title, const QStringList &heade
 
             actionLayout->addWidget(btnModify);
             actionLayout->addWidget(btnDelete);
+
+            if (showViewAction) {
+                QPushButton *btnAccept = new QPushButton("Accept");
+                btnAccept->setCursor(Qt::PointingHandCursor);
+                btnAccept->setMinimumWidth(60);
+                btnAccept->setFixedHeight(28);
+                btnAccept->setStyleSheet(
+                    "QPushButton {"
+                    "background-color: #ffffff;"
+                    "color: #3DDC84;"
+                    "border: 1px solid #3DDC84;"
+                    "border-radius: 6px;"
+                    "padding: 0px 8px;"
+                    "font-size: 13px;"
+                    "font-weight: 600;"
+                    "} "
+                    "QPushButton:hover { background-color: #e6f9ef; color: #34c772; border-color: #34c772; }"
+                );
+                actionLayout->addWidget(btnAccept);
+                 QObject::connect(btnAccept, &QPushButton::clicked, [=]() {
+                    QMessageBox::information(nullptr, "Leave Request", "Request for " + data[i][0] + " has been accepted.");
+                });
+            }
+
+             if (showQrAction) {
+                QPushButton *btnQr = new QPushButton("QR Code");
+                btnQr->setCursor(Qt::PointingHandCursor);
+                btnQr->setStyleSheet("QPushButton { background-color: #9b59b6; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 13px; font-weight: 600; } QPushButton:hover { background-color: #8e44ad; }");
+                
+                // Capture row data for QR
+                QString name = data[i].size() > 1 ? data[i][1] : "Employee";
+                QObject::connect(btnQr, &QPushButton::clicked, [=]() {
+                    QMessageBox::information(nullptr, "QR Code Generated", "QR Code generated for: " + name + "\n(Sent to printer)");
+                });
+                actionLayout->addWidget(btnQr);
+            }
+
             actionLayout->addStretch();
             
             // Connect Delete Button
@@ -1275,11 +1425,7 @@ static QWidget* createMaintenancePage(QStackedWidget* &outNestedStack) {
              formLayout->addStretch();
              
              // Wrap in scroll area
-             QScrollArea *scrolld = new QScrollArea();
-             scrolld->setWidgetResizable(true);
-             scrolld->setWidget(formContainer);
-             scrolld->setFrameShape(QFrame::NoFrame);
-             cLayout->addWidget(scrolld);
+             cLayout->addWidget(formContainer);
 
              // Logic to Add Machine
              // We need to capture outNestedStack to find the table later
@@ -1775,6 +1921,10 @@ static QWidget* createProductPage(QStackedWidget* &outNestedStack) {
     return page;
 }
 
+
+
+
+
 static QWidget* createPersonnelPage(QStackedWidget* &outNestedStack) {
     QWidget *page = new QWidget();
     QVBoxLayout *layout = new QVBoxLayout(page);
@@ -1787,7 +1937,7 @@ static QWidget* createPersonnelPage(QStackedWidget* &outNestedStack) {
     actionLayout->setSpacing(12);
 
     outNestedStack = new QStackedWidget();
-    QStringList tabNames = {"Employee Directory", "Add Employee", "Payroll", "Leave Requests"};
+    QStringList tabNames = {"Employee Directory", "Add Employee", "Payroll", "Leave Requests", "Statistics", "PDF Printing"};
     QList<QPushButton*> tabButtons;
 
     for (const auto &name : tabNames) {
@@ -1801,31 +1951,199 @@ static QWidget* createPersonnelPage(QStackedWidget* &outNestedStack) {
         QVBoxLayout *cLayout = new QVBoxLayout(content);
         
         if (name == "Employee Directory") {
-             cLayout->addWidget(createStyledTable("Staff Directory", {"ID", "Name", "Position", "Department", "Start Date"}, {
+            // Container for list page
+            QWidget *listPageWidget = new QWidget();
+            QVBoxLayout *listPageLayout = new QVBoxLayout(listPageWidget);
+            listPageLayout->setContentsMargins(0,0,0,0);
+            listPageLayout->setSpacing(10);
+            
+            // Search Bar
+            QWidget *controlBar = new QWidget();
+            QHBoxLayout *controlLayout = new QHBoxLayout(controlBar);
+            controlLayout->setContentsMargins(0, 0, 0, 0);
+
+            QLineEdit *searchEdit = new QLineEdit();
+            searchEdit->setPlaceholderText("Search Employee...");
+            searchEdit->setStyleSheet(getInputStyle());
+            searchEdit->setFixedWidth(200);
+            
+            controlLayout->addWidget(searchEdit);
+            controlLayout->addStretch();
+            listPageLayout->addWidget(controlBar);
+
+            // Table
+            QWidget *tableWidgetWrapper = createStyledTable("Staff Directory", 
+                {"ID", "Name", "Position", "Department", "Start Date"}, {
                  {"EMP-001", "John Doe", "Manager", "Sales", "2020-01-15"},
                  {"EMP-002", "Jane Smith", "Engineer", "Product", "2021-03-22"},
                  {"EMP-003", "Robert Brown", "Technician", "Maintenance", "2019-11-05"},
                  {"EMP-004", "Emily White", "Accountant", "Finance", "2022-06-01"}
-             }, true));
+             }, true, true); // Actions + QR
+
+            QTableWidget *table = tableWidgetWrapper->findChild<QTableWidget*>();
+            if (table) table->setObjectName("PersonnelTable");
+            
+            listPageLayout->addWidget(tableWidgetWrapper);
+            cLayout->addWidget(listPageWidget);
+
+            // Search Logic
+            if (table) {
+                QObject::connect(searchEdit, &QLineEdit::textChanged, [table](const QString &text) {
+                    QString query = text.toLower();
+                    for(int i = 0; i < table->rowCount(); ++i) {
+                        bool match = false;
+                        if(table->item(i, 1)) match = table->item(i, 1)->text().toLower().contains(query); // Name
+                        table->setRowHidden(i, !match);
+                    }
+                });
+            }
+
         } else if (name == "Add Employee") {
-             cLayout->addWidget(createStyledForm("New Employee Registration", {
-                 {"Full Name:", "Enter full name"},
-                 {"Position:", "Job Title"},
-                 {"Department:", "Select Department"},
-                 {"Email:", "company@email.com"},
-                 {"Start Date:", "YYYY-MM-DD"}
-             }, "Hire Employee"));
+             // Manual Form
+             QWidget *formContainer = new QWidget();
+             QVBoxLayout *formLayout = new QVBoxLayout(formContainer);
+             formLayout->setSpacing(15);
+             formLayout->setContentsMargins(0, 0, 10, 0);
+
+             QLabel *titleLabel = new QLabel("New Employee Registration");
+             titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 25px; border: none;");
+             formLayout->addWidget(titleLabel);
+
+             QString labelStyle = getLabelStyle();
+             QString inputStyle = getInputStyle();
+
+             QLineEdit *nameInput = new QLineEdit();
+             QLineEdit *posInput = new QLineEdit();
+             QComboBox *deptInput = new QComboBox(); 
+             deptInput->addItems({"Select...", "Sales", "Product", "Maintenance", "Finance", "HR"});
+             deptInput->setStyleSheet(inputStyle);
+             deptInput->setFixedHeight(45);
+             QLineEdit *emailInput = new QLineEdit();
+             QLineEdit *dateInput = new QLineEdit(); dateInput->setPlaceholderText("YYYY-MM-DD");
+
+             auto addField = [&](QString label, QWidget *w) {
+                 QLabel *lbl = new QLabel(label);
+                 lbl->setStyleSheet(labelStyle);
+                 if (QLineEdit* le = qobject_cast<QLineEdit*>(w)) le->setStyleSheet(inputStyle);
+                 formLayout->addWidget(lbl);
+                 formLayout->addWidget(w);
+             };
+
+             addField("Full Name:", nameInput);
+             addField("Position:", posInput);
+             addField("Department:", deptInput);
+             addField("Email:", emailInput);
+             addField("Start Date:", dateInput);
+
+             formLayout->addSpacing(20);
+             QPushButton *btnHire = new QPushButton("Hire Employee");
+             btnHire->setStyleSheet(getButtonStyle());
+             btnHire->setCursor(Qt::PointingHandCursor);
+             btnHire->setFixedHeight(45);
+             formLayout->addWidget(btnHire);
+             formLayout->addStretch();
+
+             // Logic
+             QObject::connect(btnHire, &QPushButton::clicked, [=]() {
+                 QTableWidget *table = outNestedStack->findChild<QTableWidget*>("PersonnelTable");
+                 if(!table) return;
+
+                 if(nameInput->text().isEmpty()) {
+                     QMessageBox::warning(nullptr, "Error", "Name is required!");
+                     return;
+                 }
+
+                 int row = table->rowCount();
+                 table->insertRow(row);
+                 // Auto ID
+                 table->setItem(row, 0, new QTableWidgetItem(QString("EMP-%1").arg(row+1, 3, 10, QChar('0'))));
+                 table->setItem(row, 1, new QTableWidgetItem(nameInput->text()));
+                 table->setItem(row, 2, new QTableWidgetItem(posInput->text()));
+                 table->setItem(row, 3, new QTableWidgetItem(deptInput->currentText()));
+                 table->setItem(row, 4, new QTableWidgetItem(dateInput->text()));
+
+                 // Clear
+                 nameInput->clear(); posInput->clear(); emailInput->clear(); dateInput->clear();
+                 deptInput->setCurrentIndex(0);
+
+                 // Success & Switch
+                 QMessageBox::information(nullptr, "Success", "Employee Hired Successfully!");
+                 if (outNestedStack) outNestedStack->setCurrentIndex(0);
+                 if (!tabButtons.isEmpty()) tabButtons.first()->setChecked(true);
+             });
+
+             cLayout->addWidget(formContainer);
+
         } else if (name == "Payroll") {
              cLayout->addWidget(createStyledTable("Recent Payroll Runs", {"Period", "Total Payout", "Status", "Date Processed"}, {
                  {"October 2023", "$145,000", "Completed", "2023-10-31"},
                  {"September 2023", "$142,500", "Completed", "2023-09-30"}
              }, true));
-        } else {
-             cLayout->addWidget(createStyledTable("Pending Leave Requests", {"Employee", "Type", "Dates", "Status"}, {
-                 {"Jane Smith", "Vacation", "Nov 5 - Nov 12", "Pending Approval"},
-                 {"Robert Brown", "Sick Leave", "Oct 26", "Approved"}
-             }, true));
-        }
+        } else if (name == "Statistics") {
+             QWidget *statsContainer = new QWidget();
+             QVBoxLayout *statsLayout = new QVBoxLayout(statsContainer);
+             statsLayout->setSpacing(30);
+
+             GenericBarChart *chart1 = new GenericBarChart("Department Headcount");
+             chart1->addBar("Sales", 12, QColor(52, 152, 219));
+             chart1->addBar("Product", 8, QColor(46, 204, 113));
+             chart1->addBar("Maintenance", 5, QColor(241, 196, 15));
+             chart1->addBar("Finance", 4, QColor(155, 89, 182));
+             
+             QWidget *c1Wrapper = new QWidget(); c1Wrapper->setStyleSheet(getCardStyle());
+             QVBoxLayout *v1 = new QVBoxLayout(c1Wrapper); v1->addWidget(chart1);
+             statsLayout->addWidget(c1Wrapper);
+
+             GenericBarChart *chart2 = new GenericBarChart("Absence Days (YTD)");
+             chart2->addBar("John Doe", 2, QColor(231, 76, 60));
+             chart2->addBar("Jane Smith", 5, QColor(231, 76, 60));
+             chart2->addBar("Robert Brown", 0, QColor(46, 204, 113));
+             chart2->addBar("Emily White", 3, QColor(243, 156, 18));
+
+             QWidget *c2Wrapper = new QWidget(); c2Wrapper->setStyleSheet(getCardStyle());
+             QVBoxLayout *v2 = new QVBoxLayout(c2Wrapper); v2->addWidget(chart2);
+             statsLayout->addWidget(c2Wrapper);
+
+             cLayout->addWidget(statsContainer);
+
+        } else if (name == "PDF Printing") {
+             QWidget *formContainer = new QWidget();
+             QVBoxLayout *vbox = new QVBoxLayout(formContainer);
+             vbox->setSpacing(15);
+             
+             QLabel *title = new QLabel("Vacation Demand Form");
+             title->setStyleSheet("font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 20px;");
+             vbox->addWidget(title);
+             
+             QString labelStyle = getLabelStyle();
+             QString inputStyle = getInputStyle();
+
+             vbox->addWidget(new QLabel("Employee Name:")); QLineEdit *eName = new QLineEdit(); eName->setStyleSheet(inputStyle); vbox->addWidget(eName);
+             vbox->addWidget(new QLabel("Start Date:")); QLineEdit *sDate = new QLineEdit(); sDate->setStyleSheet(inputStyle); vbox->addWidget(sDate);
+             vbox->addWidget(new QLabel("End Date:")); QLineEdit *eDate = new QLineEdit(); eDate->setStyleSheet(inputStyle); vbox->addWidget(eDate);
+             vbox->addWidget(new QLabel("Reason:")); QLineEdit *reason = new QLineEdit(); reason->setStyleSheet(inputStyle); vbox->addWidget(reason);
+             
+             vbox->addSpacing(30);
+             
+             QPushButton *btnPrint = new QPushButton("Print Request to PDF");
+             btnPrint->setStyleSheet(getButtonStyle());
+             btnPrint->setCursor(Qt::PointingHandCursor);
+             btnPrint->setFixedHeight(45);
+             vbox->addWidget(btnPrint);
+             vbox->addStretch();
+             
+             cLayout->addWidget(formContainer);
+
+             QObject::connect(btnPrint, &QPushButton::clicked, [=]() {
+                 QMessageBox::information(nullptr, "Info", "PDF Generation Service Started...");
+             });
+
+         } else {
+              cLayout->addWidget(createStyledTable("Pending Leave Requests", {"Employee", "Type", "Dates", "Status"}, {
+                  {"Jane Smith", "Vacation", "Nov 5 - Nov 12", "Pending Approval"},
+                  {"Robert Brown", "Sick Leave", "Oct 26", "Approved"}
+              }, true, false, true));
+         }
         cLayout->addStretch();
         outNestedStack->addWidget(content);
     }
@@ -1842,15 +2160,28 @@ static QWidget* createPersonnelPage(QStackedWidget* &outNestedStack) {
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
-    setMinimumSize(1200, 800);
+    setWindowTitle("oil press manager");
+    resize(1200, 820);
+    setWindowFlags(Qt::FramelessWindowHint | Qt::Window);
 
-    QWidget *centralWidget = new QWidget(this);
-    setCentralWidget(centralWidget);
-    centralWidget->setStyleSheet("background-color: #f4f6f8;");
-
-    QVBoxLayout *verticalRoot = new QVBoxLayout(centralWidget);
+    // --- Main Application UI ---
+    QWidget *mainAppWidget = new QWidget(this);
+    setCentralWidget(mainAppWidget);
+    mainAppWidget->setStyleSheet("background-color: #f4f6f8;");
+    
+    QVBoxLayout *verticalRoot = new QVBoxLayout(mainAppWidget);
     verticalRoot->setContentsMargins(0, 0, 0, 0);
     verticalRoot->setSpacing(0);
+
+    // Add Custom Title Bar
+    verticalRoot->addWidget(createTitleBar());
+
+    // Content Container (Sidebar + Stack)
+    QWidget *contentContainer = new QWidget();
+    QHBoxLayout *contentLayout = new QHBoxLayout(contentContainer);
+    contentLayout->setContentsMargins(0, 0, 0, 0);
+    contentLayout->setSpacing(0);
+    verticalRoot->addWidget(contentContainer, 1); // Give it stretch factor 1 to fill height
 
     // Sidebar
     QWidget *sidebar = new QWidget();
@@ -1866,12 +2197,13 @@ MainWindow::MainWindow(QWidget *parent)
 
     // LOGO INTEGRATION
     QLabel *brand = new QLabel();
+    brand->setStyleSheet("background: transparent; border: none;"); // Force transparency to fix the light-colored box
     QPixmap logoPixmap(":/logo.png");
     if(!logoPixmap.isNull()) {
-        brand->setPixmap(logoPixmap.scaledToHeight(54, Qt::SmoothTransformation));
+        brand->setPixmap(logoPixmap.scaledToHeight(160, Qt::SmoothTransformation));
         brand->setAlignment(Qt::AlignCenter);
     } else {
-        brand->setText("NEXUS ERP"); 
+        brand->setText("oilpress managment app"); 
         brand->setStyleSheet("color: white; font-size: 24px; font-weight: 900;");
     }
     
@@ -1927,14 +2259,29 @@ MainWindow::MainWindow(QWidget *parent)
     QPushButton *btnPersonnel = addNav("Personnel Management"); // NEW BUTTON
 
     sidebarLayout->addStretch();
-    sidebarLayout->addWidget(new QLabel("v1.3.0")); 
+    
+    // Eye Saver Button Integration
+    EyeSaverButton *eyeSaver = new EyeSaverButton();
+    sidebarLayout->addWidget(eyeSaver, 0, Qt::AlignLeft);
+    sidebarLayout->addSpacing(10);
+    
+    // Logout Button
+    QPushButton *btnLogout = new QPushButton("Log Out");
+    btnLogout->setCursor(Qt::PointingHandCursor);
+    btnLogout->setStyleSheet("QPushButton { background-color: transparent; color: #e74c3c; font-weight: bold; border: none; text-align: left; padding: 10px; margin-left: -5px; } QPushButton:hover { background-color: rgba(231, 76, 60, 0.1); border-radius: 5px; }");
+    sidebarLayout->addWidget(btnLogout, 0, Qt::AlignLeft);
+    
+    // Logout Logic
+    connect(btnLogout, &QPushButton::clicked, this, [this]() {
+        emit logoutRequested();
+    });
 
     stackedWidget = new QStackedWidget();
 
     // --- HOME DASHBOARD ---
     QWidget *homePage = new QWidget();
     QVBoxLayout *homeLayout = new QVBoxLayout(homePage);
-    homeLayout->setContentsMargins(50, 50, 50, 50);
+    homeLayout->setContentsMargins(30, 30, 30, 30); // Reduced from 50 to look better on 1080p
     homeLayout->setSpacing(30);
 
     QWidget *topBar = new QWidget();
@@ -1957,7 +2304,7 @@ MainWindow::MainWindow(QWidget *parent)
     statsLayout->addWidget(createStatCard("Active Clients", "1,245", "+5 new today", "#3498db"));
     statsLayout->addWidget(createStatCard("Pending Orders", "18", "Requires attention", "#e74c3c"));
     statsLayout->addWidget(createStatCard("System Status", "99.9%", "All systems operational", "#f1c40f"));
-    homeLayout->addWidget(statsContainer);
+    homeLayout->addWidget(statsContainer, 2); // Stretch 2 for stats
 
     QWidget *bottomSection = new QWidget();
     QHBoxLayout *splitLayout = new QHBoxLayout(bottomSection);
@@ -1993,7 +2340,7 @@ MainWindow::MainWindow(QWidget *parent)
     actLayout->addStretch();
     splitLayout->addWidget(quickActions, 1);
     splitLayout->addWidget(activityWidget, 2);
-    homeLayout->addWidget(bottomSection, 1);
+    homeLayout->addWidget(bottomSection, 3); // Stretch 3 for bottom area
     
     stackedWidget->addWidget(homePage);
 
@@ -2007,16 +2354,13 @@ MainWindow::MainWindow(QWidget *parent)
     stackedWidget->addWidget(createProductPage(stackProduct));
     stackedWidget->addWidget(createPersonnelPage(stackPersonnel)); // Add to stack
 
-    // Finish Root Layout
-    QWidget *contentArea = new QWidget();
-    QHBoxLayout *contentLayout = new QHBoxLayout(contentArea);
-    contentLayout->setContentsMargins(0,0,0,0);
     contentLayout->addWidget(sidebar);
     contentLayout->addWidget(stackedWidget);
-    verticalRoot->addWidget(contentArea);
+
+
+    mainAppWidget->setLayout(verticalRoot);
 
     // Sidebar Navigation
-    // CAPTURE BY VALUE FIX: [=] instead of [&]
     auto setActive = [=](int index, QPushButton* activeBtn) {
         stackedWidget->setCurrentIndex(index);
         for(auto& item : navItems) item.btn->setChecked(item.btn == activeBtn);
@@ -2046,6 +2390,9 @@ MainWindow::MainWindow(QWidget *parent)
         stackInventory->setCurrentIndex(0); // Add Stock Item tab
     });
 
-    // Start at Home
-    btnHome->click();
+    // Start at Home (StackedWidget Index 0)
+    stackedWidget->setCurrentIndex(0);
+    
+    // Auto-select Home in the sidebar
+    btnHome->setChecked(true);
 }

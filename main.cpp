@@ -1,10 +1,26 @@
 #include <QApplication>
 #include "mainwindow.h"
+#include "AuthWidgets.h"
 
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
-    MainWindow w;
-    w.show();
+    
+    AuthWindow authWin;
+    MainWindow mainWin;
+    
+    // Transitions
+    QObject::connect(&authWin, &AuthWindow::loginSuccessful, [&](){
+        authWin.hide();
+        mainWin.show();
+    });
+    
+    QObject::connect(&mainWin, &MainWindow::logoutRequested, [&](){
+        mainWin.hide();
+        authWin.show();
+    });
+    
+    authWin.show();
+    
     return a.exec();
 }
