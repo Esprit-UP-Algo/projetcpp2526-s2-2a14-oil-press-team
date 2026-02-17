@@ -5,9 +5,15 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QMessageBox>
+#include <QStackedWidget>
+#include <QPoint>
+#include <QList>
+#include <QStringList>
 #include <QScreen>
 #include <QGuiApplication>
-#include <QPropertyAnimation> 
+#include <QSlider>
+#include <QLabel>
+#include <QPropertyAnimation>
 #include <QEasingCurve>
 #include <QMouseEvent>
 
@@ -129,6 +135,36 @@ QWidget* AuthWindow::createLoginWidget() {
     passwordInput->setEchoMode(QLineEdit::Password);
     content->addWidget(passwordInput);
 
+    // Role Selection Slider
+    QLabel *roleTitle = new QLabel("Access Level: Super Admin");
+    roleTitle->setAlignment(Qt::AlignCenter);
+    roleTitle->setStyleSheet("color: #2ecc71; font-size: 14px; font-weight: bold; margin-top: 10px;");
+    content->addWidget(roleTitle);
+
+    QSlider *roleSlider = new QSlider(Qt::Horizontal);
+    roleSlider->setRange(0, 6);
+    roleSlider->setValue(0);
+    roleSlider->setStyleSheet(
+        "QSlider::groove:horizontal { height: 6px; background: #34495e; border-radius: 3px; }"
+        "QSlider::handle:horizontal { background: #2ecc71; border: none; width: 18px; height: 18px; margin: -6px 0; border-radius: 9px; }"
+        "QSlider::handle:horizontal:hover { background: #27ae60; }"
+    );
+    content->addWidget(roleSlider);
+
+    QStringList roles = {
+        "Super Admin",
+        "Order Manager",
+        "Financial Manager",
+        "Inventory Manager",
+        "Maintenance Manager",
+        "Product Manager",
+        "Personnel Manager"
+    };
+
+    connect(roleSlider, &QSlider::valueChanged, [=](int val) {
+        roleTitle->setText("Access Level: " + roles[val]);
+    });
+
     content->addSpacing(20);
 
     // Buttons
@@ -149,7 +185,9 @@ QWidget* AuthWindow::createLoginWidget() {
     content->addStretch();
     mainLayout->addLayout(content);
 
-    connect(loginBtn, &QPushButton::clicked, this, &AuthWindow::loginSuccessful);
+    connect(loginBtn, &QPushButton::clicked, [this, roleSlider]() {
+        emit loginSuccessful(roleSlider->value());
+    });
     connect(signupBtn, &QPushButton::clicked, [this]() { stack->setCurrentIndex(1); });
     connect(forgotLink, &QPushButton::clicked, []() {
         QMessageBox::information(nullptr, "Info", "Contact admin for reset.");

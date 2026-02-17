@@ -4,12 +4,15 @@
 #include <QMainWindow>
 #include <QStackedWidget>
 #include <QPoint>
+#include <QPushButton>
+#include <QList>
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 public:
     explicit MainWindow(QWidget *parent = nullptr);
+    void applyRole(int roleIndex);
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
@@ -29,6 +32,9 @@ private:
     
     QWidget* createTitleBar();
     Qt::Edges getEdge(const QPoint &pos);
+
+    struct NavItem { QString title; QPushButton *btn; };
+    QList<NavItem> navItems;
 };
 
 #endif

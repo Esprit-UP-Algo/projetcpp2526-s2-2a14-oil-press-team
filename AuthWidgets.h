@@ -15,7 +15,7 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override;
 
 signals:
-    void loginSuccessful();
+    void loginSuccessful(int roleIndex);
 
 private:
     QStackedWidget *stack;

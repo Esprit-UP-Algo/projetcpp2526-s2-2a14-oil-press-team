@@ -10,8 +10,9 @@ int main(int argc, char *argv[])
     MainWindow mainWin;
     
     // Transitions
-    QObject::connect(&authWin, &AuthWindow::loginSuccessful, [&](){
+    QObject::connect(&authWin, &AuthWindow::loginSuccessful, [&](int roleIndex){
         authWin.hide();
+        mainWin.applyRole(roleIndex);
         mainWin.show();
     });
     
