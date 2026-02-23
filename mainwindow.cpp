@@ -3,6 +3,9 @@
 #include "EyeSaverButton.h"
 #include "article.h"
 #include "transaction.h"
+#include "produit.h"
+#include <functional>
+#include <memory>
 #include <QComboBox>
 #include <QDate>
 #include <QDateEdit>
@@ -29,6 +32,7 @@
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QScrollArea>
+#include <QSqlError>
 #include <QSqlQueryModel>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -2927,8 +2931,135 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
   QStringList tabNames = {"Product Hub", "Add Product"};
   QList<QPushButton *> tabButtons;
 
-  // We need to capture the table widget to update it from the "Add Item" tab
-  QTableWidget *productTable = nullptr;
+  // Use a shared pointer to hold the table pointer so the lambda can access it after initialization
+  auto productTablePtr = std::make_shared<QTableWidget *>(nullptr);
+
+  auto refreshProductTable = std::make_shared<std::function<void()>>();
+  *refreshProductTable = [productTablePtr, refreshProductTable, outNestedStack, &tabButtons]() {
+    QTableWidget *productTable = *productTablePtr;
+    if (!productTable) return;
+    Produit p;
+    QSqlQueryModel *model = p.afficher();
+    
+    // Check for query errors
+    if (model->lastError().isValid()) {
+        qDebug() << "Refresh Table Error:" << model->lastError().text();
+    }
+
+    productTable->setRowCount(0);
+    int rows = model->rowCount();
+    productTable->setRowCount(rows);
+
+    for (int i = 0; i < rows; ++i) {
+      int pid = model->data(model->index(i, 0)).toInt();
+      productTable->setItem(i, 0, new QTableWidgetItem(QString::number(pid)));
+      productTable->setItem(i, 1, new QTableWidgetItem(model->data(model->index(i, 1)).toString()));
+      productTable->setItem(i, 2, new QTableWidgetItem(model->data(model->index(i, 2)).toDate().toString("yyyy-MM-dd")));
+      productTable->setItem(i, 3, new QTableWidgetItem(QString::number(model->data(model->index(i, 3)).toDouble(), 'f', 2)));
+      productTable->setItem(i, 4, new QTableWidgetItem(model->data(model->index(i, 4)).toString()));
+      productTable->setItem(i, 5, new QTableWidgetItem(QString::number(model->data(model->index(i, 5)).toDouble(), 'f', 2)));
+      productTable->setItem(i, 6, new QTableWidgetItem(model->data(model->index(i, 6)).toString()));
+      productTable->setItem(i, 7, new QTableWidgetItem(model->data(model->index(i, 7)).toString()));
+      productTable->setItem(i, 8, new QTableWidgetItem(model->data(model->index(i, 8)).toString()));
+
+      // Action Buttons
+      QWidget *actionWidget = new QWidget();
+      QHBoxLayout *al = new QHBoxLayout(actionWidget);
+      al->setContentsMargins(10, 0, 10, 0);
+      al->setSpacing(15);
+      al->setAlignment(Qt::AlignCenter);
+
+      QPushButton *btnEdit = new QPushButton("Edit");
+      btnEdit->setCursor(Qt::PointingHandCursor);
+      btnEdit->setMinimumWidth(80);
+      btnEdit->setFixedHeight(28);
+      btnEdit->setStyleSheet("QPushButton { background-color: #ffffff; color: #333333; border: 1px solid #cccccc; "
+                             "border-radius: 6px; padding: 0px 8px; font-size: 13px; font-weight: 600; } "
+                             "QPushButton:hover { border-color: #aaaaaa; color: #000000; background-color: #f6f6f6; }");
+
+      QPushButton *btnDelete = new QPushButton("Remove");
+      btnDelete->setCursor(Qt::PointingHandCursor);
+      btnDelete->setMinimumWidth(80);
+      btnDelete->setFixedHeight(28);
+      btnDelete->setStyleSheet("QPushButton { background-color: #ffffff; border: 1px solid #d32f2f; color: #d32f2f; "
+                               "border-radius: 6px; padding: 0px 8px; font-weight: 600; font-size: 13px; } "
+                               "QPushButton:hover { background-color: #ffebee; border-color: #b71c1c; color: #b71c1c; }");
+
+      al->addWidget(btnEdit);
+      al->addWidget(btnDelete);
+      productTable->setCellWidget(i, 9, actionWidget);
+
+      // Connect Delete
+      QObject::connect(btnDelete, &QPushButton::clicked, [productTablePtr, pid, refreshProductTable]() {
+        QTableWidget *productTable = *productTablePtr;
+        if (!productTable) return;
+        if (QMessageBox::question(productTable->window(), "Delete Product", "Are you sure?") == QMessageBox::Yes) {
+          Produit p;
+          if (p.supprimer(pid)) {
+            (*refreshProductTable)();
+          } else {
+            QMessageBox::critical(productTable->window(), "Error", "Failed to delete: " + p.getLastError());
+          }
+        }
+      });
+
+      // Connect Edit
+      QObject::connect(btnEdit, &QPushButton::clicked, [productTablePtr, i, pid, refreshProductTable]() {
+          QTableWidget *productTable = *productTablePtr;
+          if (!productTable) return;
+          QDialog dlg(productTable->window());
+          dlg.setWindowTitle("Edit Product");
+          dlg.setMinimumWidth(450);
+          dlg.setStyleSheet("QDialog { background-color: #ffffff; }");
+          QVBoxLayout *mainV = new QVBoxLayout(&dlg);
+          mainV->setContentsMargins(30, 30, 30, 30);
+          mainV->setSpacing(15);
+
+          auto addField = [&](const QString &lbl, const QString &val) {
+              mainV->addWidget(new QLabel(lbl));
+              QLineEdit *le = new QLineEdit(val);
+              le->setStyleSheet("QLineEdit { background-color: #f9fafb; border: 1px solid #eaeaea; "
+                                "border-radius: 8px; padding: 10px; font-size: 14px; }");
+              mainV->addWidget(le);
+              return le;
+          };
+
+          // Removing eIdC and eRef as requested
+          QLineEdit *eDate = addField("Date Pressage:", productTable->item(i, 2)->text());
+          QLineEdit *eQnt = addField("Quantité:", productTable->item(i, 3)->text());
+          QLineEdit *eVisc = addField("Viscosité:", productTable->item(i, 5)->text());
+          QLineEdit *eCol = addField("Couleur:", productTable->item(i, 6)->text());
+          QLineEdit *eTst = addField("Test:", productTable->item(i, 7)->text());
+          QLineEdit *eIdM = addField("ID Machine:", productTable->item(i, 8)->text());
+
+          QPushButton *btnSave = new QPushButton("Save Changes");
+          btnSave->setStyleSheet("QPushButton { background-color: #3DDC84; color: white; border: none; "
+                                 "border-radius: 8px; padding: 12px; font-weight: 700; }");
+          mainV->addWidget(btnSave);
+
+          QObject::connect(btnSave, &QPushButton::clicked, [&dlg, eDate, eQnt, eVisc, eCol, eTst, eIdM, pid, refreshProductTable]() {
+              Produit p;
+              p.setIdProduit(pid);
+              // idContenair and ref remain null/unchanged if not provided
+              p.setDatePress(QDate::fromString(eDate->text(), "yyyy-MM-dd"));
+              p.setQuantite(eQnt->text().toDouble());
+              p.setViscosite(eVisc->text().toDouble());
+              p.setCouleur(eCol->text());
+              p.setTest(eTst->text());
+              p.setIdMachine(eIdM->text().toInt());
+
+              if (p.modifier()) {
+                  dlg.accept();
+                  (*refreshProductTable)();
+              } else {
+                  QMessageBox::critical(&dlg, "Error", p.getLastError());
+              }
+          });
+          dlg.exec();
+      });
+    }
+    delete model;
+  };
 
   for (const auto &name : tabNames) {
     QPushButton *btn = new QPushButton(name);
@@ -2947,185 +3078,136 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       listPageLayout->setContentsMargins(0, 0, 0, 0);
       listPageLayout->setSpacing(10);
 
-      // Add "PRINT PDF" button aligned to right
+      // 1. Top Buttons (Refresh & Print)
+      QWidget *topButtonsWidget = new QWidget();
+      QHBoxLayout *topButtonsLayout = new QHBoxLayout(topButtonsWidget);
+      topButtonsLayout->setContentsMargins(0, 0, 0, 0);
+      topButtonsLayout->setSpacing(10);
+      topButtonsLayout->addStretch();
+
+      QPushButton *btnRefresh = new QPushButton("REFRESH");
+      btnRefresh->setStyleSheet("QPushButton { background-color: #f8f9fa; border: 1px solid #dee2e6; color: #495057; "
+                               "border-radius: 8px; padding: 10px 18px; font-weight: 700; font-size: 13px; } "
+                               "QPushButton:hover { background-color: #e9ecef; border-color: #adb5bd; }");
+      btnRefresh->setCursor(Qt::PointingHandCursor);
+      btnRefresh->setFixedWidth(120);
+      topButtonsLayout->addWidget(btnRefresh);
+
       QPushButton *btnPrint = new QPushButton("PRINT PDF");
       btnPrint->setStyleSheet(getButtonStyle());
       btnPrint->setCursor(Qt::PointingHandCursor);
       btnPrint->setFixedWidth(150);
-      listPageLayout->addWidget(btnPrint, 0, Qt::AlignRight);
+      topButtonsLayout->addWidget(btnPrint);
 
-      // Create table
-      QWidget *tableWidgetWrapper = createStyledTable(
-          "Current Product Catalog",
-          {"ID Container", "Date Pressage", "Capacité", "Ref Testeur",
-           "Qualité", "Viscosity", "Color", "Ref Press"},
-          {{"CONT-001", "2023-10-25", "500L", "TEST-A1", "Premium", "0.85",
-            "Golden", "PRESS-X1"},
-           {"CONT-002", "2023-10-26", "200L", "TEST-B2", "Standard", "0.90",
-            "Yellow", "PRESS-X2"},
-           {"CONT-003", "2023-10-27", "1000L", "TEST-A1", "Premium", "0.84",
-            "Golden", "PRESS-X1"}},
-          true);
+      listPageLayout->addWidget(topButtonsWidget);
 
-      // Capture the table for updates
-      productTable = tableWidgetWrapper->findChild<QTableWidget *>();
+      // 2. Table
+      *productTablePtr = new QTableWidget();
+      QTableWidget *productTable = *productTablePtr;
+      QStringList headers = {"ID", "Conteneur", "Date Press", "Quantité",
+                             "Ref", "Viscosité", "Couleur", "Test", "ID Machine", "Actions"};
+      productTable->setColumnCount(headers.size());
+      productTable->setHorizontalHeaderLabels(headers);
+      productTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+      productTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+      productTable->horizontalHeader()->setSectionResizeMode(headers.size() - 1, QHeaderView::Fixed);
+      productTable->setColumnWidth(headers.size() - 1, 220);
+      productTable->verticalHeader()->setVisible(false);
+      // productTable->setColumnHidden(0, true);
+      // productTable->setColumnHidden(1, true); 
+      // productTable->setColumnHidden(4, true); 
+      productTable->verticalHeader()->setDefaultSectionSize(60);
+      productTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+      productTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+      productTable->setAlternatingRowColors(true);
+      productTable->setStyleSheet(
+          "QTableWidget { border: 1px solid #eaeaea; background-color: #ffffff; "
+          "gridline-color: transparent; border-radius: 8px; alternate-background-color: #f9fafb; }"
+          "QHeaderView::section { background-color: #ffffff; padding: 12px; border: none; "
+          "border-bottom: 2px solid #f0f0f0; font-weight: 700; color: #666; "
+          "text-transform: uppercase; font-size: 12px; }"
+          "QTableWidget::item { padding: 12px; border-bottom: 1px solid #f5f5f5; color: #333; }"
+          "QTableWidget::item:selected { background-color: #e6f9ef; color: #1a1a1a; }");
 
-      listPageLayout->addWidget(tableWidgetWrapper);
+      listPageLayout->addWidget(productTable);
 
-      // Connect print button
-      // PDF Export functionality removed as per request
-      // The button remains visible but inactive
-
+      (*refreshProductTable)();
       cLayout->addWidget(listPageWidget);
+
+      // Connect Buttons
+      QObject::connect(btnRefresh, &QPushButton::clicked, [refreshProductTable]() {
+          (*refreshProductTable)();
+      });
+
+      QObject::connect(btnPrint, &QPushButton::clicked, [productTablePtr]() {
+          QTableWidget *productTable = *productTablePtr;
+          if (!productTable) return;
+          QMessageBox::information(productTable->window(), "Print", "PDF Export started...");
+      });
+
     } else if (name == "Add Product") {
-      // Manual form creation to allow access to inputs
       QWidget *formContainer = new QWidget();
       QVBoxLayout *formLayout = new QVBoxLayout(formContainer);
       formLayout->setSpacing(15);
-      formLayout->setContentsMargins(
-          0, 0, 10, 0); // Slight right margin for scrollbar if needed
+      formLayout->setContentsMargins(0, 0, 10, 0);
 
-      // Title
       QLabel *titleLabel = new QLabel("Add New Product");
-      titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: "
-                                "#1a1a1a; margin-bottom: 25px; border: none;");
+      titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 25px;");
       formLayout->addWidget(titleLabel);
 
-      QString labelStyle = getLabelStyle();
-      QString inputStyle = getInputStyle();
-
-      // Define fields (ID is auto-generated, so removed from input)
-      struct FieldInput {
-        QString label;
-        QString placeholder;
-        QLineEdit *widget;
+      auto createField = [&](const QString &lbl, const QString &ph) {
+          formLayout->addWidget(new QLabel(lbl));
+          QLineEdit *le = new QLineEdit();
+          le->setPlaceholderText(ph);
+          le->setStyleSheet("QLineEdit { background-color: #fcfcfc; border: 1px solid #e0e0e0; "
+                            "border-radius: 8px; padding: 10px 14px; font-size: 14px; min-height: 45px; }");
+          formLayout->addWidget(le);
+          return le;
       };
-      QList<FieldInput> inputs = {
-          {"Date Pressage:", "YYYY-MM-DD", new QLineEdit()},
-          {"Capacité:", "e.g., 500L", new QLineEdit()},
-          {"Ref Testeur:", "Enter Tester Ref", new QLineEdit()},
-          {"Qualité:", "Enter Quality Grade", new QLineEdit()},
-          {"Viscosity:", "Enter Viscosity", new QLineEdit()},
-          {"Color:", "Enter Color", new QLineEdit()},
-          {"Ref Press:", "Enter Press Ref", new QLineEdit()}};
 
-      for (auto &field : inputs) {
-        QLabel *lbl = new QLabel(field.label);
-        lbl->setStyleSheet(labelStyle);
-        field.widget->setStyleSheet(inputStyle);
-        field.widget->setPlaceholderText(field.placeholder);
-
-        formLayout->addWidget(lbl);
-        formLayout->addWidget(field.widget);
-      }
+      // Removed iIdC and iRef
+      QLineEdit *iDate = createField("Date Pressage:", "YYYY-MM-DD");
+      iDate->setText(QDate::currentDate().toString("yyyy-MM-dd"));
+      QLineEdit *iQnt = createField("Quantité:", "500.0");
+      QLineEdit *iVisc = createField("Viscosité:", "0.85");
+      QLineEdit *iCol = createField("Couleur:", "Golden");
+      QLineEdit *iTst = createField("Test:", "Compliant");
+      QLineEdit *iIdM = createField("ID Machine:", "101");
 
       formLayout->addSpacing(20);
       QPushButton *btnAdd = new QPushButton("Add Product");
-      btnAdd->setStyleSheet(getButtonStyle());
+      btnAdd->setStyleSheet("QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3DDC84, stop:1 #2DB66F); "
+                            "color: white; border: none; border-radius: 8px; padding: 12px; font-weight: 700; }");
       btnAdd->setCursor(Qt::PointingHandCursor);
-      btnAdd->setFixedHeight(45);
       formLayout->addWidget(btnAdd);
       formLayout->addStretch();
 
-      // Add Logic
-      QObject::connect(
-          btnAdd, &QPushButton::clicked,
-          [inputs, productTable, outNestedStack, tabButtons]() {
-            if (!productTable)
-              return;
+      QObject::connect(btnAdd, &QPushButton::clicked, [=]() {
+          Produit p;
+          // idContenair and ref remain null
+          p.setDatePress(QDate::fromString(iDate->text(), "yyyy-MM-dd"));
+          p.setQuantite(iQnt->text().toDouble());
+          p.setViscosite(iVisc->text().toDouble());
+          p.setCouleur(iCol->text());
+          p.setTest(iTst->text());
+          p.setIdMachine(iIdM->text().toInt());
 
-            // 1. Auto-generate ID (Simple Logic: "CONT-" + (RowCount + 1))
-            // Note: In a real app, this should check for existing IDs or use a
-            // database counter.
-            int nextIdNum = productTable->rowCount() + 1;
-            QString newId =
-                QString("CONT-%1").arg(nextIdNum, 3, 10, QChar('0'));
+          if (p.ajouter()) {
+              QMessageBox::information(nullptr, "Success", "Product added successfully!");
+              iQnt->clear(); iVisc->clear(); iCol->clear(); iTst->clear(); iIdM->clear();
+              
+              // Switch to "Product Hub" tab first
+              if (outNestedStack) outNestedStack->setCurrentIndex(0);
+              if (!tabButtons.isEmpty()) tabButtons.first()->setChecked(true);
+              
+              // Refresh the table
+              if (refreshProductTable) (*refreshProductTable)();
+          } else {
+              QMessageBox::critical(nullptr, "Error", p.getLastError());
+          }
+      });
 
-            // 2. Collect Data
-            int row = productTable->rowCount();
-            productTable->insertRow(row);
-
-            // Column 0: ID
-            productTable->setItem(row, 0, new QTableWidgetItem(newId));
-
-            // Other Columns
-            for (int i = 0; i < inputs.size(); ++i) {
-              productTable->setItem(
-                  row, i + 1, new QTableWidgetItem(inputs[i].widget->text()));
-              inputs[i].widget->clear(); // Clear input after adding
-            }
-
-            // Add Actions (Modify/Delete) - We need to manually replicate the
-            // actions column setup here or ideally extract that logic. For now,
-            // let's replicate the basic button creation from createStyledTable
-            // to ensure consistency.
-            QWidget *actionWidget = new QWidget();
-            QHBoxLayout *actionLayout = new QHBoxLayout(actionWidget);
-            actionLayout->setContentsMargins(2, 2, 30, 2);
-            actionLayout->setSpacing(20);
-            actionLayout->setAlignment(Qt::AlignCenter);
-
-            QPushButton *btnModify = new QPushButton("Edit");
-            btnModify->setCursor(Qt::PointingHandCursor);
-            btnModify->setMinimumWidth(80);
-            btnModify->setFixedHeight(28);
-            btnModify->setStyleSheet(
-                "QPushButton { background-color: #ffffff; color: #333333; "
-                "border: 1px solid #cccccc; border-radius: 6px; padding: 0px "
-                "8px; font-size: 13px; font-weight: 600; } QPushButton:hover { "
-                "border-color: #aaaaaa; color: #000000; background-color: "
-                "#f6f6f6; } QPushButton:pressed { background-color: #e6e6e6; "
-                "}");
-
-            QPushButton *btnDelete = new QPushButton("Remove");
-            btnDelete->setCursor(Qt::PointingHandCursor);
-            btnDelete->setMinimumWidth(80);
-            btnDelete->setFixedHeight(28);
-            btnDelete->setStyleSheet(
-                "QPushButton { background-color: #ffffff; color: #d32f2f; "
-                "border: 1px solid #d32f2f; border-radius: 6px; padding: 0px "
-                "8px; font-size: 13px; font-weight: 600; } QPushButton:hover { "
-                "background-color: #ffebee; border-color: #b71c1c; color: "
-                "#b71c1c; } QPushButton:pressed { background-color: #ffcdd2; "
-                "}");
-
-            actionLayout->addWidget(btnModify);
-            actionLayout->addWidget(btnDelete);
-            actionLayout->addStretch();
-
-            // Connect Delete (Copying logic from createStyledTable fix)
-            QObject::connect(
-                btnDelete, &QPushButton::clicked, [productTable, btnDelete]() {
-                  QPoint btnPos = btnDelete->mapTo(productTable->viewport(),
-                                                   btnDelete->rect().center());
-                  int r = productTable->rowAt(btnPos.y());
-                  if (r >= 0) {
-                    QMessageBox::StandardButton reply;
-                    reply = QMessageBox::question(
-                        productTable->window(), "Confirm Deletion",
-                        "Are you sure you want to delete this item?",
-                        QMessageBox::Yes | QMessageBox::No);
-                    if (reply == QMessageBox::Yes)
-                      productTable->removeRow(r);
-                  }
-                });
-
-            productTable->setCellWidget(
-                row, 8, actionWidget); // Column 8 is Actions (0-7 are data)
-
-            // 3. Switch to List View
-            if (outNestedStack)
-              outNestedStack->setCurrentIndex(0);
-            if (!tabButtons.isEmpty())
-              tabButtons.first()->setChecked(true);
-          });
-
-      // Wrap in scroll area
-      QScrollArea *scrolld = new QScrollArea();
-      scrolld->setWidgetResizable(true);
-      scrolld->setWidget(formContainer);
-      scrolld->setFrameShape(QFrame::NoFrame);
-      cLayout->addWidget(scrolld);
+      cLayout->addWidget(formContainer);
     }
     cLayout->addStretch();
     outNestedStack->addWidget(content);

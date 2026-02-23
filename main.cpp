@@ -4,6 +4,7 @@
 #include "AuthWidgets.h"
 #include "connection.h"
 
+
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
@@ -13,6 +14,7 @@ int main(int argc, char *argv[])
 
     if(!test)
     {
+
         QMessageBox::critical(nullptr, QObject::tr("database is not open"),
                               QObject::tr("connection failed.\nClick Cancel to exit."),
                               QMessageBox::Cancel);
