@@ -10,6 +10,7 @@ CONFIG += console
 SOURCES += \
     article.cpp \
     connection.cpp \
+    machine.cpp \
     main.cpp \
     mainwindow.cpp \
     transaction.cpp \
@@ -19,6 +20,7 @@ SOURCES += \
 HEADERS += \
     article.h \
     connection.h \
+    machine.h \
     mainwindow.h \
     transaction.h \
     EyeSaverButton.h \
