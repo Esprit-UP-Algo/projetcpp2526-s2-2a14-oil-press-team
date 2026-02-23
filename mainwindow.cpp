@@ -2,8 +2,10 @@
 #include "AuthWidgets.h"
 #include "EyeSaverButton.h"
 #include "article.h"
+#include "transaction.h"
 #include <QComboBox>
 #include <QDate>
+#include <QDateEdit>
 #include <QDateTime>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -1229,6 +1231,9 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
                           "Analytics"};
   QList<QPushButton *> tabButtons;
 
+  // Shared table pointer so "New Invoice" can refresh "Transaction Hub"
+  QTableWidget *transTable = nullptr;
+
   for (const auto &name : tabNames) {
     QPushButton *btn = new QPushButton(name);
     btn->setCheckable(true);
@@ -1240,21 +1245,154 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
     QVBoxLayout *cLayout = new QVBoxLayout(content);
 
     if (name == "New Invoice") {
-      // Add Print PDF Button
-      QPushButton *btnPrint = new QPushButton("PRINT PDF");
-      btnPrint->setStyleSheet(getButtonStyle());
-      btnPrint->setCursor(Qt::PointingHandCursor);
-      btnPrint->setFixedWidth(150);
-      cLayout->addWidget(btnPrint, 0, Qt::AlignRight);
+      // ========== AJOUTER (CREATE) ==========
 
-      cLayout->addWidget(
-          createStyledForm("Invoice Creation Form",
-                           {{"Customer Name:", "Enter customer name"},
-                            {"Amount:", "0.00"},
-                            {"Date:", "YYYY-MM-DD"}},
-                           "Submit Invoice"));
+      // Solid white card container — no transparency that bleeds dark bg
+      QWidget *formContainer = new QWidget();
+      formContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+      formContainer->setStyleSheet(
+          "QWidget {"
+          "  background-color: #ffffff;"
+          "  border-radius: 12px;"
+          "}");
+
+      QVBoxLayout *outerLayout = new QVBoxLayout(formContainer);
+      outerLayout->setContentsMargins(40, 35, 40, 35);
+      outerLayout->setSpacing(0);
+
+      // Title
+      QLabel *titleLabel = new QLabel("New Transaction");
+      titleLabel->setStyleSheet(
+          "font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 18px;");
+      outerLayout->addWidget(titleLabel);
+
+      // Field style — explicitly covers QLineEdit, QDateEdit AND QComboBox
+      QString fieldStyle =
+          "QLineEdit, QDateEdit, QComboBox {"
+          "  background-color: #f8f9fb;"
+          "  border: 1.5px solid #d0d5dd;"
+          "  border-radius: 8px;"
+          "  padding: 10px 14px;"
+          "  font-size: 14px;"
+          "  color: #1a1a1a;"
+          "  min-height: 42px;"
+          "}"
+          "QLineEdit:focus, QDateEdit:focus, QComboBox:focus {"
+          "  border: 2px solid #3DDC84;"
+          "  background-color: #ffffff;"
+          "}"
+          "QComboBox::drop-down { border: none; width: 28px; }"
+          "QComboBox QAbstractItemView {"
+          "  background-color: #ffffff; color: #1a1a1a;"
+          "  selection-background-color: #e8fdf2;"
+          "  border: 1px solid #d0d5dd;"
+          "  outline: none;"
+          "}"
+          "QDateEdit::drop-down { border: none; width: 28px; }";
+
+      QString lblStyle =
+          "font-size: 13px; font-weight: 600; color: #374151;"
+          "margin-top: 14px; margin-bottom: 5px;";
+
+      // Helper to add a label + widget pair
+      auto addField = [&](const QString &label, QWidget *w) {
+        QLabel *lbl = new QLabel(label);
+        lbl->setStyleSheet(lblStyle);
+        w->setStyleSheet(fieldStyle);
+        outerLayout->addWidget(lbl);
+        outerLayout->addWidget(w);
+      };
+
+      // --- Fields ---
+      QLineEdit *inputMontant = new QLineEdit();
+      inputMontant->setPlaceholderText("e.g. 1500.00");
+      addField("Amount (TND):", inputMontant);
+
+      QDateEdit *inputDate = new QDateEdit(QDate::currentDate());
+      inputDate->setCalendarPopup(true);
+      inputDate->setDisplayFormat("yyyy-MM-dd");
+      addField("Transaction Date:", inputDate);
+
+      QComboBox *inputType = new QComboBox();
+      inputType->addItems({"Revenue", "Expense", "Refund", "Transfer"});
+      addField("Transaction Type:", inputType);
+
+      QComboBox *inputMode = new QComboBox();
+      inputMode->addItems({"Cash", "Card", "Bank Transfer", "Check"});
+      addField("Payment Mode:", inputMode);
+
+      QLineEdit *inputDesc = new QLineEdit();
+      inputDesc->setPlaceholderText("Enter description...");
+      addField("Description:", inputDesc);
+
+      QLineEdit *inputCommande = new QLineEdit();
+      inputCommande->setPlaceholderText("0");
+      addField("Order ID:", inputCommande);
+
+      // --- Submit Button ---
+      outerLayout->addSpacing(22);
+      QPushButton *btnSubmit = new QPushButton("Submit Transaction");
+      btnSubmit->setStyleSheet(
+          "QPushButton {"
+          "  background-color: #3DDC84;"
+          "  color: #ffffff;"
+          "  border: none;"
+          "  border-radius: 8px;"
+          "  font-size: 15px;"
+          "  font-weight: 700;"
+          "  min-height: 48px;"
+          "  padding: 0px 28px;"
+          "}"
+          "QPushButton:hover { background-color: #34c772; }"
+          "QPushButton:pressed { background-color: #2aad60; }");
+      btnSubmit->setCursor(Qt::PointingHandCursor);
+      outerLayout->addWidget(btnSubmit);
+      outerLayout->addStretch();
+
+      cLayout->addWidget(formContainer);
+
+      // --- Connect Submit ---
+      QObject::connect(
+          btnSubmit, &QPushButton::clicked,
+          [inputMontant, inputDate, inputType, inputMode, inputDesc,
+           inputCommande, &transTable]() {
+            if (inputMontant->text().trimmed().isEmpty()) {
+              QMessageBox::warning(nullptr, "Validation Error", "Amount is required.");
+              return;
+            }
+            bool ok = false;
+            double montant = inputMontant->text().toDouble(&ok);
+            if (!ok) {
+              QMessageBox::warning(nullptr, "Validation Error",
+                                   "Amount must be a valid number.");
+              return;
+            }
+            Transaction t;
+            t.setMontant(montant);
+            t.setDateTransaction(inputDate->date());
+            t.setTypeTransaction(inputType->currentText());
+            t.setModePaiement(inputMode->currentText());
+            t.setDescription(inputDesc->text().trimmed());
+            t.setIdCommande(inputCommande->text().toInt());
+
+            if (t.ajouter()) {
+              QMessageBox::information(nullptr, "Success",
+                                       "Transaction added successfully!");
+              inputMontant->clear();
+              inputDate->setDate(QDate::currentDate());
+              inputType->setCurrentIndex(0);
+              inputMode->setCurrentIndex(0);
+              inputDesc->clear();
+              inputCommande->clear();
+            } else {
+              QMessageBox::critical(
+                  nullptr, "Error",
+                  "Failed to add transaction.\n\nDB Error: " + t.getLastError());
+            }
+          });
+
     } else if (name == "Transaction Hub") {
-      // --- Custom Transactions View ---
+      // ========== AFFICHER (READ) + MODIFIER (UPDATE) + SUPPRIMER (DELETE) ==========
       QWidget *transContainer = new QWidget();
       QVBoxLayout *transLayout = new QVBoxLayout(transContainer);
       transLayout->setContentsMargins(0, 0, 0, 0);
@@ -1266,26 +1404,22 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
       controlLayout->setContentsMargins(0, 0, 0, 0);
 
       QLineEdit *searchEdit = new QLineEdit();
-      searchEdit->setPlaceholderText("Search...");
+      searchEdit->setPlaceholderText("Search description / type...");
       searchEdit->setStyleSheet(getInputStyle());
-      searchEdit->setFixedWidth(150); // Reduced width
-
-      QComboBox *searchType = new QComboBox();
-      searchType->addItems({"Status"});
-      searchType->setStyleSheet(getInputStyle());
-      searchType->setFixedWidth(80); // Reduced width
-
-      // Removed Search Button
+      searchEdit->setFixedWidth(200);
 
       QLabel *lblSort = new QLabel("Sort by:");
       lblSort->setStyleSheet(getLabelStyle());
 
       QComboBox *sortType = new QComboBox();
-      sortType->addItems({"Amt High-Low", "Amt Low-High"}); // Shortened text
+      sortType->addItems({"Amt High-Low", "Amt Low-High"});
       sortType->setStyleSheet(getInputStyle());
-      sortType->setFixedWidth(130); // Reduced width
+      sortType->setFixedWidth(130);
 
-      // Removed Sort Button
+      QPushButton *btnRefresh = new QPushButton("Refresh");
+      btnRefresh->setStyleSheet(getButtonStyle());
+      btnRefresh->setCursor(Qt::PointingHandCursor);
+      btnRefresh->setFixedWidth(100);
 
       QPushButton *btnPrint = new QPushButton("PRINT PDF");
       btnPrint->setStyleSheet(getButtonStyle());
@@ -1293,27 +1427,367 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
       btnPrint->setFixedWidth(120);
 
       controlLayout->addWidget(searchEdit);
-      controlLayout->addWidget(searchType);
-      // controlLayout->addWidget(btnSearch); // Removed
-      controlLayout->addSpacing(15); // Reduced spacing
+      controlLayout->addSpacing(15);
       controlLayout->addWidget(lblSort);
       controlLayout->addWidget(sortType);
-      // controlLayout->addWidget(btnSort); // Removed
+      controlLayout->addSpacing(10);
+      controlLayout->addWidget(btnRefresh);
       controlLayout->addStretch();
       controlLayout->addWidget(btnPrint);
 
       transLayout->addWidget(controlBar);
 
       // 2. Table
-      QStringList headers = {"Date", "Description", "Amount", "Status",
-                             "Actions"};
-      QTableWidget *table = new QTableWidget();
-      table->setColumnCount(headers.size());
-      table->setHorizontalHeaderLabels(headers);
-      table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-      table->verticalHeader()->setVisible(false);
-      table->setAlternatingRowColors(true);
-      table->setStyleSheet(
+      transTable = new QTableWidget();
+      QStringList headers = {"ID", "Amount", "Date", "Type", "Payment Mode",
+                             "Description", "Order ID", "Actions"};
+      transTable->setColumnCount(headers.size());
+      transTable->setHorizontalHeaderLabels(headers);
+      transTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+      transTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+      transTable->horizontalHeader()->setSectionResizeMode(headers.size() - 1, QHeaderView::Fixed);
+      transTable->setColumnWidth(headers.size() - 1, 220);
+      transTable->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+      transTable->verticalHeader()->setVisible(false);
+      transTable->setColumnHidden(0, true); // Hide ID column
+      transTable->verticalHeader()->setDefaultSectionSize(60);
+      transTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+      transTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+      transTable->setAlternatingRowColors(true);
+      transTable->setStyleSheet(
+          "QTableWidget { border: 1px solid #eaeaea; background-color: "
+          "#ffffff; gridline-color: transparent; border-radius: 8px; "
+          "alternate-background-color: #f9fafb; }"
+          "QHeaderView::section { background-color: #ffffff; padding: 12px; "
+          "border: none; border-bottom: 2px solid #f0f0f0; font-weight: 700; "
+          "color: #666; text-transform: uppercase; font-size: 12px; }"
+          "QTableWidget::item { padding: 12px; border-bottom: 1px solid "
+          "#f5f5f5; color: #333; }"
+          "QTableWidget::item:selected { background-color: #e6f9ef; color: "
+          "#1a1a1a; }");
+
+      transLayout->addWidget(transTable);
+
+      // 3. Lambda to load/refresh data from the database
+      auto refreshTable = [transTable, searchEdit, sortType]() {
+        Transaction tr;
+        QSqlQueryModel *model = tr.afficher();
+
+        // Read all into a local list for filtering/sorting
+        struct Row {
+          int id; double montant; QString date; QString type;
+          QString mode; QString desc; int commande;
+        };
+        QList<Row> allRows;
+        for (int i = 0; i < model->rowCount(); ++i) {
+          Row r;
+          r.id = model->data(model->index(i, 0)).toInt();
+          r.montant = model->data(model->index(i, 1)).toDouble();
+          r.date = model->data(model->index(i, 2)).toString();
+          r.type = model->data(model->index(i, 3)).toString();
+          r.mode = model->data(model->index(i, 4)).toString();
+          r.desc = model->data(model->index(i, 5)).toString();
+          r.commande = model->data(model->index(i, 6)).toInt();
+          allRows.append(r);
+        }
+        delete model;
+
+        // Filter
+        QString query = searchEdit->text().toLower();
+        QList<Row> filtered;
+        for (const auto &r : allRows) {
+          bool match = r.desc.toLower().contains(query) ||
+                       r.type.toLower().contains(query) ||
+                       r.mode.toLower().contains(query);
+          if (match) filtered.append(r);
+        }
+
+        // Sort
+        QString sort = sortType->currentText();
+        std::sort(filtered.begin(), filtered.end(),
+                  [sort](const Row &a, const Row &b) {
+                    if (sort == "Amt High-Low") return a.montant > b.montant;
+                    else return a.montant < b.montant;
+                  });
+
+        // Populate table
+        transTable->setRowCount(0);
+        transTable->setRowCount(filtered.size());
+        for (int i = 0; i < filtered.size(); ++i) {
+          const auto &r = filtered[i];
+          transTable->setItem(i, 0, new QTableWidgetItem(QString::number(r.id)));
+          transTable->setItem(i, 1, new QTableWidgetItem(QString::number(r.montant, 'f', 2)));
+          transTable->setItem(i, 2, new QTableWidgetItem(r.date));
+          transTable->setItem(i, 3, new QTableWidgetItem(r.type));
+          transTable->setItem(i, 4, new QTableWidgetItem(r.mode));
+          transTable->setItem(i, 5, new QTableWidgetItem(r.desc));
+          transTable->setItem(i, 6, new QTableWidgetItem(QString::number(r.commande)));
+
+          // --- Action Buttons (Edit + Delete) ---
+          QWidget *actionWidget = new QWidget();
+          QHBoxLayout *actionBtnLayout = new QHBoxLayout(actionWidget);
+          actionBtnLayout->setContentsMargins(10, 0, 10, 0);
+          actionBtnLayout->setSpacing(15);
+          actionBtnLayout->setAlignment(Qt::AlignCenter);
+
+          QPushButton *btnModify = new QPushButton("Edit");
+          btnModify->setCursor(Qt::PointingHandCursor);
+          btnModify->setMinimumWidth(80);
+          btnModify->setFixedHeight(28);
+          btnModify->setStyleSheet(
+              "QPushButton {"
+              "background-color: #ffffff;"
+              "color: #333333;"
+              "border: 1px solid #cccccc;"
+              "border-radius: 6px;"
+              "padding: 0px 8px;"
+              "font-size: 13px;"
+              "font-weight: 600;"
+              "} "
+              "QPushButton:hover { border-color: #aaaaaa; color: #000000; "
+              "background-color: #f6f6f6; }"
+              "QPushButton:pressed { background-color: #e6e6e6; }");
+
+          QPushButton *btnDelete = new QPushButton("Remove");
+          btnDelete->setCursor(Qt::PointingHandCursor);
+          btnDelete->setMinimumWidth(80);
+          btnDelete->setFixedHeight(28);
+          btnDelete->setStyleSheet(
+              "QPushButton { background-color: #ffffff; border: 1px solid "
+              "#d32f2f; color: #d32f2f; border-radius: 6px; padding: 0px 8px; "
+              "font-weight: 600; font-size: 13px; } QPushButton:hover { "
+              "background-color: #ffebee; border-color: #b71c1c; color: "
+              "#b71c1c; }");
+
+          actionBtnLayout->addWidget(btnModify);
+          actionBtnLayout->addWidget(btnDelete);
+          transTable->setCellWidget(i, 7, actionWidget);
+
+          // --- Connect Edit ---
+          int rowId = r.id;
+          QObject::connect(
+              btnModify, &QPushButton::clicked,
+              [transTable, btnModify, rowId, searchEdit, sortType]() {
+                // Find current row dynamically
+                QPoint btnPos = btnModify->mapTo(transTable->viewport(),
+                                                  btnModify->rect().center());
+                int row = transTable->rowAt(btnPos.y());
+                if (row < 0) return;
+
+                QDialog dlg(transTable->window());
+                dlg.setWindowTitle("Edit Transaction");
+                dlg.setModal(true);
+                dlg.setMinimumWidth(450);
+                dlg.setStyleSheet("QDialog { background-color: #ffffff; "
+                                  "border-radius: 12px; }");
+
+                QVBoxLayout *mainV = new QVBoxLayout(&dlg);
+                mainV->setContentsMargins(30, 30, 30, 30);
+                mainV->setSpacing(20);
+
+                QLabel *title = new QLabel("Update Transaction");
+                title->setStyleSheet(
+                    "font-size: 20px; font-weight: 700; color: #1a1a1a;");
+                mainV->addWidget(title);
+
+                QFormLayout *form = new QFormLayout();
+                form->setSpacing(15);
+                form->setLabelAlignment(Qt::AlignLeft);
+
+                auto styleField = [&](QWidget *w) {
+                  w->setStyleSheet(
+                      "QLineEdit, QDateEdit, QComboBox { background-color: #f9fafb; border: 1px "
+                      "solid #eaeaea; border-radius: 8px; padding: 10px; "
+                      "font-size: 14px; color: #333; } "
+                      "QLineEdit:focus, QDateEdit:focus, QComboBox:focus { "
+                      "border-color: #3DDC84; background-color: #ffffff; }");
+                  w->setFixedHeight(40);
+                };
+
+                QLineEdit *editMontant = new QLineEdit(transTable->item(row, 1)->text());
+                styleField(editMontant);
+
+                QDateEdit *editDate = new QDateEdit(
+                    QDate::fromString(transTable->item(row, 2)->text().left(10), "yyyy-MM-dd"));
+                editDate->setCalendarPopup(true);
+                editDate->setDisplayFormat("yyyy-MM-dd");
+                styleField(editDate);
+
+                QComboBox *editType = new QComboBox();
+                editType->addItems({"Revenue", "Expense", "Refund", "Transfer"});
+                editType->setCurrentText(transTable->item(row, 3)->text());
+                styleField(editType);
+
+                QComboBox *editMode = new QComboBox();
+                editMode->addItems({"Cash", "Card", "Bank Transfer", "Check"});
+                editMode->setCurrentText(transTable->item(row, 4)->text());
+                styleField(editMode);
+
+                QLineEdit *editDesc = new QLineEdit(transTable->item(row, 5)->text());
+                styleField(editDesc);
+
+                QLineEdit *editCommande = new QLineEdit(transTable->item(row, 6)->text());
+                styleField(editCommande);
+
+                auto addRow = [&](const QString &label, QWidget *w) {
+                  QLabel *l = new QLabel(label);
+                  l->setStyleSheet(
+                      "font-weight: 600; color: #444; font-size: 13px;");
+                  form->addRow(l, w);
+                };
+
+                addRow("Amount:", editMontant);
+                addRow("Date:", editDate);
+                addRow("Type:", editType);
+                addRow("Payment Mode:", editMode);
+                addRow("Description:", editDesc);
+                addRow("Order ID:", editCommande);
+
+                mainV->addLayout(form);
+                mainV->addSpacing(10);
+
+                QDialogButtonBox *bbox = new QDialogButtonBox(
+                    QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+                bbox->setStyleSheet(
+                    "QPushButton { padding: 10px 24px; border-radius: 8px; "
+                    "font-weight: 700; font-size: 14px; min-width: 100px; }"
+                    "QPushButton[text='Save'] { background-color: #3DDC84; "
+                    "color: white; border: none; }"
+                    "QPushButton[text='Save']:hover { background-color: "
+                    "#34c772; }"
+                    "QPushButton[text='Cancel'] { background-color: #ffffff; "
+                    "color: #666; border: 1px solid #ddd; }"
+                    "QPushButton[text='Cancel']:hover { background-color: "
+                    "#f9fafb; }");
+                mainV->addWidget(bbox);
+
+                QObject::connect(bbox, &QDialogButtonBox::accepted, &dlg,
+                                 &QDialog::accept);
+                QObject::connect(bbox, &QDialogButtonBox::rejected, &dlg,
+                                 &QDialog::reject);
+
+                if (dlg.exec() == QDialog::Accepted) {
+                  Transaction t;
+                  t.setIdTransaction(rowId);
+                  t.setMontant(editMontant->text().toDouble());
+                  t.setDateTransaction(editDate->date());
+                  t.setTypeTransaction(editType->currentText());
+                  t.setModePaiement(editMode->currentText());
+                  t.setDescription(editDesc->text().trimmed());
+                  t.setIdCommande(editCommande->text().toInt());
+
+                  if (t.modifier()) {
+                    QMessageBox::information(
+                        transTable->window(), "Success",
+                        "Transaction updated successfully.");
+                    // Trigger refresh via searchEdit signal
+                    emit searchEdit->textChanged(searchEdit->text());
+                  } else {
+                    QMessageBox::critical(
+                        transTable->window(), "Error",
+                        "Failed to update transaction.\n\nDB Error: " +
+                            t.getLastError());
+                  }
+                }
+              });
+
+          // --- Connect Delete ---
+          QObject::connect(
+              btnDelete, &QPushButton::clicked,
+              [transTable, btnDelete, rowId, searchEdit]() {
+                QMessageBox::StandardButton reply;
+                reply = QMessageBox::question(
+                    transTable->window(), "Delete Transaction",
+                    "Are you sure you want to delete this transaction?",
+                    QMessageBox::Yes | QMessageBox::No);
+                if (reply == QMessageBox::Yes) {
+                  Transaction t;
+                  if (t.supprimer(rowId)) {
+                    QMessageBox::information(transTable->window(), "Deleted",
+                                             "Transaction deleted successfully.");
+                    // Trigger refresh
+                    emit searchEdit->textChanged(searchEdit->text());
+                  } else {
+                    QMessageBox::critical(
+                        transTable->window(), "Error",
+                        "Failed to delete transaction.\n\nDB Error: " +
+                            t.getLastError());
+                  }
+                }
+              });
+        }
+      };
+
+      // Initial load
+      refreshTable();
+
+      // Connections - Auto Update on search/sort
+      QObject::connect(searchEdit, &QLineEdit::textChanged, refreshTable);
+      QObject::connect(sortType, &QComboBox::currentTextChanged, refreshTable);
+      QObject::connect(btnRefresh, &QPushButton::clicked, refreshTable);
+
+      // Print PDF
+      QObject::connect(btnPrint, &QPushButton::clicked, [transTable]() {
+        QString fileName = QFileDialog::getSaveFileName(
+            transTable->window(), "Export PDF", "transactions_report.pdf",
+            "PDF Files (*.pdf)");
+        if (fileName.isEmpty()) return;
+
+        QPrinter printer(QPrinter::PrinterResolution);
+        printer.setOutputFormat(QPrinter::PdfFormat);
+        printer.setOutputFileName(fileName);
+        printer.setPageSize(QPageSize(QPageSize::A4));
+
+        QString html = "<h2 style='color:#1a1a1a;'>Transaction Report</h2>"
+                       "<table style='width:100%; border-collapse:collapse;'>"
+                       "<tr style='background:#f0f0f0;'>"
+                       "<th style='padding:8px; border:1px solid #ddd;'>Amount</th>"
+                       "<th style='padding:8px; border:1px solid #ddd;'>Date</th>"
+                       "<th style='padding:8px; border:1px solid #ddd;'>Type</th>"
+                       "<th style='padding:8px; border:1px solid #ddd;'>Payment</th>"
+                       "<th style='padding:8px; border:1px solid #ddd;'>Description</th>"
+                       "<th style='padding:8px; border:1px solid #ddd;'>Order ID</th>"
+                       "</tr>";
+
+        for (int r = 0; r < transTable->rowCount(); ++r) {
+          html += "<tr>";
+          for (int c = 1; c <= 6; ++c) { // Skip hidden ID col
+            QString val = transTable->item(r, c) ? transTable->item(r, c)->text() : "";
+            html += "<td style='padding:8px; border:1px solid #ddd;'>" + val + "</td>";
+          }
+          html += "</tr>";
+        }
+        html += "</table>";
+
+        QTextDocument doc;
+        doc.setHtml(html);
+        doc.setPageSize(printer.pageRect(QPrinter::Point).size());
+        doc.print(&printer);
+
+        QMessageBox::information(transTable->window(), "Success",
+                                 "PDF Exported Successfully!");
+      });
+
+      cLayout->addWidget(transContainer);
+
+    } else if (name == "Expense Tracking") {
+      // ========== Filtered view — Expenses only ==========
+      QPushButton *btnPrint = new QPushButton("PRINT PDF");
+      btnPrint->setStyleSheet(getButtonStyle());
+      btnPrint->setCursor(Qt::PointingHandCursor);
+      btnPrint->setFixedWidth(150);
+      cLayout->addWidget(btnPrint, 0, Qt::AlignRight);
+
+      QTableWidget *expTable = new QTableWidget();
+      QStringList headers = {"Date", "Type", "Description", "Amount", "Payment Mode"};
+      expTable->setColumnCount(headers.size());
+      expTable->setHorizontalHeaderLabels(headers);
+      expTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+      expTable->verticalHeader()->setVisible(false);
+      expTable->setAlternatingRowColors(true);
+      expTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+      expTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+      expTable->setStyleSheet(
           "QTableWidget { border: 1px solid #eaeaea; background-color: "
           "#ffffff; gridline-color: transparent; border-radius: 8px; "
           "alternate-background-color: #f9fafb; }"
@@ -1321,147 +1795,71 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
           "border: none; border-bottom: 2px solid #f0f0f0; font-weight: 700; "
           "color: #666; }");
 
-      // Data
-      struct Transaction {
-        QString id;
-        QString date;
-        QString desc;
-        double amount;
-        QString transactionStatus;
-      };
-      QList<Transaction> transactions = {
-          {"TRX-1024", "2023-10-25", "Packaging Supplies", 150.00, "Completed"},
-          {"TRX-1023", "2023-10-24", "Client Payment - Luigi", 1200.00,
-           "Completed"},
-          {"TRX-1022", "2023-10-24", "Organic Certification", 340.50,
-           "Pending"},
-          {"TRX-1021", "2023-10-23", "Maintenance Parts", 850.00, "Completed"},
-          {"TRX-1020", "2023-10-22", "Utility Bill", 210.75, "Pending"}};
+      // Load expense data from DB
+      auto loadExpenses = [expTable]() {
+        QSqlQuery query;
+        query.prepare("SELECT DATE_TRANSACTION, TYPE_TRANSACTION, DESCRIPTION, "
+                      "MONTANT, MODE_PAIEMENT FROM FINANCE "
+                      "WHERE UPPER(TYPE_TRANSACTION) = 'EXPENSE' "
+                      "ORDER BY DATE_TRANSACTION DESC");
+        query.exec();
 
-      auto populateTable = [table](const QList<Transaction> &data) {
-        table->setRowCount(0);
-        table->setRowCount(data.size());
-        for (int i = 0; i < data.size(); ++i) {
-          const auto &t = data[i];
-          table->setItem(i, 0, new QTableWidgetItem(t.date));
-          table->setItem(i, 1, new QTableWidgetItem(t.desc));
-          // Format Amount
-          QString amtStr = "$" + QString::number(t.amount, 'f', 2);
-          if (t.amount >= 1000) {
-            int pos = amtStr.length() - 6;
-            while (pos > 1) {
-              amtStr.insert(pos, ",");
-              pos -= 3;
-            }
+        expTable->setRowCount(0);
+        int row = 0;
+        while (query.next()) {
+          expTable->insertRow(row);
+          expTable->setItem(row, 0, new QTableWidgetItem(query.value(0).toString()));
+          expTable->setItem(row, 1, new QTableWidgetItem(query.value(1).toString()));
+          expTable->setItem(row, 2, new QTableWidgetItem(query.value(2).toString()));
+          expTable->setItem(row, 3, new QTableWidgetItem(
+              QString::number(query.value(3).toDouble(), 'f', 2)));
+          expTable->setItem(row, 4, new QTableWidgetItem(query.value(4).toString()));
+          row++;
+        }
+      };
+
+      loadExpenses();
+      cLayout->addWidget(expTable);
+
+      // Print PDF
+      QObject::connect(btnPrint, &QPushButton::clicked, [expTable]() {
+        QString fileName = QFileDialog::getSaveFileName(
+            expTable->window(), "Export PDF", "expense_report.pdf",
+            "PDF Files (*.pdf)");
+        if (fileName.isEmpty()) return;
+
+        QPrinter printer(QPrinter::PrinterResolution);
+        printer.setOutputFormat(QPrinter::PdfFormat);
+        printer.setOutputFileName(fileName);
+        printer.setPageSize(QPageSize(QPageSize::A4));
+
+        QString html = "<h2>Expense Report</h2>"
+                       "<table style='width:100%; border-collapse:collapse;'>"
+                       "<tr style='background:#f0f0f0;'>"
+                       "<th style='padding:8px; border:1px solid #ddd;'>Date</th>"
+                       "<th style='padding:8px; border:1px solid #ddd;'>Type</th>"
+                       "<th style='padding:8px; border:1px solid #ddd;'>Description</th>"
+                       "<th style='padding:8px; border:1px solid #ddd;'>Amount</th>"
+                       "<th style='padding:8px; border:1px solid #ddd;'>Payment</th></tr>";
+        for (int r = 0; r < expTable->rowCount(); ++r) {
+          html += "<tr>";
+          for (int c = 0; c < expTable->columnCount(); ++c) {
+            QString val = expTable->item(r, c) ? expTable->item(r, c)->text() : "";
+            html += "<td style='padding:8px; border:1px solid #ddd;'>" + val + "</td>";
           }
-          table->setItem(i, 2, new QTableWidgetItem(amtStr));
-          table->setItem(i, 3, new QTableWidgetItem(t.transactionStatus));
-
-          // Action Column
-          QWidget *actionWidget = new QWidget();
-          QHBoxLayout *actionLayout = new QHBoxLayout(actionWidget);
-          actionLayout->setContentsMargins(5, 2, 5, 2);
-          actionLayout->setSpacing(5);
-
-          QPushButton *btnEdit = new QPushButton("Edit");
-          btnEdit->setCursor(Qt::PointingHandCursor);
-          btnEdit->setMinimumWidth(80);
-          btnEdit->setFixedHeight(28);
-          btnEdit->setStyleSheet(
-              "QPushButton { background-color: #ffffff; border: 1px solid "
-              "#cccccc; border-radius: 6px; padding: 0px 8px; font-weight: "
-              "600; font-size: 13px; color: #333333; } QPushButton:hover { "
-              "border-color: #aaaaaa; color: #000000; background-color: "
-              "#f6f6f6; }");
-
-          QPushButton *btnRem = new QPushButton("Remove");
-          btnRem->setCursor(Qt::PointingHandCursor);
-          btnRem->setMinimumWidth(80);
-          btnRem->setFixedHeight(28);
-          btnRem->setStyleSheet(
-              "QPushButton { background-color: #ffffff; border: 1px solid "
-              "#d32f2f; color: #d32f2f; border-radius: 6px; padding: 0px 8px; "
-              "font-weight: 600; font-size: 13px; } QPushButton:hover { "
-              "background-color: #ffebee; border-color: #b71c1c; color: "
-              "#b71c1c; }");
-
-          actionLayout->addWidget(btnEdit);
-          actionLayout->addWidget(btnRem);
-          table->setCellWidget(i, 4, actionWidget);
-
-          QObject::connect(btnRem, &QPushButton::clicked, [table, btnRem]() {
-            QPoint btnPos =
-                btnRem->mapTo(table->viewport(), btnRem->rect().center());
-            int row = table->rowAt(btnPos.y());
-            if (row >= 0) {
-              if (QMessageBox::question(table->window(), "Confirm",
-                                        "Remove this transaction record?") ==
-                  QMessageBox::Yes)
-                table->removeRow(row);
-            }
-          });
+          html += "</tr>";
         }
-      };
-
-      populateTable(transactions);
-      transLayout->addWidget(table);
-
-      // 3. Logic
-      // Define update function
-      auto updateView = [=]() {
-        QString query = searchEdit->text().toLower();
-        QString sType = searchType->currentText();
-        QString sort = sortType->currentText();
-
-        QList<Transaction> filtered;
-        for (const auto &t : transactions) {
-          bool match = t.transactionStatus.toLower().contains(query);
-          if (match)
-            filtered.append(t);
-        }
-
-        // Sort
-        std::sort(filtered.begin(), filtered.end(),
-                  [sort](const Transaction &a, const Transaction &b) {
-                    if (sort == "Amt High-Low")
-                      return a.amount > b.amount;
-                    else
-                      return a.amount < b.amount;
-                  });
-
-        populateTable(filtered);
-      };
-
-      // Initial Population
-      updateView();
-
-      // Connections - Auto Update
-      QObject::connect(searchEdit, &QLineEdit::textChanged, updateView);
-      QObject::connect(searchType, &QComboBox::currentTextChanged, updateView);
-      QObject::connect(sortType, &QComboBox::currentTextChanged, updateView);
-
-      // Print
-      QObject::connect(btnPrint, &QPushButton::clicked, [=]() {
-        QMessageBox::information(table, "Print",
-                                 "Generating Financial Report PDF...");
+        html += "</table>";
+        QTextDocument doc;
+        doc.setHtml(html);
+        doc.setPageSize(printer.pageRect(QPrinter::Point).size());
+        doc.print(&printer);
+        QMessageBox::information(expTable->window(), "Success",
+                                 "PDF Exported Successfully!");
       });
 
-      cLayout->addWidget(transContainer);
-    } else if (name == "Expense Tracking") {
-      // Add Print PDF Button
-      QPushButton *btnPrint = new QPushButton("PRINT PDF");
-      btnPrint->setStyleSheet(getButtonStyle());
-      btnPrint->setCursor(Qt::PointingHandCursor);
-      btnPrint->setFixedWidth(150);
-      cLayout->addWidget(btnPrint, 0, Qt::AlignRight);
-
-      cLayout->addWidget(createStyledTable(
-          "Expense Log", {"Date", "Category", "Description", "Amount"},
-          {{"2023-10-25", "Travel", "Flight to NY Conference", "$450.00"},
-           {"2023-10-24", "Meals", "Team Lunch", "$125.00"}},
-          true));
     } else if (name == "Analytics") {
-      // Financial Analytics
+      // ========== Analytics — Aggregated from DB ==========
       QPushButton *btnPrint = new QPushButton("PRINT REPORT");
       btnPrint->setStyleSheet(getButtonStyle());
       btnPrint->setCursor(Qt::PointingHandCursor);
@@ -1469,8 +1867,19 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
       cLayout->addWidget(btnPrint, 0, Qt::AlignRight);
 
       GenericBarChart *chart = new GenericBarChart("Revenue vs Expenses");
-      chart->addBar("Revenue", 1250500, QColor(61, 220, 132));
-      chart->addBar("Expenses", 850000, QColor(231, 76, 60));
+
+      // Query aggregated data from DB
+      QSqlQuery q;
+      double totalRevenue = 0, totalExpense = 0;
+
+      q.prepare("SELECT NVL(SUM(MONTANT),0) FROM FINANCE WHERE UPPER(TYPE_TRANSACTION) = 'REVENUE'");
+      if (q.exec() && q.next()) totalRevenue = q.value(0).toDouble();
+
+      q.prepare("SELECT NVL(SUM(MONTANT),0) FROM FINANCE WHERE UPPER(TYPE_TRANSACTION) = 'EXPENSE'");
+      if (q.exec() && q.next()) totalExpense = q.value(0).toDouble();
+
+      chart->addBar("Revenue", totalRevenue, QColor(61, 220, 132));
+      chart->addBar("Expenses", totalExpense, QColor(231, 76, 60));
 
       QWidget *chartContainer = new QWidget();
       chartContainer->setStyleSheet(getCardStyle());
@@ -1478,6 +1887,28 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
       containerLayout->setContentsMargins(30, 30, 30, 30);
       containerLayout->addWidget(chart);
 
+      // Summary cards
+      QWidget *summaryBar = new QWidget();
+      QHBoxLayout *summaryLayout = new QHBoxLayout(summaryBar);
+      summaryLayout->setSpacing(20);
+
+      double net = totalRevenue - totalExpense;
+      QString netColor = net >= 0 ? "#3DDC84" : "#d32f2f";
+
+      summaryLayout->addWidget(
+          createStatCard("Total Revenue",
+                         QString::number(totalRevenue, 'f', 2),
+                         "From DB", "#3DDC84"));
+      summaryLayout->addWidget(
+          createStatCard("Total Expenses",
+                         QString::number(totalExpense, 'f', 2),
+                         "From DB", "#e74c3c"));
+      summaryLayout->addWidget(
+          createStatCard("Net Profit",
+                         QString::number(net, 'f', 2),
+                         net >= 0 ? "Positive" : "Negative", netColor));
+
+      cLayout->addWidget(summaryBar);
       cLayout->addWidget(chartContainer);
     }
     cLayout->addStretch();

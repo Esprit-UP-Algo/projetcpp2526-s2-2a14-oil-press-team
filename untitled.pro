@@ -12,6 +12,7 @@ SOURCES += \
     connection.cpp \
     main.cpp \
     mainwindow.cpp \
+    transaction.cpp \
     EyeSaverButton.cpp \
     AuthWidgets.cpp
 
@@ -19,6 +20,7 @@ HEADERS += \
     article.h \
     connection.h \
     mainwindow.h \
+    transaction.h \
     EyeSaverButton.h \
     AuthWidgets.h
 
