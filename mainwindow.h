@@ -3,14 +3,46 @@
 
 #include <QMainWindow>
 #include <QStackedWidget>
+<<<<<<< HEAD
+=======
+#include <QPoint>
+#include <QPushButton>
+#include <QList>
+>>>>>>> main
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 public:
     explicit MainWindow(QWidget *parent = nullptr);
+<<<<<<< HEAD
 private:
     QStackedWidget *stackedWidget;
+=======
+    void applyRole(int roleIndex);
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
+
+signals:
+    void logoutRequested();
+
+private:
+    QStackedWidget *stackedWidget;
+    QPoint m_dragPosition;
+    bool m_isResizing = false;
+    bool m_isMoving = false;
+    int m_edgeMargin = 8;
+    
+    QWidget* createTitleBar();
+    Qt::Edges getEdge(const QPoint &pos);
+
+    struct NavItem { QString title; QPushButton *btn; };
+    QList<NavItem> navItems;
+>>>>>>> main
 };
 
 #endif

@@ -1,17 +1,45 @@
 QT       += core gui printsupport widgets
+<<<<<<< HEAD
 
 CONFIG += c++17
+=======
+QT+= sql
+CONFIG += c++17
+CONFIG += console
+>>>>>>> main
 
 # You can make your code fail to compile if it uses deprecated APIs.
 # In order to do so, uncomment the following line.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+<<<<<<< HEAD
     main.cpp \
     mainwindow.cpp
 
 HEADERS += \
     mainwindow.h
+=======
+    article.cpp \
+    connection.cpp \
+    main.cpp \
+    mainwindow.cpp \
+    transaction.cpp \
+    EyeSaverButton.cpp \
+    AuthWidgets.cpp \
+    produit.cpp \
+    commande.cpp
+
+HEADERS += \
+    article.h \
+    connection.h \
+    mainwindow.h \
+    transaction.h \
+    EyeSaverButton.h \
+    AuthWidgets.h \
+    produit.h \
+    commande.h
+>>>>>>> main
 
 FORMS += \
     mainwindow.ui
@@ -23,3 +51,10 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 
 RESOURCES += \
     resources.qrc
+<<<<<<< HEAD
+=======
+
+SUBDIRS += \
+    Atelier_Connexion.pro \
+    Atelier_Connexion.pro
+>>>>>>> main
