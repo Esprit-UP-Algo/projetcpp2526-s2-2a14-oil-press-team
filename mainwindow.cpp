@@ -5,6 +5,7 @@
 #include "commande.h"
 #include "transaction.h"
 #include "produit.h"
+#include "personnel.h"
 #include <functional>
 #include <QComboBox>
 #include <QDate>
@@ -3382,6 +3383,9 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
                           "Request Hub", "Analytics", "PDF Printing"};
   QList<QPushButton *> tabButtons;
 
+  // Shared pointer for the table
+  QTableWidget *personnelTable = nullptr;
+
   for (const auto &name : tabNames) {
     QPushButton *btn = new QPushButton(name);
     btn->setCheckable(true);
@@ -3393,7 +3397,7 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
     QVBoxLayout *cLayout = new QVBoxLayout(content);
 
     if (name == "Staff Hub") {
-      // Container for list page
+      // ========== AFFICHER (READ) + MODIFIER + SUPPRIMER ==========
       QWidget *listPageWidget = new QWidget();
       QVBoxLayout *listPageLayout = new QVBoxLayout(listPageWidget);
       listPageLayout->setContentsMargins(0, 0, 0, 0);
@@ -3409,129 +3413,217 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
       searchEdit->setStyleSheet(getInputStyle());
       searchEdit->setFixedWidth(200);
 
+      QPushButton *btnRefresh = new QPushButton("Refresh");
+      btnRefresh->setStyleSheet(getButtonStyle());
+      btnRefresh->setCursor(Qt::PointingHandCursor);
+      btnRefresh->setFixedWidth(100);
+
       controlLayout->addWidget(searchEdit);
+      controlLayout->addSpacing(10);
+      controlLayout->addWidget(btnRefresh);
       controlLayout->addStretch();
       listPageLayout->addWidget(controlBar);
 
       // Table
-      QWidget *tableWidgetWrapper = createStyledTable(
-          "Staff Directory",
-          {"ID", "Name", "Position", "Department", "Start Date"},
-          {{"EMP-001", "John Doe", "Manager", "Sales", "2020-01-15"},
-           {"EMP-002", "Jane Smith", "Engineer", "Product", "2021-03-22"},
-           {"EMP-003", "Robert Brown", "Technician", "Maintenance",
-            "2019-11-05"},
-           {"EMP-004", "Emily White", "Accountant", "Finance", "2022-06-01"}},
-          true, true); // Actions + QR
+      personnelTable = new QTableWidget();
+      QStringList headers = {"CIN", "Name", "Salary", "Address", "Phone", "Exp", "Grade", "Role", "Actions"};
+      personnelTable->setColumnCount(headers.size());
+      personnelTable->setHorizontalHeaderLabels(headers);
+      personnelTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+      personnelTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+      personnelTable->verticalHeader()->setVisible(false);
+      personnelTable->verticalHeader()->setDefaultSectionSize(60);
+      personnelTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+      personnelTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+      personnelTable->setAlternatingRowColors(true);
+      personnelTable->setStyleSheet(
+          "QTableWidget { border: 1px solid #eaeaea; background-color: #ffffff; "
+          "gridline-color: transparent; border-radius: 8px; "
+          "alternate-background-color: #f9fafb; }"
+          "QHeaderView::section { background-color: #ffffff; padding: 12px; "
+          "border: none; border-bottom: 2px solid #f0f0f0; font-weight: 700; "
+          "color: #666; text-transform: uppercase; font-size: 12px; }"
+          "QTableWidget::item { padding: 12px; border-bottom: 1px solid #f5f5f5; "
+          "color: #333; }"
+          "QTableWidget::item:selected { background-color: #e6f9ef; color: #1a1a1a; }");
 
-      QTableWidget *table = tableWidgetWrapper->findChild<QTableWidget *>();
-      if (table)
-        table->setObjectName("PersonnelTable");
-
-      listPageLayout->addWidget(tableWidgetWrapper);
+      listPageLayout->addWidget(personnelTable);
       cLayout->addWidget(listPageWidget);
 
-      // Search Logic
-      if (table) {
-        QObject::connect(
-            searchEdit, &QLineEdit::textChanged, [table](const QString &text) {
-              QString query = text.toLower();
-              for (int i = 0; i < table->rowCount(); ++i) {
-                bool match = false;
-                if (table->item(i, 1))
-                  match = table->item(i, 1)->text().toLower().contains(
-                      query); // Name
-                table->setRowHidden(i, !match);
+      auto refreshTable = [personnelTable]() {
+          Personnel p;
+          QSqlQueryModel *model = p.afficher();
+          personnelTable->setRowCount(0);
+          int rowCount = model->rowCount();
+          personnelTable->setRowCount(rowCount);
+
+          for (int i = 0; i < rowCount; ++i) {
+              for (int j = 0; j < 8; ++j) {
+                  personnelTable->setItem(i, j, new QTableWidgetItem(model->data(model->index(i, j)).toString()));
               }
-            });
-      }
+
+              // Action Buttons
+              QWidget *actionWidget = new QWidget();
+              QHBoxLayout *actionBtnLayout = new QHBoxLayout(actionWidget);
+              actionBtnLayout->setContentsMargins(10, 0, 10, 0);
+              actionBtnLayout->setSpacing(10);
+              actionBtnLayout->setAlignment(Qt::AlignCenter);
+
+              QPushButton *btnModify = new QPushButton("Edit");
+              btnModify->setCursor(Qt::PointingHandCursor);
+              btnModify->setMinimumWidth(70);
+              btnModify->setFixedHeight(28);
+              btnModify->setStyleSheet("QPushButton { background-color: #ffffff; color: #333; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; font-weight: 600; } QPushButton:hover { background-color: #f6f6f6; }");
+
+              QPushButton *btnDelete = new QPushButton("Remove");
+              btnDelete->setCursor(Qt::PointingHandCursor);
+              btnDelete->setMinimumWidth(70);
+              btnDelete->setFixedHeight(28);
+              btnDelete->setStyleSheet("QPushButton { background-color: #ffffff; color: #d32f2f; border: 1px solid #d32f2f; border-radius: 6px; font-size: 13px; font-weight: 600; } QPushButton:hover { background-color: #ffebee; }");
+
+              actionBtnLayout->addWidget(btnModify);
+              actionBtnLayout->addWidget(btnDelete);
+
+              QObject::connect(btnDelete, &QPushButton::clicked, [personnelTable, i]() {
+                  int cin = personnelTable->item(i, 0)->text().toInt();
+                  if (QMessageBox::question(nullptr, "Confirm Deletion", "Are you sure you want to delete this employee?") == QMessageBox::Yes) {
+                      Personnel p;
+                      if (p.supprimer(cin)) {
+                         QMessageBox::information(nullptr, "Deleted", "Employee removed successfully.");
+                         // Refresh via button or signal if needed
+                      }
+                  }
+              });
+
+              QObject::connect(btnModify, &QPushButton::clicked, [personnelTable, i]() {
+                  QDialog *dialog = new QDialog();
+                  dialog->setWindowTitle("Modify Personnel");
+                  dialog->setMinimumWidth(400);
+                  QVBoxLayout *dLayout = new QVBoxLayout(dialog);
+                  
+                  QList<QLineEdit*> inputs;
+                  QStringList fieldNames = {"CIN", "Name", "Salary", "Address", "Phone", "Experience", "Grade", "Role"};
+                  for (int c = 0; c < 8; ++c) {
+                      dLayout->addWidget(new QLabel(fieldNames[c]));
+                      QLineEdit *le = new QLineEdit(personnelTable->item(i, c)->text());
+                      if (c == 0) le->setEnabled(false); // CIN is PK
+                      dLayout->addWidget(le);
+                      inputs.append(le);
+                  }
+
+                  QPushButton *btnSave = new QPushButton("Save Changes");
+                  dLayout->addWidget(btnSave);
+                  QObject::connect(btnSave, &QPushButton::clicked, [=]() {
+                      Personnel p;
+                      p.setCin(inputs[0]->text().toInt());
+                      p.setNom(inputs[1]->text());
+                      p.setSalaire(inputs[2]->text().toDouble());
+                      p.setAdresse(inputs[3]->text());
+                      p.setTel(inputs[4]->text());
+                      p.setExperience(inputs[5]->text().toInt());
+                      p.setGrade(inputs[6]->text());
+                      p.setRole(inputs[7]->text());
+
+                      if (p.modifier()) {
+                          QMessageBox::information(nullptr, "Success", "Record updated.");
+                          dialog->accept();
+                      } else {
+                          QMessageBox::critical(nullptr, "Error", p.getLastError());
+                      }
+                  });
+                  dialog->exec();
+              });
+
+              personnelTable->setCellWidget(i, 8, actionWidget);
+          }
+      };
+
+      QObject::connect(btnRefresh, &QPushButton::clicked, refreshTable);
+      refreshTable(); // Initial load
+
+      // Search Logic
+      QObject::connect(searchEdit, &QLineEdit::textChanged, [personnelTable](const QString &text) {
+          QString query = text.toLower();
+          for (int i = 0; i < personnelTable->rowCount(); ++i) {
+              bool match = false;
+              if (personnelTable->item(i, 1))
+                  match = personnelTable->item(i, 1)->text().toLower().contains(query);
+              personnelTable->setRowHidden(i, !match);
+          }
+      });
 
     } else if (name == "Add Staff") {
-      // Manual Form
+      // ========== AJOUTER (CREATE) ==========
       QWidget *formContainer = new QWidget();
       QVBoxLayout *formLayout = new QVBoxLayout(formContainer);
-      formLayout->setSpacing(15);
+      formLayout->setSpacing(10);
       formLayout->setContentsMargins(0, 0, 10, 0);
 
       QLabel *titleLabel = new QLabel("New Employee Registration");
-      titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: "
-                                "#1a1a1a; margin-bottom: 25px; border: none;");
+      titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 15px; border: none;");
       formLayout->addWidget(titleLabel);
 
       QString labelStyle = getLabelStyle();
       QString inputStyle = getInputStyle();
 
-      QLineEdit *nameInput = new QLineEdit();
-      QLineEdit *posInput = new QLineEdit();
-      QComboBox *deptInput = new QComboBox();
-      deptInput->addItems(
-          {"Select...", "Sales", "Product", "Maintenance", "Finance", "HR"});
-      deptInput->setStyleSheet(inputStyle);
-      deptInput->setFixedHeight(45);
-      QLineEdit *emailInput = new QLineEdit();
-      QLineEdit *dateInput = new QLineEdit();
-      dateInput->setPlaceholderText("YYYY-MM-DD");
+      QLineEdit *cinInput = new QLineEdit(); cinInput->setPlaceholderText("CIN Number");
+      QLineEdit *nameInput = new QLineEdit(); nameInput->setPlaceholderText("Full Name");
+      QLineEdit *salInput = new QLineEdit(); salInput->setPlaceholderText("Salary");
+      QLineEdit *addrInput = new QLineEdit(); addrInput->setPlaceholderText("Address");
+      QLineEdit *telInput = new QLineEdit(); telInput->setPlaceholderText("Phone Number");
+      QLineEdit *expInput = new QLineEdit(); expInput->setPlaceholderText("Years of Exp");
+      QComboBox *gradeInput = new QComboBox();
+      gradeInput->addItems({"Junior", "Senior", "Lead", "Principal", "Chief"});
+      QComboBox *roleInput = new QComboBox();
+      roleInput->addItems({"Stock Management", "Product Management", "Maintenance Management", "Personnel Management", "Order Management", "Financial Management"});
 
       auto addField = [&](QString label, QWidget *w) {
-        QLabel *lbl = new QLabel(label);
-        lbl->setStyleSheet(labelStyle);
-        if (QLineEdit *le = qobject_cast<QLineEdit *>(w))
-          le->setStyleSheet(inputStyle);
-        formLayout->addWidget(lbl);
+        formLayout->addWidget(new QLabel(label));
+        w->setStyleSheet(inputStyle);
+        if (qobject_cast<QLineEdit*>(w) || qobject_cast<QComboBox*>(w))
+            w->setFixedHeight(45);
         formLayout->addWidget(w);
       };
 
-      addField("Full Name:", nameInput);
-      addField("Position:", posInput);
-      addField("Department:", deptInput);
-      addField("Email:", emailInput);
-      addField("Start Date:", dateInput);
+      addField("CIN:", cinInput);
+      addField("Name:", nameInput);
+      addField("Salary:", salInput);
+      addField("Address:", addrInput);
+      addField("Phone:", telInput);
+      addField("Experience:", expInput);
+      addField("Grade:", gradeInput);
+      addField("Role:", roleInput);
 
-      formLayout->addSpacing(20);
       QPushButton *btnHire = new QPushButton("Hire Employee");
       btnHire->setStyleSheet(getButtonStyle());
-      btnHire->setCursor(Qt::PointingHandCursor);
       btnHire->setFixedHeight(45);
       formLayout->addWidget(btnHire);
       formLayout->addStretch();
 
-      // Logic
       QObject::connect(btnHire, &QPushButton::clicked, [=]() {
-        QTableWidget *table =
-            outNestedStack->findChild<QTableWidget *>("PersonnelTable");
-        if (!table)
-          return;
+          if (cinInput->text().isEmpty() || nameInput->text().isEmpty()) {
+              QMessageBox::warning(nullptr, "Error", "CIN and Name are required!");
+              return;
+          }
 
-        if (nameInput->text().isEmpty()) {
-          QMessageBox::warning(nullptr, "Error", "Name is required!");
-          return;
-        }
+          Personnel p;
+          p.setCin(cinInput->text().toInt());
+          p.setNom(nameInput->text());
+          p.setSalaire(salInput->text().toDouble());
+          p.setAdresse(addrInput->text());
+          p.setTel(telInput->text());
+          p.setExperience(expInput->text().toInt());
+          p.setGrade(gradeInput->currentText());
+          p.setRole(roleInput->currentText());
 
-        int row = table->rowCount();
-        table->insertRow(row);
-        // Auto ID
-        table->setItem(row, 0,
-                       new QTableWidgetItem(
-                           QString("EMP-%1").arg(row + 1, 3, 10, QChar('0'))));
-        table->setItem(row, 1, new QTableWidgetItem(nameInput->text()));
-        table->setItem(row, 2, new QTableWidgetItem(posInput->text()));
-        table->setItem(row, 3, new QTableWidgetItem(deptInput->currentText()));
-        table->setItem(row, 4, new QTableWidgetItem(dateInput->text()));
-
-        // Clear
-        nameInput->clear();
-        posInput->clear();
-        emailInput->clear();
-        dateInput->clear();
-        deptInput->setCurrentIndex(0);
-
-        // Success & Switch
-        QMessageBox::information(nullptr, "Success",
-                                 "Employee Hired Successfully!");
-        if (outNestedStack)
-          outNestedStack->setCurrentIndex(0);
-        if (!tabButtons.isEmpty())
-          tabButtons.first()->setChecked(true);
+          if (p.ajouter()) {
+              QMessageBox::information(nullptr, "Success", "Employee added successfully.");
+              cinInput->clear(); nameInput->clear(); salInput->clear(); addrInput->clear();
+              telInput->clear(); expInput->clear();
+              outNestedStack->setCurrentIndex(0);
+          } else {
+              QMessageBox::critical(nullptr, "Error", p.getLastError());
+          }
       });
 
       cLayout->addWidget(formContainer);
