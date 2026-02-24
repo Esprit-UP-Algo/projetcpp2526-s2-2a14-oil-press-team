@@ -2,10 +2,10 @@
 #include "AuthWidgets.h"
 #include "EyeSaverButton.h"
 #include "article.h"
+#include "commande.h"
 #include "transaction.h"
 #include "produit.h"
 #include <functional>
-#include <memory>
 #include <QComboBox>
 #include <QDate>
 #include <QDateEdit>
@@ -15,6 +15,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QRadioButton>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -33,6 +34,7 @@
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QSqlError>
+#include <QSqlRecord>
 #include <QSqlQueryModel>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -802,6 +804,26 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
   QStringList tabNames = {"New Order", "Edit Order", "Order Hub", "Analytics"};
   QList<QPushButton *> tabButtons;
 
+  // Helper functions used internally to build repetitive UI
+  auto addField = [](QVBoxLayout* layout, const QString& labelStyle, const QString& inputStyle, const QString& label, const QString& placeholder, QWidget*& outWidget, bool isDate = false) {
+    QLabel *lbl = new QLabel(label);
+    lbl->setStyleSheet(labelStyle);
+    layout->addWidget(lbl);
+    if (isDate) {
+        QDateEdit *dateEdit = new QDateEdit(QDate::currentDate());
+        dateEdit->setDisplayFormat("yyyy-MM-dd");
+        dateEdit->setCalendarPopup(true);
+        dateEdit->setStyleSheet(inputStyle);
+        outWidget = dateEdit;
+    } else {
+        QLineEdit *inp = new QLineEdit();
+        inp->setStyleSheet(inputStyle);
+        inp->setPlaceholderText(placeholder);
+        outWidget = inp;
+    }
+    layout->addWidget(outWidget);
+  };
+
   for (const auto &name : tabNames) {
     QPushButton *btn = new QPushButton(name);
     btn->setCheckable(true);
@@ -813,32 +835,170 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
     QVBoxLayout *cLayout = new QVBoxLayout(content);
 
     if (name == "New Order") {
-      cLayout->addWidget(
-          createStyledForm("New Order Registration",
-                           {{"Company Name:", "Enter company name"},
-                            {"Contact Person:", "Enter contact person name"},
-                            {"Email Address:", "email@example.com"},
-                            {"Phone Number:", "+1 (555) ..."},
-                            {"Address:", "Street, City, Zip"}},
-                           "Register Client"));
+      QWidget *formContainer = new QWidget();
+      formContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+      formContainer->setStyleSheet(".QWidget { background-color: #ffffff; border-radius: 10px; border: 1px solid #eee; }");
+      QVBoxLayout *outerLayout = new QVBoxLayout(formContainer);
+      outerLayout->setContentsMargins(30, 30, 30, 30);
+      
+      QWidget *formContent = new QWidget();
+      QVBoxLayout *formLayout = new QVBoxLayout(formContent);
+      formLayout->setContentsMargins(0, 0, 10, 0);
+      formLayout->setSpacing(15);
+
+      QLabel *titleLabel = new QLabel("New Order Registration");
+      titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 25px; border: none;");
+      formLayout->addWidget(titleLabel);
+
+      QString labelStyle = getLabelStyle();
+      QString inputStyle = getInputStyle();
+
+      QWidget *wId, *wDate, *wClient, *wDelivery;
+      addField(formLayout, labelStyle, inputStyle, "ID:", "Enter order ID", wId, false);
+      addField(formLayout, labelStyle, inputStyle, "Order Date:", "", wDate, true);
+      addField(formLayout, labelStyle, inputStyle, "Client's Name:", "Enter client's name", wClient, false);
+      addField(formLayout, labelStyle, inputStyle, "Delivery Date:", "", wDelivery, true);
+
+      QLabel *stateLbl = new QLabel("State:");
+      stateLbl->setStyleSheet(labelStyle);
+      formLayout->addWidget(stateLbl);
+
+      QWidget *radioWidget = new QWidget();
+      QHBoxLayout *radioLayout = new QHBoxLayout(radioWidget);
+      radioLayout->setContentsMargins(0, 0, 0, 0);
+      QRadioButton *pendingRadio = new QRadioButton("Pending");
+      QRadioButton *completedRadio = new QRadioButton("Completed");
+      pendingRadio->setChecked(true);
+      pendingRadio->setStyleSheet("QRadioButton { font-size: 14px; color: #333; }");
+      completedRadio->setStyleSheet("QRadioButton { font-size: 14px; color: #333; }");
+      radioLayout->addWidget(pendingRadio);
+      radioLayout->addWidget(completedRadio);
+      radioLayout->addStretch();
+      formLayout->addWidget(radioWidget);
+
+      formLayout->addSpacing(20);
+      QPushButton *btnSubmit = new QPushButton("Register Order");
+      btnSubmit->setStyleSheet(getButtonStyle());
+      btnSubmit->setCursor(Qt::PointingHandCursor);
+      btnSubmit->setFixedHeight(45);
+      formLayout->addWidget(btnSubmit);
+      formLayout->addStretch();
+
+      QScrollArea *scrollArea = new QScrollArea();
+      scrollArea->setWidgetResizable(true);
+      scrollArea->setFrameShape(QFrame::NoFrame);
+      scrollArea->setStyleSheet("QScrollArea { background: transparent; border: none; } QWidget { background: transparent; }");
+      scrollArea->setWidget(formContent);
+      outerLayout->addWidget(scrollArea);
+
+      cLayout->addWidget(formContainer);
+
+      // Connect Button
+      QObject::connect(btnSubmit, &QPushButton::clicked, [=]() {
+          int id = static_cast<QLineEdit*>(wId)->text().toInt();
+          QDate date = static_cast<QDateEdit*>(wDate)->date();
+          QString client = static_cast<QLineEdit*>(wClient)->text();
+          QDate delivery = static_cast<QDateEdit*>(wDelivery)->date();
+          QString state = pendingRadio->isChecked() ? "Pending" : "Completed";
+
+          Commande c(id, date, state, client, delivery);
+          if (c.ajouter()) {
+              QMessageBox::information(nullptr, "Success", "Order added successfully!");
+          } else {
+              QMessageBox::critical(nullptr, "Error", "Failed to add order.");
+          }
+      });
+
     } else if (name == "Edit Order") {
       QWidget *searchBar = new QWidget();
       searchBar->setStyleSheet(getCardStyle());
       QHBoxLayout *sLayout = new QHBoxLayout(searchBar);
       QLineEdit *searchInp = new QLineEdit();
       searchInp->setStyleSheet("border: none; font-size: 14px;");
-      searchInp->setPlaceholderText("Search Client ID or Name...");
-      QPushButton *sBtn = new QPushButton("Search");
+      searchInp->setPlaceholderText("Search Order ID...");
+      QPushButton *sBtn = new QPushButton("Search (Not used yet)");
       sBtn->setStyleSheet(getButtonStyle());
-      sBtn->setFixedWidth(100);
+      sBtn->setFixedWidth(150);
       sLayout->addWidget(searchInp);
       sLayout->addWidget(sBtn);
       cLayout->addWidget(searchBar);
       cLayout->addSpacing(15);
-      cLayout->addWidget(createStyledForm(
-          "Edit Details",
-          {{"Company Name:", "Acme Corp"}, {"Email:", "contact@acme.com"}},
-          "Update Profile"));
+      
+      // Inline edit form
+      QWidget *formContainer = new QWidget();
+      formContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+      formContainer->setStyleSheet(".QWidget { background-color: #ffffff; border-radius: 10px; border: 1px solid #eee; }");
+      QVBoxLayout *outerLayout = new QVBoxLayout(formContainer);
+      outerLayout->setContentsMargins(30, 30, 30, 30);
+      
+      QWidget *formContent = new QWidget();
+      QVBoxLayout *formLayout = new QVBoxLayout(formContent);
+      formLayout->setContentsMargins(0, 0, 10, 0);
+      formLayout->setSpacing(15);
+
+      QLabel *titleLabel = new QLabel("Edit Order Details");
+      titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 25px; border: none;");
+      formLayout->addWidget(titleLabel);
+
+      QString labelStyle = getLabelStyle();
+      QString inputStyle = getInputStyle();
+
+      QWidget *wId, *wDate, *wClient, *wDelivery;
+      addField(formLayout, labelStyle, inputStyle, "ID:", "Enter order ID", wId, false);
+      static_cast<QLineEdit*>(wId)->setReadOnly(true); // Don't let users edit ID in this static form directly without searching
+      addField(formLayout, labelStyle, inputStyle, "Order Date:", "", wDate, true);
+      addField(formLayout, labelStyle, inputStyle, "Client's Name:", "Enter client's name", wClient, false);
+      addField(formLayout, labelStyle, inputStyle, "Delivery Date:", "", wDelivery, true);
+
+      QLabel *stateLbl = new QLabel("State:");
+      stateLbl->setStyleSheet(labelStyle);
+      formLayout->addWidget(stateLbl);
+
+      QWidget *radioWidget = new QWidget();
+      QHBoxLayout *radioLayout = new QHBoxLayout(radioWidget);
+      radioLayout->setContentsMargins(0, 0, 0, 0);
+      QRadioButton *pendingRadio = new QRadioButton("Pending");
+      QRadioButton *completedRadio = new QRadioButton("Completed");
+      pendingRadio->setChecked(true);
+      pendingRadio->setStyleSheet("QRadioButton { font-size: 14px; color: #333; }");
+      completedRadio->setStyleSheet("QRadioButton { font-size: 14px; color: #333; }");
+      radioLayout->addWidget(pendingRadio);
+      radioLayout->addWidget(completedRadio);
+      radioLayout->addStretch();
+      formLayout->addWidget(radioWidget);
+
+      formLayout->addSpacing(20);
+      QPushButton *btnSubmit = new QPushButton("Update Order");
+      btnSubmit->setStyleSheet(getButtonStyle());
+      btnSubmit->setCursor(Qt::PointingHandCursor);
+      btnSubmit->setFixedHeight(45);
+      formLayout->addWidget(btnSubmit);
+      formLayout->addStretch();
+
+      QScrollArea *scrollArea = new QScrollArea();
+      scrollArea->setWidgetResizable(true);
+      scrollArea->setFrameShape(QFrame::NoFrame);
+      scrollArea->setStyleSheet("QScrollArea { background: transparent; border: none; } QWidget { background: transparent; }");
+      scrollArea->setWidget(formContent);
+      outerLayout->addWidget(scrollArea);
+
+      cLayout->addWidget(formContainer);
+
+      // We will implement searching and full update logic later.
+      QObject::connect(btnSubmit, &QPushButton::clicked, [=]() {
+          int id = static_cast<QLineEdit*>(wId)->text().toInt();
+          QDate date = static_cast<QDateEdit*>(wDate)->date();
+          QString client = static_cast<QLineEdit*>(wClient)->text();
+          QDate delivery = static_cast<QDateEdit*>(wDelivery)->date();
+          QString state = pendingRadio->isChecked() ? "Pending" : "Completed";
+
+          Commande c(id, date, state, client, delivery);
+          if (c.modifier()) {
+              QMessageBox::information(nullptr, "Success", "Order updated successfully!");
+          } else {
+              QMessageBox::critical(nullptr, "Error", "Failed to update order. Ensure ID is correct.");
+          }
+      });
     } else if (name == "Order Hub") {
       // --- Order History with Search & Sort ---
 
@@ -879,19 +1039,25 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       btnPrint->setStyleSheet(getButtonStyle());
       btnPrint->setFixedWidth(120);
 
+      // Refresh Button
+      QPushButton *btnRefresh = new QPushButton("Refresh");
+      btnRefresh->setCursor(Qt::PointingHandCursor);
+      btnRefresh->setStyleSheet(getButtonStyle());
+      btnRefresh->setFixedWidth(100);
+
       controlLayout->addWidget(searchEdit);
       controlLayout->addSpacing(15);
       controlLayout->addWidget(lblSort);
       controlLayout->addWidget(sortCombo);
-      controlLayout->addSpacing(15);
-      controlLayout->addWidget(btnPrint);
       controlLayout->addStretch();
+      controlLayout->addWidget(btnRefresh);
+      controlLayout->addSpacing(10);
+      controlLayout->addWidget(btnPrint);
 
       histLayout->addWidget(controlBar);
 
       // 2. Table
-      QStringList headers = {"Date",   "Client", "Type",
-                             "Amount", "Notes",  "Actions"};
+      QStringList headers = {"ID", "Date", "State", "Client", "Delivery", "Actions"};
       QTableWidget *table = new QTableWidget();
       table->setColumnCount(headers.size());
       table->setHorizontalHeaderLabels(headers);
@@ -899,6 +1065,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       table->horizontalHeader()->setSectionResizeMode(
           headers.size() - 1, QHeaderView::ResizeToContents);
       table->verticalHeader()->setVisible(false);
+      table->verticalHeader()->setDefaultSectionSize(60);
       table->setAlternatingRowColors(true);
       table->setStyleSheet(
           "QTableWidget { border: 1px solid #eaeaea; background-color: "
@@ -968,70 +1135,33 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       });
 
       // 3. Data & Logic
-      struct OrderItem {
-        QString date;
-        QString client;
-        QString action;
-        double amount;
-        QString notes;
-      };
+      auto updateTable = [table, searchEdit, sortCombo]() {
+        Commande c;
+        QSqlQueryModel *model = c.afficher();
+        if (!model) return;
 
-      // Mock Data
-      QList<OrderItem> allOrders = {
-          {"2023-10-25", "Trattoria Luigi", "Meeting", 0.0,
-           "Discussed Winter Supply"},
-          {"2023-10-24", "Oileria Bella", "Support", 0.0,
-           "Clarified acidity levels"},
-          {"2023-10-22", "Organic Market", "Order", 4500.50,
-           "Placed bulk order #992"},
-          {"2023-10-20", "Gourmet Foods", "Call", 0.0, "Quality check inquiry"},
-          {"2023-10-18", "Pasta Place", "Order", 1200.00,
-           "Regular monthly supply"},
-          {"2023-10-15", "Pizza House", "Order", 320.75, "Emergency restock"}};
-
-      auto updateTable = [table, allOrders, searchEdit, sortCombo]() {
         QString query = searchEdit->text().toLower();
-        QString sortMode = sortCombo->currentText();
+        // Sorting might be complex to implement purely in C++ with QSqlQueryModel if we don't use QSortFilterProxyModel,
+        // For now, we will just filter visually or fetch sorted from DB. This is a simple visual filter.
 
-        // 1. Filter
-        QList<OrderItem> filtered;
-        for (const auto &item : allOrders) {
-          bool match = item.client.toLower().contains(query) ||
-                       item.notes.toLower().contains(query) ||
-                       item.action.toLower().contains(query);
-          if (match)
-            filtered.append(item);
-        }
-
-        // 2. Sort
-        std::sort(filtered.begin(), filtered.end(),
-                  [sortMode](const OrderItem &a, const OrderItem &b) {
-                    if (sortMode == "Date (Newest)")
-                      return a.date > b.date;
-                    if (sortMode == "Date (Oldest)")
-                      return a.date < b.date;
-                    if (sortMode == "Amount (High-Low)")
-                      return a.amount > b.amount;
-                    if (sortMode == "Amount (Low-High)")
-                      return a.amount < b.amount;
-                    return false;
-                  });
-
-        // 3. Populate
         table->setRowCount(0);
-        table->setRowCount(filtered.size());
-        for (int i = 0; i < filtered.size(); ++i) {
-          const auto &item = filtered[i];
-          table->setItem(i, 0, new QTableWidgetItem(item.date));
-          table->setItem(i, 1, new QTableWidgetItem(item.client));
-          table->setItem(i, 2, new QTableWidgetItem(item.action));
+        int rowIdx = 0;
+        for (int i = 0; i < model->rowCount(); ++i) {
+          QString id = model->record(i).value("ID_COMMANDE").toString();
+          QString date = model->record(i).value("DATE_COMMANDE").toDate().toString("yyyy-MM-dd");
+          QString etat = model->record(i).value("ETAT_COMMANDE").toString();
+          QString client = model->record(i).value("NOM_CLIENT").toString();
+          QString livraison = model->record(i).value("DATE_LIVRAISON").toDate().toString("yyyy-MM-dd");
 
-          QString amtStr = (item.amount > 0)
-                               ? QString::number(item.amount, 'f', 2) + " €"
-                               : "-";
-          table->setItem(i, 3, new QTableWidgetItem(amtStr));
+          bool match = client.toLower().contains(query) || id.contains(query) || etat.toLower().contains(query);
+          if (!match && !query.isEmpty()) continue;
 
-          table->setItem(i, 4, new QTableWidgetItem(item.notes));
+          table->insertRow(rowIdx);
+          table->setItem(rowIdx, 0, new QTableWidgetItem(id));
+          table->setItem(rowIdx, 1, new QTableWidgetItem(date));
+          table->setItem(rowIdx, 2, new QTableWidgetItem(etat));
+          table->setItem(rowIdx, 3, new QTableWidgetItem(client));
+          table->setItem(rowIdx, 4, new QTableWidgetItem(livraison));
 
           // Action Column
           QWidget *actionWidget = new QWidget();
@@ -1046,8 +1176,8 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
           btnModify->setStyleSheet(
               "QPushButton { background-color: #ffffff; border: 1px solid "
               "#cccccc; border-radius: 6px; padding: 0px 8px; font-weight: "
-              "600; font-size: 13px; color: #333333; } QPushButton:hover { "
-              "border-color: #aaaaaa; color: #000000; background-color: "
+              "normal; font-size: 13px; color: #0066cc; } QPushButton:hover { "
+              "border-color: #aaaaaa; color: #004c99; background-color: "
               "#f6f6f6; }");
 
           QPushButton *btnDelete = new QPushButton("Remove");
@@ -1063,74 +1193,86 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
           actionLayout->addWidget(btnModify);
           actionLayout->addWidget(btnDelete);
-          table->setCellWidget(i, 5, actionWidget);
+          table->setCellWidget(rowIdx, 5, actionWidget);
+
+          int orderId = id.toInt();
 
           // Connect Modify
-          QObject::connect(
-              btnModify, &QPushButton::clicked,
-              [table, i, data = filtered[i]]() {
+          QObject::connect(btnModify, &QPushButton::clicked, [table, orderId, id, date, etat, client, livraison]() {
                 QDialog dlg(table->window());
                 dlg.setWindowTitle("Edit Order Details");
                 dlg.setModal(true);
                 dlg.setMinimumWidth(450);
-                dlg.setStyleSheet("QDialog { background-color: #ffffff; "
-                                  "border-radius: 12px; }");
+                dlg.setStyleSheet("QDialog { background-color: #ffffff; border-radius: 12px; }");
 
                 QVBoxLayout *mainV = new QVBoxLayout(&dlg);
                 mainV->setContentsMargins(30, 30, 30, 30);
                 mainV->setSpacing(20);
 
                 QLabel *title = new QLabel("Update Order Information");
-                title->setStyleSheet(
-                    "font-size: 20px; font-weight: 700; color: #1a1a1a;");
+                title->setStyleSheet("font-size: 20px; font-weight: 700; color: #1a1a1a;");
                 mainV->addWidget(title);
 
                 QFormLayout *form = new QFormLayout();
                 form->setSpacing(15);
                 form->setLabelAlignment(Qt::AlignLeft);
+                
+                // Fields
+                QDateEdit *dateEdit = new QDateEdit(QDate::fromString(date, "yyyy-MM-dd"));
+                dateEdit->setDisplayFormat("yyyy-MM-dd");
+                dateEdit->setCalendarPopup(true);
+                QLineEdit *clientEdit = new QLineEdit(client);
+                QDateEdit *livraisonEdit = new QDateEdit(QDate::fromString(livraison, "yyyy-MM-dd"));
+                livraisonEdit->setDisplayFormat("yyyy-MM-dd");
+                livraisonEdit->setCalendarPopup(true);
 
-                QLineEdit *dateEdit = new QLineEdit(table->item(i, 0)->text());
-                QLineEdit *clientEdit =
-                    new QLineEdit(table->item(i, 1)->text());
-                QLineEdit *typeEdit = new QLineEdit(table->item(i, 2)->text());
-                QLineEdit *amountEdit =
-                    new QLineEdit(table->item(i, 3)->text());
-                QLineEdit *notesEdit = new QLineEdit(table->item(i, 4)->text());
-
-                auto styleField = [&](QLineEdit *le) {
-                  le->setStyleSheet(
-                      "QLineEdit { background-color: #f9fafb; border: 1px "
+                auto styleField = [&](QWidget *w) {
+                  w->setStyleSheet(
+                      "QWidget { background-color: #f9fafb; border: 1px "
                       "solid #eaeaea; border-radius: 8px; padding: 10px; "
-                      "font-size: 14px; color: #333; } QLineEdit:focus { "
+                      "font-size: 14px; color: #333; } QWidget:focus { "
                       "border-color: #3DDC84; background-color: #ffffff; }");
-                  le->setFixedHeight(40);
+                  w->setFixedHeight(40);
                 };
 
                 styleField(dateEdit);
                 styleField(clientEdit);
-                styleField(typeEdit);
-                styleField(amountEdit);
-                styleField(notesEdit);
+                styleField(livraisonEdit);
+
+                QWidget *radioWidget = new QWidget();
+                radioWidget->setStyleSheet("background: transparent; border: none;");
+                QHBoxLayout *radioLayout = new QHBoxLayout(radioWidget);
+                radioLayout->setContentsMargins(0, 0, 0, 0);
+                QRadioButton *pendingRadio = new QRadioButton("Pending");
+                QRadioButton *completedRadio = new QRadioButton("Completed");
+                pendingRadio->setStyleSheet("QRadioButton { font-size: 14px; color: #333; background: transparent; border: none; }");
+                completedRadio->setStyleSheet("QRadioButton { font-size: 14px; color: #333; background: transparent; border: none; }");
+                if (etat == "Completed") {
+                     completedRadio->setChecked(true);
+                } else {
+                     pendingRadio->setChecked(true);
+                }
+                radioLayout->addWidget(pendingRadio);
+                radioLayout->addWidget(completedRadio);
+                radioLayout->addStretch();
 
                 auto addRow = [&](const QString &label, QWidget *w) {
                   QLabel *l = new QLabel(label);
-                  l->setStyleSheet(
-                      "font-weight: 600; color: #444; font-size: 13px;");
+                  l->setStyleSheet("font-weight: 600; color: #444; font-size: 13px; background: transparent; border: none;");
                   form->addRow(l, w);
                 };
 
                 addRow("Order Date:", dateEdit);
                 addRow("Client Name:", clientEdit);
-                addRow("Interaction Type:", typeEdit);
-                addRow("Total Amount:", amountEdit);
-                addRow("Internal Notes:", notesEdit);
+                addRow("Delivery Date:", livraisonEdit);
+                addRow("State:", radioWidget);
 
                 mainV->addLayout(form);
                 mainV->addSpacing(10);
 
-                QDialogButtonBox *bbox = new QDialogButtonBox(
-                    QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+                QDialogButtonBox *bbox = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
                 bbox->setStyleSheet(
+                    "QDialogButtonBox { background: transparent; border: none; }"
                     "QPushButton { padding: 10px 24px; border-radius: 8px; "
                     "font-weight: 700; font-size: 14px; min-width: 100px; }"
                     "QPushButton[text='Save'] { background-color: #3DDC84; "
@@ -1143,49 +1285,51 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                     "#f9fafb; }");
                 mainV->addWidget(bbox);
 
-                QObject::connect(bbox, &QDialogButtonBox::accepted, &dlg,
-                                 &QDialog::accept);
-                QObject::connect(bbox, &QDialogButtonBox::rejected, &dlg,
-                                 &QDialog::reject);
+                QObject::connect(bbox, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+                QObject::connect(bbox, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
 
                 if (dlg.exec() == QDialog::Accepted) {
-                  table->item(i, 0)->setText(dateEdit->text());
-                  table->item(i, 1)->setText(clientEdit->text());
-                  table->item(i, 2)->setText(typeEdit->text());
-                  table->item(i, 3)->setText(amountEdit->text());
-                  table->item(i, 4)->setText(notesEdit->text());
-                  QMessageBox::information(
-                      table->window(), "Success",
-                      "Order details updated successfully.");
+                    QString newState = pendingRadio->isChecked() ? "Pending" : "Completed";
+                    Commande c(orderId, dateEdit->date(), newState, clientEdit->text(), livraisonEdit->date());
+                    if (c.modifier()) {
+                        QMessageBox::information(table->window(), "Success", "Order updated successfully!");
+                        // Ideally we'd refresh the table here. In the full application, we should trigger the outer updateTable() to re-query the DB.
+                    } else {
+                         QMessageBox::critical(table->window(), "Error", "Failed to update order.");
+                    }
                 }
-              });
+          });
 
           // Connect Delete
-          QObject::connect(
-              btnDelete, &QPushButton::clicked, [table, btnDelete]() {
+          QObject::connect(btnDelete, &QPushButton::clicked, [table, btnDelete, orderId]() {
                 QMessageBox::StandardButton reply;
                 reply = QMessageBox::question(
                     table->window(), "Delete Order",
                     "Are you sure you want to delete this order?",
                     QMessageBox::Yes | QMessageBox::No);
                 if (reply == QMessageBox::Yes) {
-                  // Find row dynamically because removal changes indices
-                  QPoint btnPos = btnDelete->mapTo(table->viewport(),
-                                                   btnDelete->rect().center());
-                  int row = table->rowAt(btnPos.y());
-                  if (row >= 0) {
-                    table->removeRow(row);
-                    QMessageBox::information(table->window(), "Deleted",
-                                             "Order deleted successfully.");
+                  Commande c;
+                  if (c.supprimer(orderId)) {
+                      QMessageBox::information(table->window(), "Deleted", "Order deleted successfully.");
+                      // We ideally should refresh the whole table here.
+                      QPoint btnPos = btnDelete->mapTo(table->viewport(), btnDelete->rect().center());
+                      int row = table->rowAt(btnPos.y());
+                      if (row >= 0) table->removeRow(row);
+                  } else {
+                      QMessageBox::critical(table->window(), "Error", "Failed to delete order.");
                   }
                 }
               });
+
+          rowIdx++;
         }
+        delete model;
       };
 
       // Connect
       QObject::connect(searchEdit, &QLineEdit::textChanged, updateTable);
       QObject::connect(sortCombo, &QComboBox::currentTextChanged, updateTable);
+      QObject::connect(btnRefresh, &QPushButton::clicked, updateTable);
 
       // Init
       updateTable();

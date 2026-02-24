@@ -15,7 +15,8 @@ SOURCES += \
     transaction.cpp \
     EyeSaverButton.cpp \
     AuthWidgets.cpp \
-    produit.cpp
+    produit.cpp \
+    commande.cpp
 
 HEADERS += \
     article.h \
@@ -24,7 +25,8 @@ HEADERS += \
     transaction.h \
     EyeSaverButton.h \
     AuthWidgets.h \
-    produit.h
+    produit.h \
+    commande.h
 
 FORMS += \
     mainwindow.ui
