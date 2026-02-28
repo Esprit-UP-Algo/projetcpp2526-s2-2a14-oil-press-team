@@ -6,6 +6,7 @@
 #include "transaction.h"
 #include "produit.h"
 #include "personnel.h"
+#include "machine.h"
 #include <functional>
 #include <QComboBox>
 #include <QDate>
@@ -431,85 +432,7 @@ static QWidget *createStatCard(const QString &title, const QString &value,
   return card;
 }
 
-static QWidget *createStyledForm(const QString &title,
-                                 const QList<QPair<QString, QString>> &fields,
-                                 const QString &submitText, int spacing = 15,
-                                 bool useScroll = true) {
-  // 1. Create content widget
-  QWidget *formContent = new QWidget();
-  QVBoxLayout *layout = new QVBoxLayout(formContent);
-  int rightMargin = useScroll ? 10 : 0;
-  layout->setContentsMargins(0, 0, rightMargin, 0);
-  layout->setSpacing(spacing);
 
-  if (!title.isEmpty()) {
-    QLabel *titleLabel = new QLabel(title);
-    titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: "
-                              "#1a1a1a; margin-bottom: 25px; border: none;");
-    layout->addWidget(titleLabel);
-  }
-
-  QString labelStyle = getLabelStyle();
-  QString inputStyle = getInputStyle();
-
-  for (const auto &field : fields) {
-    QLabel *lbl = new QLabel(field.first);
-    lbl->setStyleSheet(labelStyle);
-    QLineEdit *input = new QLineEdit();
-    input->setStyleSheet(inputStyle);
-    input->setPlaceholderText(field.second);
-
-    layout->addWidget(lbl);
-    layout->addWidget(input);
-  }
-
-  if (!submitText.isEmpty()) {
-    layout->addSpacing(20);
-    QPushButton *btnSubmit = new QPushButton(submitText);
-    btnSubmit->setStyleSheet(getButtonStyle());
-    btnSubmit->setCursor(Qt::PointingHandCursor);
-    btnSubmit->setFixedHeight(45);
-    layout->addWidget(btnSubmit);
-  }
-
-  layout->addStretch();
-
-  // 2. Create container
-  QWidget *formContainer = new QWidget();
-  formContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-  formContainer->setStyleSheet(
-      ".QWidget { background-color: #ffffff; border-radius: 10px; border: 1px "
-      "solid #eee; }");
-
-  QVBoxLayout *outerLayout = new QVBoxLayout(formContainer);
-  outerLayout->setContentsMargins(30, 30, 30, 30);
-
-  if (useScroll) {
-    QScrollArea *scrollArea = new QScrollArea();
-    scrollArea->setWidgetResizable(true);
-    scrollArea->setFrameShape(QFrame::NoFrame);
-    scrollArea->setStyleSheet(
-        "QScrollArea { background: transparent; border: none; }"
-        "QWidget { background: transparent; }"
-        "QScrollBar:vertical { border: none; background: #f0f0f0; width: 10px; "
-        "margin: 0px 0px 0px 0px; border-radius: 5px; }"
-        "QScrollBar::handle:vertical { background: #cdcdcd; min-height: 20px; "
-        "border-radius: 5px; }"
-        "QScrollBar::handle:vertical:hover { background: #3DDC84; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { "
-        "height: 0px; }"
-        "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { "
-        "background: none; }");
-    scrollArea->setWidget(formContent);
-    outerLayout->addWidget(scrollArea);
-  } else {
-    formContent->setAttribute(Qt::WA_TranslucentBackground);
-    formContent->setStyleSheet("background: transparent;");
-    outerLayout->addWidget(formContent);
-  }
-
-  return formContainer;
-}
 
 static QWidget *
 createStyledTable(const QString &title, const QStringList &headers,
@@ -2572,10 +2495,130 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
   actionLayout->setSpacing(12);
 
   outNestedStack = new QStackedWidget();
-  // Updated tab names for Machine Management (English)
-  QStringList tabNames = {"Add Asset", "Asset Hub", "Service History",
-                          "Analytics"};
+  QStringList tabNames = {"Add Asset", "Asset Hub", "Service History", "Analytics"};
   QList<QPushButton *> tabButtons;
+
+  // Shared pointers for cross-lambda access
+  auto machineTablePtr = std::make_shared<QTableWidget *>(nullptr);
+  auto refreshMachineTable = std::make_shared<std::function<void()>>();
+
+  *refreshMachineTable = [machineTablePtr, refreshMachineTable]() {
+    QTableWidget *table = *machineTablePtr;
+    if (!table) return;
+
+    Machine m;
+    QSqlQueryModel *model = m.afficher();
+    
+    table->setRowCount(0);
+    int rows = model->rowCount();
+    table->setRowCount(rows);
+
+    for (int i = 0; i < rows; ++i) {
+      int mid = model->data(model->index(i, 0)).toInt();
+      table->setItem(i, 0, new QTableWidgetItem(QString::number(mid)));
+      table->setItem(i, 1, new QTableWidgetItem(model->data(model->index(i, 1)).toString()));
+      table->setItem(i, 2, new QTableWidgetItem(model->data(model->index(i, 2)).toString()));
+      table->setItem(i, 3, new QTableWidgetItem(model->data(model->index(i, 3)).toString()));
+      
+      QTableWidgetItem *hItem = new QTableWidgetItem();
+      hItem->setData(Qt::DisplayRole, model->data(model->index(i, 4)).toInt());
+      table->setItem(i, 4, hItem);
+
+      // --- Actions ---
+      QWidget *actionWidget = new QWidget();
+      QHBoxLayout *al = new QHBoxLayout(actionWidget);
+      al->setContentsMargins(5, 2, 5, 2);
+      al->setSpacing(8);
+
+      QPushButton *btnMod = new QPushButton("Edit");
+      btnMod->setCursor(Qt::PointingHandCursor);
+      btnMod->setMinimumWidth(80);
+      btnMod->setFixedHeight(28);
+      btnMod->setStyleSheet(
+          "QPushButton { background-color: #ffffff; border: 1px solid #cccccc; border-radius: 6px; padding: 0px 8px; font-weight: 600; font-size: 13px; color: #333333; } "
+          "QPushButton:hover { border-color: #aaaaaa; color: #000000; background-color: #f6f6f6; }");
+
+      QPushButton *btnDel = new QPushButton("Remove");
+      btnDel->setCursor(Qt::PointingHandCursor);
+      btnDel->setMinimumWidth(80);
+      btnDel->setFixedHeight(28);
+      btnDel->setStyleSheet(
+          "QPushButton { background-color: #ffffff; border: 1px solid #d32f2f; color: #d32f2f; border-radius: 6px; padding: 0px 8px; font-weight: 600; font-size: 13px; } "
+          "QPushButton:hover { background-color: #ffebee; border-color: #b71c1c; color: #b71c1c; }");
+
+      al->addWidget(btnMod);
+      al->addWidget(btnDel);
+      table->setCellWidget(i, 5, actionWidget);
+
+      // Connect Edit
+      QObject::connect(btnMod, &QPushButton::clicked, [table, mid, refreshMachineTable]() {
+          // Find row index
+          int row = -1;
+          for(int r=0; r<table->rowCount(); ++r) {
+              if(table->item(r, 0)->text().toInt() == mid) {
+                  row = r;
+                  break;
+              }
+          }
+          if(row == -1) return;
+
+          QString currentName = table->item(row, 1)->text();
+          QString currentType = table->item(row, 2)->text();
+          QString currentStatus = table->item(row, 3)->text();
+          int currentHours = table->item(row, 4)->data(Qt::DisplayRole).toInt();
+
+          QDialog dlg(table->window());
+          dlg.setWindowTitle("Modify Machine");
+          dlg.setMinimumWidth(400);
+          dlg.setStyleSheet("QDialog { background-color: #ffffff; border-radius: 12px; }");
+
+          QVBoxLayout *mainV = new QVBoxLayout(&dlg);
+          mainV->setContentsMargins(30, 30, 30, 30);
+          mainV->setSpacing(15);
+
+          auto addField = [&](const QString &lblText, const QString &val) {
+              mainV->addWidget(new QLabel(lblText));
+              QLineEdit *le = new QLineEdit(val);
+              le->setStyleSheet("QLineEdit { background-color: #f9fafb; border: 1px solid #eaeaea; border-radius: 8px; padding: 10px; font-size: 14px; }");
+              mainV->addWidget(le);
+              return le;
+          };
+
+          QLineEdit *edName = addField("Name:", currentName);
+          QLineEdit *edType = addField("Type:", currentType);
+          QLineEdit *edStatus = addField("Status:", currentStatus);
+          QLineEdit *edHours = addField("Hours:", QString::number(currentHours));
+
+          QPushButton *btnSave = new QPushButton("Save Changes");
+          btnSave->setStyleSheet("QPushButton { background-color: #3DDC84; color: white; border: none; border-radius: 8px; padding: 12px; font-weight: 700; }");
+          mainV->addWidget(btnSave);
+
+          QObject::connect(btnSave, &QPushButton::clicked, [=, &dlg]() {
+              Machine updateObj(mid, edName->text(), edType->text(), edStatus->text(), edHours->text().toInt());
+              if (updateObj.modifier()) {
+                  dlg.accept();
+                  (*refreshMachineTable)();
+              } else {
+                  QMessageBox::critical(&dlg, "Error", "Update failed: " + updateObj.getLastError());
+              }
+          });
+          dlg.exec();
+      });
+
+      // Connect Delete
+      QObject::connect(btnDel, &QPushButton::clicked, [table, mid, refreshMachineTable]() {
+          if (QMessageBox::warning(table->window(), "Confirm Delete", "Are you sure you want to remove this machine?", QMessageBox::Yes | QMessageBox::No) == QMessageBox::Yes) {
+              Machine deleteObj;
+              if (deleteObj.supprimer(mid)) {
+                  (*refreshMachineTable)();
+              } else {
+                  QMessageBox::critical(table->window(), "Error", "Delete failed: " + deleteObj.getLastError());
+              }
+          }
+      });
+    }
+    delete model;
+  };
 
   for (const auto &name : tabNames) {
     QPushButton *btn = new QPushButton(name);
@@ -2588,465 +2631,162 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
     QVBoxLayout *cLayout = new QVBoxLayout(content);
 
     if (name == "Add Asset") {
-      // Manual form creation for Add Machine
       QWidget *formContainer = new QWidget();
       QVBoxLayout *formLayout = new QVBoxLayout(formContainer);
       formLayout->setSpacing(15);
-      formLayout->setContentsMargins(0, 0, 10, 0);
 
-      // Title
       QLabel *titleLabel = new QLabel("New Machine");
-      titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: "
-                                "#1a1a1a; margin-bottom: 25px; border: none;");
+      titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 25px; border: none;");
       formLayout->addWidget(titleLabel);
 
-      QString labelStyle = getLabelStyle();
-      QString inputStyle = getInputStyle();
-
-      // Define fields (ID is auto-generated, so removed)
-      struct FieldInput {
-        QString label;
-        QString placeholder;
-        QLineEdit *widget;
-      };
-      // Use shared_ptr or similar if we were using sophisticated management,
-      // but here standard pointers in lambda with capture by value of the list
-      // of raw pointers is fine for this scope However, we need to capture
-      // specific widgets.
       QLineEdit *nameInput = new QLineEdit();
       QLineEdit *typeInput = new QLineEdit();
       QLineEdit *statusInput = new QLineEdit();
+      QLineEdit *hoursInput = new QLineEdit("0");
 
-      QList<QPair<QString, QLineEdit *>> inputs = {
-          {"Machine Name:", nameInput},
-          {"Machine Type:", typeInput},
-          {"Machine Status:", statusInput}};
+      auto addInput = [&](const QString &txt, QLineEdit *le) {
+          QLabel *l = new QLabel(txt);
+          l->setStyleSheet(getLabelStyle());
+          le->setStyleSheet(getInputStyle());
+          formLayout->addWidget(l);
+          formLayout->addWidget(le);
+      };
 
-      for (auto &field : inputs) {
-        QLabel *lbl = new QLabel(field.first);
-        lbl->setStyleSheet(labelStyle);
-        field.second->setStyleSheet(inputStyle);
-        // field.second->setPlaceholderText(field.placeholder); // Simplified
-
-        formLayout->addWidget(lbl);
-        formLayout->addWidget(field.second);
-      }
+      addInput("Machine Name:", nameInput);
+      addInput("Machine Type:", typeInput);
+      addInput("Machine Status:", statusInput);
+      addInput("Operating Hours:", hoursInput);
 
       formLayout->addSpacing(20);
       QPushButton *btnAdd = new QPushButton("Add Machine");
       btnAdd->setStyleSheet(getButtonStyle());
-      btnAdd->setCursor(Qt::PointingHandCursor);
       btnAdd->setFixedHeight(45);
       formLayout->addWidget(btnAdd);
       formLayout->addStretch();
 
-      // Wrap in scroll area
       cLayout->addWidget(formContainer);
 
-      // Logic to Add Machine
-      // We need to capture outNestedStack to find the table later
-      QObject::connect(
-          btnAdd, &QPushButton::clicked,
-          [nameInput, typeInput, statusInput, outNestedStack, tabButtons]() {
-            // Find the table in the "Machine List" page (which is index 1 of
-            // outNestedStack)
-            QTableWidget *table =
-                outNestedStack->findChild<QTableWidget *>("MaintenanceTable");
-            if (!table) {
-              QMessageBox::warning(nullptr, "Error",
-                                   "Machine List table not found!");
+      QObject::connect(btnAdd, &QPushButton::clicked, [=]() {
+          if (nameInput->text().isEmpty() || typeInput->text().isEmpty()) {
+              QMessageBox::warning(nullptr, "Error", "Name and Type are required.");
               return;
-            }
+          }
 
-            if (nameInput->text().isEmpty() || typeInput->text().isEmpty()) {
-              QMessageBox::warning(nullptr, "Error",
-                                   "Please fill in Name and Type.");
-              return;
-            }
-
-            // Generate ID
-            int nextIdNum = table->rowCount() + 1;
-            QString newId = QString("MAC-%1").arg(nextIdNum, 3, 10, QChar('0'));
-
-            // Add Row
-            int row = table->rowCount();
-            table->insertRow(row);
-
-            table->setItem(row, 0, new QTableWidgetItem(newId));
-            table->setItem(row, 1, new QTableWidgetItem(nameInput->text()));
-            table->setItem(row, 2, new QTableWidgetItem(typeInput->text()));
-            table->setItem(row, 3,
-                           new QTableWidgetItem(statusInput->text().isEmpty()
-                                                    ? "Normal"
-                                                    : statusInput->text()));
-
-            // Hours default 0
-            QTableWidgetItem *hItem = new QTableWidgetItem();
-            hItem->setData(Qt::DisplayRole, 0);
-            table->setItem(row, 4, hItem);
-
-            // Add Actions (Copy of Machine List logic)
-            QWidget *actionWidget = new QWidget();
-            QHBoxLayout *al = new QHBoxLayout(actionWidget);
-            al->setContentsMargins(2, 2, 2, 2);
-            QPushButton *btnMod = new QPushButton("Edit");
-            btnMod->setCursor(Qt::PointingHandCursor);
-            btnMod->setStyleSheet(
-                "QPushButton { background-color: #ffffff; border: 1px solid "
-                "#cccccc; border-radius: 6px; padding: 4px 10px; font-weight: "
-                "600; font-size: 13px; color: #333333; } QPushButton:hover { "
-                "background-color: #f6f6f6; border-color: #bbbbbb; }");
-
-            QPushButton *btnDel = new QPushButton("Delete");
-            btnDel->setCursor(Qt::PointingHandCursor);
-            btnDel->setStyleSheet(
-                "QPushButton { background-color: #ffffff; border: 1px solid "
-                "#d32f2f; color: #d32f2f; border-radius: 6px; padding: 4px "
-                "10px; font-weight: 600; font-size: 13px; } QPushButton:hover "
-                "{ background-color: #ffebee; border-color: #b71c1c; color: "
-                "#b71c1c; }");
-
-            // Connect Delete Button
-            QObject::connect(btnDel, &QPushButton::clicked, [table, btnDel]() {
-              QPoint btnPos =
-                  btnDel->mapTo(table->viewport(), btnDel->rect().center());
-              int r = table->rowAt(btnPos.y());
-              if (r >= 0) {
-                int ret = QMessageBox::warning(
-                    table, "Confirm Delete",
-                    "Are you sure you want to delete this machine?",
-                    QMessageBox::Yes | QMessageBox::No);
-                if (ret == QMessageBox::Yes)
-                  table->removeRow(r);
+          Machine newM(0, nameInput->text(), typeInput->text(), statusInput->text().isEmpty() ? "Normal" : statusInput->text(), hoursInput->text().toInt());
+          if (newM.ajouter()) {
+              QMessageBox::information(nullptr, "Success", "Machine added with persistence!");
+              nameInput->clear(); typeInput->clear(); statusInput->clear(); hoursInput->setText("0");
+              
+              if (refreshMachineTable) {
+                  (*refreshMachineTable)();
               }
-            });
+              
+              if (outNestedStack && tabButtons.size() > 1) {
+                  outNestedStack->setCurrentIndex(1);
+                  tabButtons[1]->setChecked(true);
+              }
+          } else {
+              QMessageBox::critical(nullptr, "Error", "Database insertion failed: " + newM.getLastError());
+          }
+      });
 
-            al->addWidget(btnMod);
-            al->addWidget(btnDel);
-            table->setCellWidget(row, 5, actionWidget);
-
-            // Clear inputs
-            nameInput->clear();
-            typeInput->clear();
-            statusInput->clear();
-
-            // Switch to list
-            if (outNestedStack)
-              outNestedStack->setCurrentIndex(1); // Index 1 is Machine List
-            if (tabButtons.size() > 1)
-              tabButtons[1]->setChecked(true);
-          });
     } else if (name == "Asset Hub") {
-      // --- Enhanced Machine List ---
-      QWidget *listContainer = new QWidget();
-      QVBoxLayout *listLayout = new QVBoxLayout(listContainer);
-      listLayout->setContentsMargins(0, 0, 0, 0);
-      listLayout->setSpacing(10);
-
-      // 1. Control Bar
       QWidget *controlBar = new QWidget();
       QHBoxLayout *controlLayout = new QHBoxLayout(controlBar);
-      controlLayout->setContentsMargins(0, 0, 0, 0);
+      
+      QLineEdit *searchEdit = new QLineEdit();
+      searchEdit->setPlaceholderText("Search...");
+      searchEdit->setStyleSheet(getInputStyle());
+      searchEdit->setFixedWidth(120);
 
-      // Removed Sort Button as requested
+      QComboBox *searchType = new QComboBox();
+      searchType->addItems({"Name", "Type"});
+      searchType->setStyleSheet(getInputStyle());
+      searchType->setFixedWidth(90);
+
+      QPushButton *btnRefresh = new QPushButton("Refresh");
+      btnRefresh->setStyleSheet(getButtonStyle());
+      btnRefresh->setCursor(Qt::PointingHandCursor);
+      btnRefresh->setFixedWidth(100);
 
       QPushButton *btnPrint = new QPushButton("PRINT PDF");
       btnPrint->setStyleSheet(getButtonStyle());
-      btnPrint->setCursor(Qt::PointingHandCursor);
       btnPrint->setFixedWidth(120);
 
-      // Added Search Bar
-      // QLineEdit *searchEdit = new QLineEdit();
-      // searchEdit->setPlaceholderText("Search...");
-      // searchEdit->setStyleSheet(getInputStyle());
-      // searchEdit->setFixedWidth(150);
-
-      QComboBox *searchType = new QComboBox();
-      searchType->addItems({"Type", "Status"});
-      searchType->setStyleSheet(getInputStyle());
-      searchType->setFixedWidth(100);
-
-      // Added Sort Controls (Replacing Search)
-      QLabel *lblSort = new QLabel("Sort by:");
-      lblSort->setStyleSheet(getLabelStyle());
-
       QComboBox *sortType = new QComboBox();
-      sortType->addItems({"Select...", "Status", "Hours"});
+      sortType->addItems({"All", "Status", "Hours"});
       sortType->setStyleSheet(getInputStyle());
-      sortType->setFixedWidth(120);
+      sortType->setFixedWidth(110);
 
-      // controlLayout->addWidget(searchEdit); // Removed
       controlLayout->addWidget(searchType);
-      controlLayout->addSpacing(20);
-      controlLayout->addWidget(lblSort);
+      controlLayout->addWidget(searchEdit);
+      controlLayout->addSpacing(10);
+      controlLayout->addWidget(new QLabel("Sort by:"));
       controlLayout->addWidget(sortType);
+      controlLayout->addSpacing(10);
+      controlLayout->addWidget(btnRefresh);
       controlLayout->addStretch();
       controlLayout->addWidget(btnPrint);
 
-      listLayout->addWidget(controlBar);
-
-      // 2. Table
-      QStringList headers = {"ID",     "Name",  "Type",
-                             "Status", "Hours", "Actions"};
+      QStringList headers = {"ID", "Name", "Type", "Status", "Hours", "Actions"};
       QTableWidget *table = new QTableWidget();
-      table->setObjectName(
-          "MaintenanceTable"); // Added ObjectName for finding it later
+      *machineTablePtr = table;
       table->setColumnCount(headers.size());
       table->setHorizontalHeaderLabels(headers);
       table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-      table->horizontalHeader()->setSectionResizeMode(
-          headers.size() - 1, QHeaderView::ResizeToContents);
-      table->setColumnHidden(0, true); // Hide ID column
+      table->horizontalHeader()->setSectionResizeMode(headers.size() - 1, QHeaderView::ResizeToContents);
+      table->setColumnHidden(0, true);
       table->verticalHeader()->setVisible(false);
       table->setAlternatingRowColors(true);
       table->setStyleSheet(
-          "QTableWidget { border: 1px solid #eaeaea; background-color: "
-          "#ffffff; gridline-color: transparent; border-radius: 8px; "
-          "alternate-background-color: #f9fafb; }"
-          "QHeaderView::section { background-color: #ffffff; padding: 12px; "
-          "border: none; border-bottom: 2px solid #f0f0f0; font-weight: 700; "
-          "color: #666; }");
+          "QTableWidget { border: 1px solid #eaeaea; background-color: #ffffff; gridline-color: transparent; border-radius: 8px; alternate-background-color: #f9fafb; }"
+          "QHeaderView::section { background-color: #ffffff; padding: 12px; border: none; border-bottom: 2px solid #f0f0f0; font-weight: 700; color: #666; }");
 
-      // Data
-      struct Machine {
-        QString id;
-        QString name;
-        QString type;
-        QString machineStatus;
-        int hours;
-      };
-      QList<Machine> machines = {
-          {"MAC-001", "Press Alpha", "Press", "Normal", 1250},
-          {"MAC-002", "Centrifuge Beta", "Centrifuge", "Broken", 800},
-          {"MAC-003", "Filter Gamma", "Filter", "Maintenance", 3200},
-          {"MAC-004", "Press Delta", "Press", "Normal", 450},
-          {"MAC-005", "Bottler Epsilon", "Bottling", "Normal", 2100}};
+      cLayout->addWidget(controlBar);
+      cLayout->addWidget(table);
 
-      auto populateTable = [table, headers](const QList<Machine> &data) {
-        table->setRowCount(0);
-        table->setRowCount(data.size());
-        for (int i = 0; i < data.size(); ++i) {
-          const auto &m = data[i];
-          table->setItem(i, 0, new QTableWidgetItem(m.id));
-          table->setItem(i, 1, new QTableWidgetItem(m.name));
-          table->setItem(i, 2, new QTableWidgetItem(m.type));
-          table->setItem(i, 3, new QTableWidgetItem(m.machineStatus));
-          // Hours (sortable number)
-          QTableWidgetItem *hItem = new QTableWidgetItem();
-          hItem->setData(Qt::DisplayRole, m.hours);
-          table->setItem(i, 4, hItem);
+      QObject::connect(sortType, &QComboBox::currentTextChanged, [table](const QString &text) {
+          if (text == "Status") table->sortItems(3, Qt::AscendingOrder);
+          else if (text == "Hours") table->sortItems(4, Qt::AscendingOrder);
+          // For "All" we could ideally sort by ID if needed, but keeping it simple
+          else if (text == "All") table->sortItems(0, Qt::AscendingOrder);
+      });
 
-          // Actions
-          QWidget *actionWidget = new QWidget();
-          QHBoxLayout *al = new QHBoxLayout(actionWidget);
-          al->setContentsMargins(5, 2, 5, 2);
-          al->setSpacing(8);
-
-          QPushButton *btnMod = new QPushButton("Edit");
-          btnMod->setCursor(Qt::PointingHandCursor);
-          btnMod->setMinimumWidth(80);
-          btnMod->setFixedHeight(28);
-          btnMod->setStyleSheet(
-              "QPushButton { background-color: #ffffff; border: 1px solid "
-              "#cccccc; border-radius: 6px; padding: 0px 8px; font-weight: "
-              "600; font-size: 13px; color: #333333; } QPushButton:hover { "
-              "border-color: #aaaaaa; color: #000000; background-color: "
-              "#f6f6f6; }");
-
-          QPushButton *btnDel = new QPushButton("Remove");
-          btnDel->setCursor(Qt::PointingHandCursor);
-          btnDel->setMinimumWidth(80);
-          btnDel->setFixedHeight(28);
-          btnDel->setStyleSheet(
-              "QPushButton { background-color: #ffffff; border: 1px solid "
-              "#d32f2f; color: #d32f2f; border-radius: 6px; padding: 0px 8px; "
-              "font-weight: 600; font-size: 13px; } QPushButton:hover { "
-              "background-color: #ffebee; border-color: #b71c1c; color: "
-              "#b71c1c; }");
-
-          al->addWidget(btnMod);
-          al->addWidget(btnDel);
-          table->setCellWidget(i, 5, actionWidget);
-
-          // Connect Modify Button
-          QObject::connect(btnMod, &QPushButton::clicked, [table, btnMod]() {
-            QPoint btnPos =
-                btnMod->mapTo(table->viewport(), btnMod->rect().center());
-            int row = table->rowAt(btnPos.y());
-            if (row >= 0) {
-              // Get current data
-              QString id = table->item(row, 0)->text();
-              QString name = table->item(row, 1)->text();
-              QString type = table->item(row, 2)->text();
-              QString currentMachineStatus = table->item(row, 3)->text();
-
-              // Create Dialog
-              QDialog dlg(table);
-              dlg.setWindowTitle("Modify Machine");
-              dlg.setModal(true);
-              dlg.setMinimumWidth(400);
-              dlg.setStyleSheet("QDialog { background-color: #ffffff; "
-                                "border-radius: 12px; }");
-
-              QVBoxLayout *mainV = new QVBoxLayout(&dlg);
-              mainV->setContentsMargins(30, 30, 30, 30);
-              mainV->setSpacing(20);
-
-              QLabel *title = new QLabel("Edit Machine Details");
-              title->setStyleSheet(
-                  "font-size: 20px; font-weight: 700; color: #1a1a1a;");
-              mainV->addWidget(title);
-
-              QFormLayout *form = new QFormLayout();
-              form->setSpacing(15);
-              form->setLabelAlignment(Qt::AlignLeft);
-
-              QLineEdit *edName = new QLineEdit(name);
-              edName->setStyleSheet(getInputStyle());
-              edName->setFixedHeight(40);
-
-              QLineEdit *edType = new QLineEdit(type);
-              edType->setStyleSheet(getInputStyle());
-              edType->setFixedHeight(40);
-
-              QLineEdit *edStatus = new QLineEdit(currentMachineStatus);
-              edStatus->setStyleSheet(getInputStyle());
-              edStatus->setFixedHeight(40);
-
-              QLabel *lblId = new QLabel(id);
-              lblId->setStyleSheet("font-weight: 600; color: #666;");
-
-              auto addStyledRow = [&](const QString &label, QWidget *w) {
-                QLabel *l = new QLabel(label);
-                l->setStyleSheet(getLabelStyle());
-                form->addRow(l, w);
-              };
-
-              addStyledRow("Machine ID:", lblId);
-              addStyledRow("Name:", edName);
-              addStyledRow("Type:", edType);
-              addStyledRow("Status:", edStatus);
-
-              mainV->addLayout(form);
-              mainV->addSpacing(10);
-
-              QDialogButtonBox *bbox = new QDialogButtonBox(
-                  QDialogButtonBox::Save | QDialogButtonBox::Cancel);
-              bbox->setStyleSheet(
-                  "QPushButton { padding: 8px 20px; border-radius: 6px; "
-                  "font-weight: 600; }"
-                  "QPushButton[text='Save'] { background-color: #3DDC84; "
-                  "color: white; border: none; }"
-                  "QPushButton[text='Save']:hover { background-color: #34c772; "
-                  "}"
-                  "QPushButton[text='Cancel'] { background-color: #f5f5f5; "
-                  "color: #666; border: 1px solid #ddd; }"
-                  "QPushButton[text='Cancel']:hover { background-color: #eee; "
-                  "}");
-              mainV->addWidget(bbox);
-
-              QObject::connect(bbox, &QDialogButtonBox::accepted, &dlg,
-                               &QDialog::accept);
-              QObject::connect(bbox, &QDialogButtonBox::rejected, &dlg,
-                               &QDialog::reject);
-
-              if (dlg.exec() == QDialog::Accepted) {
-                table->item(row, 1)->setText(edName->text());
-                table->item(row, 2)->setText(edType->text());
-                table->item(row, 3)->setText(edStatus->text());
-                QMessageBox::information(table, "Success",
-                                         "Machine updated successfully!");
-              }
-            }
-          });
-
-          // Connect Delete Button
-          QObject::connect(btnDel, &QPushButton::clicked, [table, btnDel]() {
-            // Find the row containing this button
-            // We need to map the button position to the table coordinates
-            QPoint btnPos =
-                btnDel->mapTo(table->viewport(), btnDel->rect().center());
-            int row = table->rowAt(btnPos.y());
-            if (row >= 0) {
-              int ret = QMessageBox::warning(
-                  table, "Confirm Delete",
-                  "Are you sure you want to delete this machine?",
-                  QMessageBox::Yes | QMessageBox::No);
-              if (ret == QMessageBox::Yes) {
-                table->removeRow(row);
-              }
-            }
-          });
-
-          al->addWidget(btnMod);
-          al->addWidget(btnDel);
-          table->setCellWidget(i, 5, actionWidget);
-        }
-      };
-
-      populateTable(machines);
-      listLayout->addWidget(table);
-
-      // Connect Search Logic
-      /*
-      auto filterTable = [=]() {
-          QString query = searchEdit->text().toLower();
-          QString type = searchType->currentText();
-          int colIndex = (type == "Type") ? 2 : 3; // Type=2, Status=3
-
-          for(int i = 0; i < table->rowCount(); ++i) {
+      auto updateFilter = [table, searchEdit, searchType]() {
+          QString lowerQuery = searchEdit->text().toLower();
+          int col = (searchType->currentText() == "Type") ? 2 : 1; // 1 = Name, 2 = Type
+          
+          for (int i = 0; i < table->rowCount(); ++i) {
               bool match = false;
-              QTableWidgetItem *item = table->item(i, colIndex);
-              if (item) {
-                  match = item->text().toLower().contains(query);
+              if (table->item(i, col)) {
+                  match = table->item(i, col)->text().toLower().contains(lowerQuery);
               }
               table->setRowHidden(i, !match);
           }
       };
 
-      QObject::connect(searchEdit, &QLineEdit::textChanged, filterTable);
-      QObject::connect(searchType, &QComboBox::currentTextChanged, filterTable);
-      */
+      QObject::connect(searchEdit, &QLineEdit::textChanged, updateFilter);
+      QObject::connect(searchType, &QComboBox::currentTextChanged, updateFilter);
 
-      // Connect Sort Logic
-      QObject::connect(
-          sortType, &QComboBox::currentTextChanged,
-          [table](const QString &text) {
-            table->setSortingEnabled(false); // Disable default sorting to use
-                                             // ours or just set sort order
-            if (text == "Status") {
-              table->sortItems(3, Qt::AscendingOrder); // Column 3 = Status
-            } else if (text == "Hours") {
-              table->sortItems(4, Qt::AscendingOrder); // Column 4 = Hours
-            }
-          });
-
-      // Print
-      QObject::connect(btnPrint, &QPushButton::clicked, [=]() {
-        QMessageBox::information(
-            table, "Print", "Geneating PDF report for Maintenance List...");
+      QObject::connect(btnRefresh, &QPushButton::clicked, [refreshMachineTable]() {
+          (*refreshMachineTable)();
       });
 
-      cLayout->addWidget(listContainer);
+      QObject::connect(btnPrint, &QPushButton::clicked, [table]() {
+          if (!table) return;
+          QMessageBox::information(table->window(), "Print", "PDF Export started...");
+      });
+
+      (*refreshMachineTable)();
+
     } else if (name == "Service History") {
-      // Keep historical logs
-      cLayout->addWidget(createStyledTable(
-          "Intervention History", {"Date", "Machine", "Action", "Result"},
-          {{"2023-09-01", "MAC-001", "Belt Replacement", "Success"}}, true));
-    } else if (name == "Analytics") { // Explicitly define Analytics tab
-      // Maintenance Statistics Chart
+      cLayout->addWidget(createStyledTable("Intervention History", {"Date", "Machine", "Action", "Result"}, {{"2024-02-27", "MAC-001", "Routine Check", "Success"}}, true));
+    } else if (name == "Analytics") {
       GenericBarChart *chart = new GenericBarChart("Machine Status Overview");
-      chart->addBar("Operational", 15, QColor(46, 204, 113)); // Green
-      chart->addBar("Broken", 2, QColor(231, 76, 60));        // Red
-      chart->addBar("Maintenance", 3, QColor(241, 196, 15));  // Orange
-
-      QWidget *chartContainer = new QWidget();
-      chartContainer->setStyleSheet(getCardStyle());
-      QVBoxLayout *containerLayout = new QVBoxLayout(chartContainer);
-      containerLayout->setContentsMargins(20, 20, 20, 20);
-      containerLayout->addWidget(chart);
-
-      cLayout->addWidget(chartContainer);
+      chart->addBar("Operational", 15, QColor(46, 204, 113));
+      chart->addBar("Broken", 2, QColor(231, 76, 60));
+      chart->addBar("Maintenance", 3, QColor(241, 196, 15));
+      cLayout->addWidget(chart);
     }
     cLayout->addStretch();
     outNestedStack->addWidget(content);
@@ -3073,14 +2813,14 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
   actionLayout->setSpacing(12);
 
   outNestedStack = new QStackedWidget();
-  QStringList tabNames = {"Product Hub", "Add Product"};
+  QStringList tabNames = {"Product Hub", "Add Product", "Analytics"};
   QList<QPushButton *> tabButtons;
 
   // Use a shared pointer to hold the table pointer so the lambda can access it after initialization
   auto productTablePtr = std::make_shared<QTableWidget *>(nullptr);
 
   auto refreshProductTable = std::make_shared<std::function<void()>>();
-  *refreshProductTable = [productTablePtr, refreshProductTable, outNestedStack, &tabButtons]() {
+  *refreshProductTable = [productTablePtr, refreshProductTable]() {
     QTableWidget *productTable = *productTablePtr;
     if (!productTable) return;
     Produit p;
@@ -3353,6 +3093,12 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       });
 
       cLayout->addWidget(formContainer);
+    } else if (name == "Analytics") {
+      GenericBarChart *chart = new GenericBarChart("Product Production Overview");
+      chart->addBar("Extra Virgin 1L", 450, QColor(61, 220, 132));
+      chart->addBar("Premium Blend 500ml", 120, QColor(52, 152, 219));
+      chart->addBar("Economy 2L", 80, QColor(241, 196, 15));
+      cLayout->addWidget(chart);
     }
     cLayout->addStretch();
     outNestedStack->addWidget(content);

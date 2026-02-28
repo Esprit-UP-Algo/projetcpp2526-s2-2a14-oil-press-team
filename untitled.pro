@@ -17,7 +17,8 @@ SOURCES += \
     AuthWidgets.cpp \
     produit.cpp \
     commande.cpp \
-    personnel.cpp
+    personnel.cpp \
+    machine.cpp
 
 HEADERS += \
     article.h \
@@ -28,7 +29,8 @@ HEADERS += \
     AuthWidgets.h \
     produit.h \
     commande.h \
-    personnel.h
+    personnel.h \
+    machine.h
 
 FORMS += \
     mainwindow.ui
