@@ -1,4 +1,4 @@
-#include "mainwindow.h"
+﻿#include "mainwindow.h"
 #include "AuthWidgets.h"
 #include "EyeSaverButton.h"
 #include "article.h"
@@ -7,7 +7,6 @@
 #include "produit.h"
 #include "personnel.h"
 #include "machine.h"
-#include "smtp.h"
 #include <functional>
 #include <QComboBox>
 #include <QDate>
@@ -18,14 +17,9 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
-#include <QIntValidator>
 #include <QRadioButton>
 #include <QGridLayout>
 #include <QHBoxLayout>
-#include <QPrinter>
-#include <QPrintDialog>
-#include <QTextDocument>
-#include <QTextStream>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
@@ -139,21 +133,21 @@ QWidget *MainWindow::createTitleBar() {
   layout->addStretch();
 
   // Buttons on the RIGHT - Opposite size (Rectangular 45x35)
-  QPushButton *minBtn = new QPushButton("−");
+  QPushButton *minBtn = new QPushButton("âˆ’");
   minBtn->setFixedSize(45, 35);
   minBtn->setCursor(Qt::PointingHandCursor);
   minBtn->setStyleSheet("QPushButton { background: transparent; border: none; "
                         "color: #999; font-size: 16px; } QPushButton:hover { "
                         "background-color: #333; color: white; }");
 
-  QPushButton *maxBtn = new QPushButton("▢");
+  QPushButton *maxBtn = new QPushButton("â–¢");
   maxBtn->setFixedSize(45, 35);
   maxBtn->setCursor(Qt::PointingHandCursor);
   maxBtn->setStyleSheet("QPushButton { background: transparent; border: none; "
                         "color: #999; font-size: 14px; } QPushButton:hover { "
                         "background-color: #333; color: white; }");
 
-  QPushButton *closeBtn = new QPushButton("✕");
+  QPushButton *closeBtn = new QPushButton("âœ•");
   closeBtn->setFixedSize(45, 35);
   closeBtn->setCursor(Qt::PointingHandCursor);
   closeBtn->setStyleSheet(
@@ -1325,7 +1319,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
     if (name == "New Invoice") {
       // ========== AJOUTER (CREATE) ==========
 
-      // Solid white card container — no transparency that bleeds dark bg
+      // Solid white card container â€” no transparency that bleeds dark bg
       QWidget *formContainer = new QWidget();
       formContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
       formContainer->setStyleSheet(
@@ -1344,7 +1338,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
           "font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 18px;");
       outerLayout->addWidget(titleLabel);
 
-      // Field style — explicitly covers QLineEdit, QDateEdit AND QComboBox
+      // Field style â€” explicitly covers QLineEdit, QDateEdit AND QComboBox
       QString fieldStyle =
           "QLineEdit, QDateEdit, QComboBox {"
           "  background-color: #f8f9fb;"
@@ -1849,7 +1843,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
       cLayout->addWidget(transContainer);
 
     } else if (name == "Expense Tracking") {
-      // ========== Filtered view — Expenses only ==========
+      // ========== Filtered view â€” Expenses only ==========
       QPushButton *btnPrint = new QPushButton("PRINT PDF");
       btnPrint->setStyleSheet(getButtonStyle());
       btnPrint->setCursor(Qt::PointingHandCursor);
@@ -1937,7 +1931,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
       });
 
     } else if (name == "Analytics") {
-      // ========== Analytics — Aggregated from DB ==========
+      // ========== Analytics â€” Aggregated from DB ==========
       QPushButton *btnPrint = new QPushButton("PRINT REPORT");
       btnPrint->setStyleSheet(getButtonStyle());
       btnPrint->setCursor(Qt::PointingHandCursor);
@@ -2530,10 +2524,6 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       hItem->setData(Qt::DisplayRole, model->data(model->index(i, 4)).toInt());
       table->setItem(i, 4, hItem);
 
-      QTableWidgetItem *sItem = new QTableWidgetItem();
-      sItem->setData(Qt::DisplayRole, model->data(model->index(i, 5)).toInt());
-      table->setItem(i, 5, sItem);
-
       // --- Actions ---
       QWidget *actionWidget = new QWidget();
       QHBoxLayout *al = new QHBoxLayout(actionWidget);
@@ -2558,7 +2548,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
 
       al->addWidget(btnMod);
       al->addWidget(btnDel);
-      table->setCellWidget(i, 6, actionWidget);
+      table->setCellWidget(i, 5, actionWidget);
 
       // Connect Edit
       QObject::connect(btnMod, &QPushButton::clicked, [table, mid, refreshMachineTable]() {
@@ -2576,7 +2566,6 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           QString currentType = table->item(row, 2)->text();
           QString currentStatus = table->item(row, 3)->text();
           int currentHours = table->item(row, 4)->data(Qt::DisplayRole).toInt();
-          int currentSeuil = table->item(row, 5)->data(Qt::DisplayRole).toInt();
 
           QDialog dlg(table->window());
           dlg.setWindowTitle("Modify Machine");
@@ -2599,20 +2588,13 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           QLineEdit *edType = addField("Type:", currentType);
           QLineEdit *edStatus = addField("Status:", currentStatus);
           QLineEdit *edHours = addField("Hours:", QString::number(currentHours));
-          edHours->setValidator(new QIntValidator(0, 9999999, edHours));
-          QLineEdit *edSeuil = addField("Threshold:", QString::number(currentSeuil));
-          edSeuil->setValidator(new QIntValidator(0, 9999999, edSeuil));
 
           QPushButton *btnSave = new QPushButton("Save Changes");
           btnSave->setStyleSheet("QPushButton { background-color: #3DDC84; color: white; border: none; border-radius: 8px; padding: 12px; font-weight: 700; }");
           mainV->addWidget(btnSave);
 
           QObject::connect(btnSave, &QPushButton::clicked, [=, &dlg]() {
-              if (edName->text().trimmed().isEmpty() || edType->text().trimmed().isEmpty() || edHours->text().isEmpty() || edSeuil->text().isEmpty()) {
-                  QMessageBox::warning(&dlg, "Erreur de Saisie", "Veuillez remplir tous les champs obligatoires (Nom, Type, Heures, Seuil).");
-                  return;
-              }
-              Machine updateObj(mid, edName->text(), edType->text(), edStatus->text(), edHours->text().toInt(), edSeuil->text().toInt());
+              Machine updateObj(mid, edName->text(), edType->text(), edStatus->text(), edHours->text().toInt());
               if (updateObj.modifier()) {
                   dlg.accept();
                   (*refreshMachineTable)();
@@ -2655,26 +2637,17 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
 
       QLabel *titleLabel = new QLabel("New Machine");
       titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 25px; border: none;");
-      titleLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-      titleLabel->setMinimumHeight(40);
       formLayout->addWidget(titleLabel);
 
       QLineEdit *nameInput = new QLineEdit();
       QLineEdit *typeInput = new QLineEdit();
       QLineEdit *statusInput = new QLineEdit();
       QLineEdit *hoursInput = new QLineEdit("0");
-      hoursInput->setValidator(new QIntValidator(0, 9999999, hoursInput));
-      QLineEdit *seuilInput = new QLineEdit("100");
-      seuilInput->setValidator(new QIntValidator(0, 9999999, seuilInput));
 
       auto addInput = [&](const QString &txt, QLineEdit *le) {
           QLabel *l = new QLabel(txt);
           l->setStyleSheet(getLabelStyle());
-          l->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-          l->setMinimumHeight(30);
           le->setStyleSheet(getInputStyle());
-          le->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-          le->setMinimumHeight(40);
           formLayout->addWidget(l);
           formLayout->addWidget(le);
       };
@@ -2683,7 +2656,6 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       addInput("Machine Type:", typeInput);
       addInput("Machine Status:", statusInput);
       addInput("Operating Hours:", hoursInput);
-      addInput("Maintenance Threshold:", seuilInput);
 
       formLayout->addSpacing(20);
       QPushButton *btnAdd = new QPushButton("Add Machine");
@@ -2695,19 +2667,15 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       cLayout->addWidget(formContainer);
 
       QObject::connect(btnAdd, &QPushButton::clicked, [=]() {
-          if (nameInput->text().trimmed().isEmpty() || typeInput->text().trimmed().isEmpty()) {
-              QMessageBox::warning(nullptr, "Erreur de Saisie", "Les champs 'Nom' et 'Type' sont obligatoires.");
-              return;
-          }
-          if (hoursInput->text().isEmpty() || seuilInput->text().isEmpty()) {
-              QMessageBox::warning(nullptr, "Erreur de Saisie", "Les heures et le seuil ne peuvent pas être vides.");
+          if (nameInput->text().isEmpty() || typeInput->text().isEmpty()) {
+              QMessageBox::warning(nullptr, "Error", "Name and Type are required.");
               return;
           }
 
-          Machine newM(0, nameInput->text(), typeInput->text(), statusInput->text().isEmpty() ? "Normal" : statusInput->text(), hoursInput->text().toInt(), seuilInput->text().toInt());
+          Machine newM(0, nameInput->text(), typeInput->text(), statusInput->text().isEmpty() ? "Normal" : statusInput->text(), hoursInput->text().toInt());
           if (newM.ajouter()) {
               QMessageBox::information(nullptr, "Success", "Machine added with persistence!");
-              nameInput->clear(); typeInput->clear(); statusInput->clear(); hoursInput->setText("0"); seuilInput->setText("100");
+              nameInput->clear(); typeInput->clear(); statusInput->clear(); hoursInput->setText("0");
               
               if (refreshMachineTable) {
                   (*refreshMachineTable)();
@@ -2750,11 +2718,6 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       sortType->setStyleSheet(getInputStyle());
       sortType->setFixedWidth(110);
 
-      QPushButton *btnAlert = new QPushButton("Check Alerts");
-      btnAlert->setStyleSheet("QPushButton { background-color: #f39c12; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; padding: 10px 18px; } QPushButton:hover { background-color: #e67e22; }");
-      btnAlert->setCursor(Qt::PointingHandCursor);
-      btnAlert->setFixedWidth(120);
-
       controlLayout->addWidget(searchType);
       controlLayout->addWidget(searchEdit);
       controlLayout->addSpacing(10);
@@ -2763,11 +2726,9 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       controlLayout->addSpacing(10);
       controlLayout->addWidget(btnRefresh);
       controlLayout->addStretch();
-      controlLayout->addWidget(btnAlert);
-      controlLayout->addSpacing(10);
       controlLayout->addWidget(btnPrint);
 
-      QStringList headers = {"ID", "Name", "Type", "Status", "Hours", "Threshold", "Actions"};
+      QStringList headers = {"ID", "Name", "Type", "Status", "Hours", "Actions"};
       QTableWidget *table = new QTableWidget();
       *machineTablePtr = table;
       table->setColumnCount(headers.size());
@@ -2811,100 +2772,9 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           (*refreshMachineTable)();
       });
 
-      QObject::connect(btnAlert, &QPushButton::clicked, [table]() {
-          if (!table) return;
-          QString alertMsg;
-          bool hasAlerts = false;
-          for (int i = 0; i < table->rowCount(); ++i) {
-             int id = table->item(i, 0)->text().toInt();
-             QString nom = table->item(i, 1)->text();
-             int heures = table->item(i, 4)->data(Qt::DisplayRole).toInt();
-             int seuil = table->item(i, 5)->data(Qt::DisplayRole).toInt();
-             if (heures >= seuil && seuil > 0) {
-                alertMsg += "Machine " + QString::number(id) + " (" + nom + ") a atteint/dépassé son seuil (" + QString::number(heures) + "/" + QString::number(seuil) + "h).\n";
-                hasAlerts = true;
-                for(int c=0; c<table->columnCount() - 1; ++c) { // Exclude actions col
-                   if(table->item(i, c)) table->item(i, c)->setBackground(QColor(255, 200, 200)); // Red tint
-                }
-             } else {
-                for(int c=0; c<table->columnCount() - 1; ++c) {
-                   if(table->item(i, c)) table->item(i, c)->setBackground(QBrush()); // Reset
-                }
-             }
-          }
-          if (hasAlerts) {
-              QMessageBox::warning(table->window(), "Alertes de Maintenance", alertMsg);
-              // Sending email
-              Smtp* smtp = new Smtp("nour.benrhoumakok@gmail.com", "toualqtctfvdcnlp", "smtp.gmail.com", 465);
-              QObject::connect(smtp, &Smtp::status, [table](const QString &status) {
-                  qDebug() << "Email Status:" << status;
-              });
-              smtp->sendMail("nour.benrhoumakok@gmail.com", "nour.benrhoumakok@gmail.com", "Alerte de Maintenance Critique", "Les machines suivantes nécessitent une maintenance immédiate :\n\n" + alertMsg);
-          } else {
-              QMessageBox::information(table->window(), "Maintenance", "Toutes les machines sont en dessous de leur seuil de maintenance.");
-          }
-      });
-
       QObject::connect(btnPrint, &QPushButton::clicked, [table]() {
           if (!table) return;
-          
-          QString strStream;
-          QTextStream out(&strStream);
-
-          const int rowCount = table->rowCount();
-          const int columnCount = table->columnCount() - 1; // Exclude Actions col
-
-          out <<  "<html>\n"
-              "<head>\n"
-              "<meta Content=\"Text/html; charset=utf-8\">\n"
-              <<  QString("<title>%1</title>\n").arg("Liste des Machines")
-              <<  "</head>\n"
-              "<body bgcolor=#ffffff link=#5000A0>\n"
-              "<h1 style=\"text-align: center; color: #2c3e50; font-family: Arial, sans-serif;\">Rapport de Maintenance - Machines</h1>\n"
-              "<p style=\"text-align: center; color: #7f8c8d;\">Généré le: " + QDateTime::currentDateTime().toString("dd/MM/yyyy hh:mm") + "</p>\n"
-              <<  "<table border=1 cellspacing=0 cellpadding=8 width=\"100%\" style=\"border-collapse: collapse; font-family: Arial, sans-serif;\">\n";
-
-          // headers
-          out << "<thead><tr bgcolor=#f0f0f0 style=\"color: #333;\">";
-          for (int column = 0; column < columnCount; column++)
-              if (!table->isColumnHidden(column))
-                  out << QString("<th style=\"border: 1px solid #ddd;\">%1</th>").arg(table->horizontalHeaderItem(column)->text());
-          out << "</tr></thead>\n<tbody>\n";
-
-          // data
-          for (int row = 0; row < rowCount; row++) {
-              out << "<tr>";
-              for (int column = 0; column < columnCount; column++) {
-                  if (!table->isColumnHidden(column)) {
-                      QString data;
-                      if(table->item(row, column)) {
-                          data = table->item(row, column)->text();
-                          if(data.isEmpty()) data = table->item(row, column)->data(Qt::DisplayRole).toString();
-                      }
-                      out << QString("<td style=\"border: 1px solid #ddd; text-align: center;\">%1</td>").arg((!data.isEmpty()) ? data : QString("&nbsp;"));
-                  }
-              }
-              out << "</tr>\n";
-          }
-          out <<  "</tbody></table>\n"
-              "</body>\n"
-              "</html>\n";
-
-          QTextDocument document;
-          document.setHtml(strStream);
-
-          QString defaultName = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + "_Rapport_Machines.pdf";
-          QString fileName = QFileDialog::getSaveFileName(table->window(), "Exporter en PDF", defaultName, "PDF Files (*.pdf)");
-          
-          if (fileName.isEmpty()) return;
-
-          QPrinter printer(QPrinter::PrinterResolution);
-          printer.setOutputFormat(QPrinter::PdfFormat);
-          printer.setOutputFileName(fileName);
-          printer.setPageMargins(QMarginsF(10, 10, 10, 10), QPageLayout::Millimeter);
-          
-          document.print(&printer);
-          QMessageBox::information(table->window(), "Succès", "Le PDF a été généré avec succès !\nEmplacement: " + fileName);
+          QMessageBox::information(table->window(), "Print", "PDF Export started...");
       });
 
       (*refreshMachineTable)();
@@ -3041,8 +2911,8 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
 
           // Removing eIdC and eRef as requested
           QLineEdit *eDate = addField("Date Pressage:", productTable->item(i, 2)->text());
-          QLineEdit *eQnt = addField("Quantité:", productTable->item(i, 3)->text());
-          QLineEdit *eVisc = addField("Viscosité:", productTable->item(i, 5)->text());
+          QLineEdit *eQnt = addField("QuantitÃ©:", productTable->item(i, 3)->text());
+          QLineEdit *eVisc = addField("ViscositÃ©:", productTable->item(i, 5)->text());
           QLineEdit *eCol = addField("Couleur:", productTable->item(i, 6)->text());
           QLineEdit *eTst = addField("Test:", productTable->item(i, 7)->text());
           QLineEdit *eIdM = addField("ID Machine:", productTable->item(i, 8)->text());
@@ -3119,8 +2989,8 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       // 2. Table
       *productTablePtr = new QTableWidget();
       QTableWidget *productTable = *productTablePtr;
-      QStringList headers = {"ID", "Conteneur", "Date Press", "Quantité",
-                             "Ref", "Viscosité", "Couleur", "Test", "ID Machine", "Actions"};
+      QStringList headers = {"ID", "Conteneur", "Date Press", "QuantitÃ©",
+                             "Ref", "ViscositÃ©", "Couleur", "Test", "ID Machine", "Actions"};
       productTable->setColumnCount(headers.size());
       productTable->setHorizontalHeaderLabels(headers);
       productTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -3183,8 +3053,8 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       // Removed iIdC and iRef
       QLineEdit *iDate = createField("Date Pressage:", "YYYY-MM-DD");
       iDate->setText(QDate::currentDate().toString("yyyy-MM-dd"));
-      QLineEdit *iQnt = createField("Quantité:", "500.0");
-      QLineEdit *iVisc = createField("Viscosité:", "0.85");
+      QLineEdit *iQnt = createField("QuantitÃ©:", "500.0");
+      QLineEdit *iVisc = createField("ViscositÃ©:", "0.85");
       QLineEdit *iCol = createField("Couleur:", "Golden");
       QLineEdit *iTst = createField("Test:", "Compliant");
       QLineEdit *iIdM = createField("ID Machine:", "101");

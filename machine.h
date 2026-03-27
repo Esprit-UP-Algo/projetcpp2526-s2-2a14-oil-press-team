@@ -10,7 +10,7 @@ class Machine
 public:
     // Constructors
     Machine();
-    Machine(int id, QString nom, QString type, QString etat, int heures);
+    Machine(int id, QString nom, QString type, QString etat, int heures, int seuil);
 
     // Getters
     int getId() const;
@@ -18,6 +18,7 @@ public:
     QString getType() const;
     QString getEtat() const;
     int getHeures() const;
+    int getSeuil() const;
 
     // Setters
     void setId(int id);
@@ -25,6 +26,7 @@ public:
     void setType(const QString &type);
     void setEtat(const QString &etat);
     void setHeures(int heures);
+    void setSeuil(int seuil);
 
     // CRUD Operations
     bool ajouter();
@@ -39,6 +41,7 @@ private:
     QString type;
     QString etat;
     int heures;
+    int seuilMaintenance;
     QString lastError;
 };
 

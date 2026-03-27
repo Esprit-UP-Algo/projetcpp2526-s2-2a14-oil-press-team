@@ -1,4 +1,4 @@
-QT       += core gui printsupport widgets
+QT       += core gui printsupport widgets network
 QT+= sql
 CONFIG += c++17
 CONFIG += console
@@ -18,7 +18,8 @@ SOURCES += \
     produit.cpp \
     commande.cpp \
     personnel.cpp \
-    machine.cpp
+    machine.cpp \
+    smtp.cpp
 
 HEADERS += \
     article.h \
@@ -30,7 +31,8 @@ HEADERS += \
     produit.h \
     commande.h \
     personnel.h \
-    machine.h
+    machine.h \
+    smtp.h
 
 FORMS += \
     mainwindow.ui

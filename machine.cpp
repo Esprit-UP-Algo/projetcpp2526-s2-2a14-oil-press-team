@@ -9,15 +9,17 @@ Machine::Machine()
     type = "";
     etat = "";
     heures = 0;
+    seuilMaintenance = 0;
 }
 
-Machine::Machine(int id, QString nom, QString type, QString etat, int heures)
+Machine::Machine(int id, QString nom, QString type, QString etat, int heures, int seuil)
 {
     this->id = id;
     this->nom = nom;
     this->type = type;
     this->etat = etat;
     this->heures = heures;
+    this->seuilMaintenance = seuil;
 }
 
 // Getters
@@ -26,6 +28,7 @@ QString Machine::getNom() const { return nom; }
 QString Machine::getType() const { return type; }
 QString Machine::getEtat() const { return etat; }
 int Machine::getHeures() const { return heures; }
+int Machine::getSeuil() const { return seuilMaintenance; }
 
 // Setters
 void Machine::setId(int id) { this->id = id; }
@@ -33,16 +36,18 @@ void Machine::setNom(const QString &nom) { this->nom = nom; }
 void Machine::setType(const QString &type) { this->type = type; }
 void Machine::setEtat(const QString &etat) { this->etat = etat; }
 void Machine::setHeures(int heures) { this->heures = heures; }
+void Machine::setSeuil(int seuil) { this->seuilMaintenance = seuil; }
 
 bool Machine::ajouter()
 {
     QSqlQuery query;
-    query.prepare("INSERT INTO MACHINE (ID_MACHINE, NOM_MACHINE, TYPE_MACHINE, ETAT_MACHINE, HEURESFONCTIONNEMENT) "
-                  "VALUES ((SELECT NVL(MAX(ID_MACHINE), 0) + 1 FROM MACHINE), :nom, :type, :etat, :heures)");
+    query.prepare("INSERT INTO MACHINE (ID_MACHINE, NOM_MACHINE, TYPE_MACHINE, ETAT_MACHINE, HEURESFONCTIONNEMENT, SEUILMAINTENANCE) "
+                  "VALUES ((SELECT NVL(MAX(ID_MACHINE), 0) + 1 FROM MACHINE), :nom, :type, :etat, :heures, :seuil)");
     query.bindValue(":nom", nom);
     query.bindValue(":type", type);
     query.bindValue(":etat", etat);
     query.bindValue(":heures", heures);
+    query.bindValue(":seuil", seuilMaintenance);
 
     if (!query.exec()) {
         lastError = query.lastError().text();
@@ -70,12 +75,13 @@ bool Machine::modifier()
 {
     QSqlQuery query;
     query.prepare("UPDATE MACHINE SET NOM_MACHINE = :nom, TYPE_MACHINE = :type, "
-                  "ETAT_MACHINE = :etat, HEURESFONCTIONNEMENT = :heures WHERE ID_MACHINE = :id");
+                  "ETAT_MACHINE = :etat, HEURESFONCTIONNEMENT = :heures, SEUILMAINTENANCE = :seuil WHERE ID_MACHINE = :id");
     query.bindValue(":id", id);
     query.bindValue(":nom", nom);
     query.bindValue(":type", type);
     query.bindValue(":etat", etat);
     query.bindValue(":heures", heures);
+    query.bindValue(":seuil", seuilMaintenance);
 
     if (!query.exec()) {
         lastError = query.lastError().text();
@@ -88,7 +94,7 @@ bool Machine::modifier()
 QSqlQueryModel* Machine::afficher()
 {
     QSqlQueryModel *model = new QSqlQueryModel();
-    model->setQuery("SELECT ID_MACHINE, NOM_MACHINE, TYPE_MACHINE, ETAT_MACHINE, HEURESFONCTIONNEMENT FROM MACHINE");
+    model->setQuery("SELECT ID_MACHINE, NOM_MACHINE, TYPE_MACHINE, ETAT_MACHINE, HEURESFONCTIONNEMENT, SEUILMAINTENANCE FROM MACHINE");
 
     if (model->lastError().isValid()) {
         qDebug() << "Machine Afficher Error:" << model->lastError().text();
@@ -99,6 +105,7 @@ QSqlQueryModel* Machine::afficher()
     model->setHeaderData(2, Qt::Horizontal, QObject::tr("Type"));
     model->setHeaderData(3, Qt::Horizontal, QObject::tr("Status"));
     model->setHeaderData(4, Qt::Horizontal, QObject::tr("Hours"));
+    model->setHeaderData(5, Qt::Horizontal, QObject::tr("Threshold"));
 
     return model;
 }
