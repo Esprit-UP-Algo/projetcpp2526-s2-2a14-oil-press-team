@@ -8,6 +8,14 @@
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
+    a.setStyleSheet(
+        "QCalendarWidget QWidget { color: #1a1a1a; }"
+        "QCalendarWidget QWidget#qt_calendar_navigationbar { background-color: #f0f0f0; }"
+        "QCalendarWidget QTableView#qt_calendar_calendarview { background-color: #ffffff; color: #1a1a1a; selection-background-color: #3ddc84; selection-color: white; alternate-background-color: #f9f9f9; }"
+        "QCalendarWidget QAbstractItemView:enabled { color: #1a1a1a; background-color: #ffffff; }"
+        "QCalendarWidget QAbstractItemView:disabled { color: #999999; }"
+        "QCalendarWidget QToolButton { color: #1a1a1a; background-color: transparent; border: none; font-weight: bold; margin: 2px; }"
+    );
 
     Connection c;
     bool test = c.createconnect();

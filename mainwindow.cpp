@@ -785,11 +785,16 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       QString labelStyle = getLabelStyle();
       QString inputStyle = getInputStyle();
 
-      QWidget *wId, *wDate, *wClient, *wDelivery;
-      addField(formLayout, labelStyle, inputStyle, "ID:", "Enter order ID", wId, false);
+      QWidget *wId, *wDate, *wClient, *wAddress, *wDelivery;
+      addField(formLayout, labelStyle, inputStyle, "ID:", "Auto-generated", wId, false);
+      static_cast<QLineEdit*>(wId)->setReadOnly(true);
       addField(formLayout, labelStyle, inputStyle, "Order Date:", "", wDate, true);
+      static_cast<QDateEdit*>(wDate)->setMinimumDate(QDate::currentDate());
       addField(formLayout, labelStyle, inputStyle, "Client's Name:", "Enter client's name", wClient, false);
+      static_cast<QLineEdit*>(wClient)->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z \\.]*$"), page));
+      addField(formLayout, labelStyle, inputStyle, "Client's Address:", "Enter address", wAddress, false);
       addField(formLayout, labelStyle, inputStyle, "Delivery Date:", "", wDelivery, true);
+      static_cast<QDateEdit*>(wDelivery)->setMinimumDate(QDate::currentDate());
 
       QLabel *stateLbl = new QLabel("State:");
       stateLbl->setStyleSheet(labelStyle);
@@ -827,17 +832,39 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
       // Connect Button
       QObject::connect(btnSubmit, &QPushButton::clicked, [=]() {
-          int id = static_cast<QLineEdit*>(wId)->text().toInt();
+          int id = 0; // ID will be auto-generated
           QDate date = static_cast<QDateEdit*>(wDate)->date();
-          QString client = static_cast<QLineEdit*>(wClient)->text();
+          QString client = static_cast<QLineEdit*>(wClient)->text().trimmed();
+          QString address = static_cast<QLineEdit*>(wAddress)->text().trimmed();
           QDate delivery = static_cast<QDateEdit*>(wDelivery)->date();
           QString state = pendingRadio->isChecked() ? "Pending" : "Completed";
 
-          Commande c(id, date, state, client, delivery);
+          if (client.isEmpty()) {
+              QMessageBox::warning(nullptr, "Validation Error", "Client Name cannot be empty.");
+              return;
+          }
+          if (delivery < date) {
+              QMessageBox::warning(nullptr, "Validation Error", "Delivery date must be on or after the order date.");
+              return;
+          }
+
+          Commande c(id, date, state, client, address, delivery);
           if (c.ajouter()) {
               QMessageBox::information(nullptr, "Success", "Order added successfully!");
+              static_cast<QLineEdit*>(wClient)->clear();
+              static_cast<QLineEdit*>(wAddress)->clear();
+              static_cast<QDateEdit*>(wDate)->setDate(QDate::currentDate());
+              static_cast<QDateEdit*>(wDelivery)->setDate(QDate::currentDate());
+
+              // Automatically refresh and switch to Order Hub
+              QPushButton *refreshBtn = outNestedStack->findChild<QPushButton*>("orderHubRefreshBtn");
+              if (refreshBtn) refreshBtn->click();
+              outNestedStack->setCurrentIndex(2); // Order Hub is index 2
+              for(QPushButton *btn : tabButtons) {
+                  btn->setChecked(btn->text() == "Order Hub");
+              }
           } else {
-              QMessageBox::critical(nullptr, "Error", "Failed to add order.");
+              QMessageBox::critical(nullptr, "Error", "Failed to add order.\n\nDB Error: " + c.getLastError());
           }
       });
 
@@ -875,11 +902,13 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       QString labelStyle = getLabelStyle();
       QString inputStyle = getInputStyle();
 
-      QWidget *wId, *wDate, *wClient, *wDelivery;
+      QWidget *wId, *wDate, *wClient, *wAddress, *wDelivery;
       addField(formLayout, labelStyle, inputStyle, "ID:", "Enter order ID", wId, false);
-      static_cast<QLineEdit*>(wId)->setReadOnly(true); // Don't let users edit ID in this static form directly without searching
+      static_cast<QLineEdit*>(wId)->setReadOnly(true);
       addField(formLayout, labelStyle, inputStyle, "Order Date:", "", wDate, true);
       addField(formLayout, labelStyle, inputStyle, "Client's Name:", "Enter client's name", wClient, false);
+      static_cast<QLineEdit*>(wClient)->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z \\.]*$"), page));
+      addField(formLayout, labelStyle, inputStyle, "Client's Address:", "Enter address", wAddress, false);
       addField(formLayout, labelStyle, inputStyle, "Delivery Date:", "", wDelivery, true);
 
       QLabel *stateLbl = new QLabel("State:");
@@ -916,15 +945,48 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
       cLayout->addWidget(formContainer);
 
-      // We will implement searching and full update logic later.
+      QObject::connect(sBtn, &QPushButton::clicked, [=]() {
+          int searchId = searchInp->text().toInt();
+          QSqlQuery query;
+          query.prepare("SELECT DATE_COMMANDE, ETAT_COMMANDE, NOM_CLIENT, ADRESSE_CLIENT, DATE_LIVRAISON FROM COMMANDE WHERE ID_COMMANDE = :id");
+          query.bindValue(":id", searchId);
+          if (query.exec() && query.next()) {
+              static_cast<QLineEdit*>(wId)->setText(QString::number(searchId));
+              static_cast<QDateEdit*>(wDate)->setDate(query.value(0).toDate());
+              QString etat = query.value(1).toString();
+              if (etat == "Completed") completedRadio->setChecked(true);
+              else pendingRadio->setChecked(true);
+              static_cast<QLineEdit*>(wClient)->setText(query.value(2).toString());
+              static_cast<QLineEdit*>(wAddress)->setText(query.value(3).toString());
+              static_cast<QDateEdit*>(wDelivery)->setDate(query.value(4).toDate());
+              QMessageBox::information(nullptr, "Found", "Order details loaded.");
+          } else {
+              QMessageBox::warning(nullptr, "Not Found", "Order ID not found.");
+          }
+      });
+
       QObject::connect(btnSubmit, &QPushButton::clicked, [=]() {
           int id = static_cast<QLineEdit*>(wId)->text().toInt();
+          if (id <= 0) {
+              QMessageBox::warning(nullptr, "Error", "Please search and load an order first.");
+              return;
+          }
           QDate date = static_cast<QDateEdit*>(wDate)->date();
-          QString client = static_cast<QLineEdit*>(wClient)->text();
+          QString client = static_cast<QLineEdit*>(wClient)->text().trimmed();
+          QString address = static_cast<QLineEdit*>(wAddress)->text().trimmed();
           QDate delivery = static_cast<QDateEdit*>(wDelivery)->date();
           QString state = pendingRadio->isChecked() ? "Pending" : "Completed";
 
-          Commande c(id, date, state, client, delivery);
+          if (client.isEmpty()) {
+              QMessageBox::warning(nullptr, "Validation Error", "Client Name cannot be empty.");
+              return;
+          }
+          if (delivery < date) {
+              QMessageBox::warning(nullptr, "Validation Error", "Delivery date must be on or after the order date.");
+              return;
+          }
+
+          Commande c(id, date, state, client, address, delivery);
           if (c.modifier()) {
               QMessageBox::information(nullptr, "Success", "Order updated successfully!");
           } else {
@@ -973,6 +1035,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
       // Refresh Button
       QPushButton *btnRefresh = new QPushButton("Refresh");
+      btnRefresh->setObjectName("orderHubRefreshBtn");
       btnRefresh->setCursor(Qt::PointingHandCursor);
       btnRefresh->setStyleSheet(getButtonStyle());
       btnRefresh->setFixedWidth(100);
@@ -989,7 +1052,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       histLayout->addWidget(controlBar);
 
       // 2. Table
-      QStringList headers = {"ID", "Date", "State", "Client", "Delivery", "Actions"};
+      QStringList headers = {"ID", "Date", "State", "Client", "Address", "Delivery", "Actions"};
       QTableWidget *table = new QTableWidget();
       table->setColumnCount(headers.size());
       table->setHorizontalHeaderLabels(headers);
@@ -1083,9 +1146,10 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
           QString date = model->record(i).value("DATE_COMMANDE").toDate().toString("yyyy-MM-dd");
           QString etat = model->record(i).value("ETAT_COMMANDE").toString();
           QString client = model->record(i).value("NOM_CLIENT").toString();
+          QString address = model->record(i).value("ADRESSE_CLIENT").toString();
           QString livraison = model->record(i).value("DATE_LIVRAISON").toDate().toString("yyyy-MM-dd");
 
-          bool match = client.toLower().contains(query) || id.contains(query) || etat.toLower().contains(query);
+          bool match = client.toLower().contains(query) || id.contains(query) || etat.toLower().contains(query) || address.toLower().contains(query);
           if (!match && !query.isEmpty()) continue;
 
           table->insertRow(rowIdx);
@@ -1093,7 +1157,8 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
           table->setItem(rowIdx, 1, new QTableWidgetItem(date));
           table->setItem(rowIdx, 2, new QTableWidgetItem(etat));
           table->setItem(rowIdx, 3, new QTableWidgetItem(client));
-          table->setItem(rowIdx, 4, new QTableWidgetItem(livraison));
+          table->setItem(rowIdx, 4, new QTableWidgetItem(address));
+          table->setItem(rowIdx, 5, new QTableWidgetItem(livraison));
 
           // Action Column
           QWidget *actionWidget = new QWidget();
@@ -1125,12 +1190,12 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
           actionLayout->addWidget(btnModify);
           actionLayout->addWidget(btnDelete);
-          table->setCellWidget(rowIdx, 5, actionWidget);
+          table->setCellWidget(rowIdx, 6, actionWidget);
 
           int orderId = id.toInt();
 
           // Connect Modify
-          QObject::connect(btnModify, &QPushButton::clicked, [table, orderId, id, date, etat, client, livraison]() {
+          QObject::connect(btnModify, &QPushButton::clicked, [table, orderId, id, date, etat, client, address, livraison]() {
                 QDialog dlg(table->window());
                 dlg.setWindowTitle("Edit Order Details");
                 dlg.setModal(true);
@@ -1155,21 +1220,23 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                 dateEdit->setDisplayFormat("yyyy-MM-dd");
                 dateEdit->setCalendarPopup(true);
                 QLineEdit *clientEdit = new QLineEdit(client);
+                QLineEdit *addressEdit = new QLineEdit(address);
                 QDateEdit *livraisonEdit = new QDateEdit(QDate::fromString(livraison, "yyyy-MM-dd"));
                 livraisonEdit->setDisplayFormat("yyyy-MM-dd");
                 livraisonEdit->setCalendarPopup(true);
 
                 auto styleField = [&](QWidget *w) {
                   w->setStyleSheet(
-                      "QWidget { background-color: #f9fafb; border: 1px "
+                      "QLineEdit, QDateEdit, QComboBox { background-color: #f9fafb; border: 1px "
                       "solid #eaeaea; border-radius: 6px; padding: 6px 10px; "
-                      "font-size: 13px; color: #333; } QWidget:focus { "
+                      "font-size: 13px; color: #333; } QLineEdit:focus, QDateEdit:focus, QComboBox:focus { "
                       "border-color: #3DDC84; background-color: #ffffff; }");
                   w->setFixedHeight(35);
                 };
 
                 styleField(dateEdit);
                 styleField(clientEdit);
+                styleField(addressEdit);
                 styleField(livraisonEdit);
 
                 QWidget *radioWidget = new QWidget();
@@ -1197,6 +1264,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
                 addRow("Order Date:", dateEdit);
                 addRow("Client Name:", clientEdit);
+                addRow("Address:", addressEdit);
                 addRow("Delivery Date:", livraisonEdit);
                 addRow("State:", radioWidget);
 
@@ -1223,7 +1291,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
                 if (dlg.exec() == QDialog::Accepted) {
                     QString newState = pendingRadio->isChecked() ? "Pending" : "Completed";
-                    Commande c(orderId, dateEdit->date(), newState, clientEdit->text(), livraisonEdit->date());
+                    Commande c(orderId, dateEdit->date(), newState, clientEdit->text().trimmed(), addressEdit->text().trimmed(), livraisonEdit->date());
                     if (c.modifier()) {
                         QMessageBox::information(table->window(), "Success", "Order updated successfully!");
                         // Ideally we'd refresh the table here. In the full application, we should trigger the outer updateTable() to re-query the DB.
@@ -1332,7 +1400,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
       QWidget *formContainer = new QWidget();
       formContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
       formContainer->setStyleSheet(
-          "QWidget {"
+          ".QWidget {"
           "  background-color: #ffffff;"
           "  border-radius: 12px;"
           "}");
