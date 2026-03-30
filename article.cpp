@@ -8,44 +8,49 @@ Article::Article() {
   id = 0;
   nom = "";
   quantite = 0;
-  seuilMinimal = 0;
   unite = "";
+  prixUnitaire = 0;
+  dateAchat = QDate::currentDate();
 }
 
 // Parameterized constructor
-Article::Article(int id, QString nom, int quantite, int seuilMinimal, QString unite) {
+Article::Article(int id, QString nom, int quantite, QString unite, int prixUnitaire, QDate dateAchat) {
   this->id = id;
   this->nom = nom;
   this->quantite = quantite;
-  this->seuilMinimal = seuilMinimal;
   this->unite = unite;
+  this->prixUnitaire = prixUnitaire;
+  this->dateAchat = dateAchat;
 }
 
 // --- Getters ---
 int Article::getId() const { return id; }
 QString Article::getNom() const { return nom; }
 int Article::getQuantite() const { return quantite; }
-int Article::getSeuilMinimal() const { return seuilMinimal; }
 QString Article::getUnite() const { return unite; }
+int Article::getPrixUnitaire() const { return prixUnitaire; }
+QDate Article::getDateAchat() const { return dateAchat; }
 
 // --- Setters ---
 void Article::setId(int id) { this->id = id; }
 void Article::setNom(const QString &nom) { this->nom = nom; }
 void Article::setQuantite(int quantite) { this->quantite = quantite; }
-void Article::setSeuilMinimal(int seuil) { this->seuilMinimal = seuil; }
 void Article::setUnite(const QString &unite) { this->unite = unite; }
+void Article::setPrixUnitaire(int prix) { this->prixUnitaire = prix; }
+void Article::setDateAchat(const QDate &date) { this->dateAchat = date; }
 
 // --- CRUD: Ajouter (Create) ---
 bool Article::ajouter() {
   QSqlQuery query;
   query.prepare(
-      "INSERT INTO ARTICLE (ID_ARTICLE, NOM_ARTICLE, QUANTITE, UNITE, SEUIL_MINIMAL) "
+      "INSERT INTO ARTICLE (ID_ARTICLE, NOM_ARTICLE, QUANTITE, UNITE, PRIX_UNITAIRE, DATE_ACHAT) "
       "VALUES ((SELECT NVL(MAX(ID_ARTICLE),0)+1 FROM ARTICLE), :nom, "
-      ":quantite, :unite, :seuil)");
+      ":quantite, :unite, :prix, :date_achat)");
   query.bindValue(":nom", nom);
   query.bindValue(":quantite", quantite);
   query.bindValue(":unite", unite);
-  query.bindValue(":seuil", seuilMinimal);
+  query.bindValue(":prix", prixUnitaire);
+  query.bindValue(":date_achat", dateAchat);
 
   if (!query.exec()) {
     qDebug() << "Ajouter Error:" << query.lastError().text();
@@ -73,12 +78,13 @@ bool Article::modifier() {
   QSqlQuery query;
   query.prepare(
       "UPDATE ARTICLE SET NOM_ARTICLE = :nom, "
-      "QUANTITE = :quantite, UNITE = :unite, SEUIL_MINIMAL = :seuil WHERE ID_ARTICLE = :id");
+      "QUANTITE = :quantite, UNITE = :unite, PRIX_UNITAIRE = :prix, DATE_ACHAT = :date_achat WHERE ID_ARTICLE = :id");
   query.bindValue(":id", id);
   query.bindValue(":nom", nom);
   query.bindValue(":quantite", quantite);
   query.bindValue(":unite", unite);
-  query.bindValue(":seuil", seuilMinimal);
+  query.bindValue(":prix", prixUnitaire);
+  query.bindValue(":date_achat", dateAchat);
 
   if (!query.exec()) {
     qDebug() << "Modifier Error:" << query.lastError().text();
@@ -90,7 +96,7 @@ bool Article::modifier() {
 QSqlQueryModel *Article::afficher() {
   QSqlQueryModel *model = new QSqlQueryModel();
   model->setQuery(
-      "SELECT ID_ARTICLE, NOM_ARTICLE, QUANTITE, UNITE, SEUIL_MINIMAL FROM ARTICLE");
+      "SELECT ID_ARTICLE, NOM_ARTICLE, QUANTITE, UNITE, PRIX_UNITAIRE, DATE_ACHAT FROM ARTICLE");
 
   if (model->lastError().isValid()) {
     qDebug() << "Afficher Error:" << model->lastError().text();
@@ -99,7 +105,9 @@ QSqlQueryModel *Article::afficher() {
   model->setHeaderData(0, Qt::Horizontal, QObject::tr("ID"));
   model->setHeaderData(1, Qt::Horizontal, QObject::tr("Item Name"));
   model->setHeaderData(2, Qt::Horizontal, QObject::tr("Quantity"));
-  model->setHeaderData(3, Qt::Horizontal, QObject::tr("Min Threshold"));
+  model->setHeaderData(3, Qt::Horizontal, QObject::tr("Unit"));
+  model->setHeaderData(4, Qt::Horizontal, QObject::tr("Unit Price"));
+  model->setHeaderData(5, Qt::Horizontal, QObject::tr("Date of Purchase"));
 
   return model;
 }
