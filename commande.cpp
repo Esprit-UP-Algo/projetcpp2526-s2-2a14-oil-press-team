@@ -22,17 +22,30 @@ Commande::Commande(int id, QDate dateC, QString etat, QString nomC, QDate dateL)
 
 bool Commande::ajouter()
 {
+    // Step 1: get next ID
+    QSqlQuery idQuery;
+    idQuery.prepare("SELECT NVL(MAX(ID_COMMANDE), 0) + 1 FROM COMMANDE");
+    if (!idQuery.exec() || !idQuery.next()) {
+        lastError = idQuery.lastError().text();
+        return false;
+    }
+    int nextId = idQuery.value(0).toInt();
+
+    // Step 2: Insert
     QSqlQuery query;
-    // Assuming ID_COMMANDE might not be auto-incrementing if you provide an ID directly in UI. 
     query.prepare("INSERT INTO COMMANDE (ID_COMMANDE, DATE_COMMANDE, ETAT_COMMANDE, NOM_CLIENT, DATE_LIVRAISON) "
                   "VALUES (:id, :dateC, :etat, :nom, :dateL)");
-    query.bindValue(":id", id_commande);
+    query.bindValue(":id", nextId);
     query.bindValue(":dateC", date_commande);
     query.bindValue(":etat", etat_commande);
     query.bindValue(":nom", nom_client);
     query.bindValue(":dateL", date_livraison);
 
-    return query.exec();
+    if (!query.exec()) {
+        lastError = query.lastError().text();
+        return false;
+    }
+    return true;
 }
 
 QSqlQueryModel* Commande::afficher()
@@ -53,7 +66,11 @@ bool Commande::supprimer(int id)
     QSqlQuery query;
     query.prepare("DELETE FROM COMMANDE WHERE ID_COMMANDE = :id");
     query.bindValue(":id", id);
-    return query.exec();
+    if (!query.exec()) {
+        lastError = query.lastError().text();
+        return false;
+    }
+    return true;
 }
 
 bool Commande::modifier()
@@ -67,5 +84,9 @@ bool Commande::modifier()
     query.bindValue(":nom", nom_client);
     query.bindValue(":dateL", date_livraison);
 
-    return query.exec();
+    if (!query.exec()) {
+        lastError = query.lastError().text();
+        return false;
+    }
+    return true;
 }

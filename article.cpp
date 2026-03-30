@@ -9,14 +9,16 @@ Article::Article() {
   nom = "";
   quantite = 0;
   seuilMinimal = 0;
+  unite = "";
 }
 
 // Parameterized constructor
-Article::Article(int id, QString nom, int quantite, int seuilMinimal) {
+Article::Article(int id, QString nom, int quantite, int seuilMinimal, QString unite) {
   this->id = id;
   this->nom = nom;
   this->quantite = quantite;
   this->seuilMinimal = seuilMinimal;
+  this->unite = unite;
 }
 
 // --- Getters ---
@@ -24,22 +26,25 @@ int Article::getId() const { return id; }
 QString Article::getNom() const { return nom; }
 int Article::getQuantite() const { return quantite; }
 int Article::getSeuilMinimal() const { return seuilMinimal; }
+QString Article::getUnite() const { return unite; }
 
 // --- Setters ---
 void Article::setId(int id) { this->id = id; }
 void Article::setNom(const QString &nom) { this->nom = nom; }
 void Article::setQuantite(int quantite) { this->quantite = quantite; }
 void Article::setSeuilMinimal(int seuil) { this->seuilMinimal = seuil; }
+void Article::setUnite(const QString &unite) { this->unite = unite; }
 
 // --- CRUD: Ajouter (Create) ---
 bool Article::ajouter() {
   QSqlQuery query;
   query.prepare(
-      "INSERT INTO ARTICLE (ID_ARTICLE, NOM_ARTICLE, QUANTITE, SEUIL_MINIMAL) "
+      "INSERT INTO ARTICLE (ID_ARTICLE, NOM_ARTICLE, QUANTITE, UNITE, SEUIL_MINIMAL) "
       "VALUES ((SELECT NVL(MAX(ID_ARTICLE),0)+1 FROM ARTICLE), :nom, "
-      ":quantite, :seuil)");
+      ":quantite, :unite, :seuil)");
   query.bindValue(":nom", nom);
   query.bindValue(":quantite", quantite);
+  query.bindValue(":unite", unite);
   query.bindValue(":seuil", seuilMinimal);
 
   if (!query.exec()) {
@@ -68,10 +73,11 @@ bool Article::modifier() {
   QSqlQuery query;
   query.prepare(
       "UPDATE ARTICLE SET NOM_ARTICLE = :nom, "
-      "QUANTITE = :quantite, SEUIL_MINIMAL = :seuil WHERE ID_ARTICLE = :id");
+      "QUANTITE = :quantite, UNITE = :unite, SEUIL_MINIMAL = :seuil WHERE ID_ARTICLE = :id");
   query.bindValue(":id", id);
   query.bindValue(":nom", nom);
   query.bindValue(":quantite", quantite);
+  query.bindValue(":unite", unite);
   query.bindValue(":seuil", seuilMinimal);
 
   if (!query.exec()) {
@@ -84,7 +90,7 @@ bool Article::modifier() {
 QSqlQueryModel *Article::afficher() {
   QSqlQueryModel *model = new QSqlQueryModel();
   model->setQuery(
-      "SELECT ID_ARTICLE, NOM_ARTICLE, QUANTITE, SEUIL_MINIMAL FROM ARTICLE");
+      "SELECT ID_ARTICLE, NOM_ARTICLE, QUANTITE, UNITE, SEUIL_MINIMAL FROM ARTICLE");
 
   if (model->lastError().isValid()) {
     qDebug() << "Afficher Error:" << model->lastError().text();

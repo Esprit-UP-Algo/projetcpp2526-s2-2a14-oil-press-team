@@ -14,9 +14,8 @@ int main(int argc, char *argv[])
 
     if(!test)
     {
-
         QMessageBox::critical(nullptr, QObject::tr("database is not open"),
-                              QObject::tr("connection failed.\nClick Cancel to exit."),
+                              QObject::tr("connection failed.\nError: ") + c.getLastError() + QObject::tr("\nClick Cancel to exit."),
                               QMessageBox::Cancel);
         return 0;
     }

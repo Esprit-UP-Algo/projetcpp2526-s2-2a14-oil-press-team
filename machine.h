@@ -4,13 +4,14 @@
 #include <QString>
 #include <QSqlQuery>
 #include <QSqlQueryModel>
+#include <QDate>
 
 class Machine
 {
 public:
     // Constructors
     Machine();
-    Machine(int id, QString nom, QString type, QString etat, int heures, int seuil);
+    Machine(int id, QString nom, QString type, QString etat, int heures, int seuil, QDate dateM = QDate());
 
     // Getters
     int getId() const;
@@ -19,6 +20,7 @@ public:
     QString getEtat() const;
     int getHeures() const;
     int getSeuil() const;
+    QDate getDateM() const;
 
     // Setters
     void setId(int id);
@@ -27,6 +29,7 @@ public:
     void setEtat(const QString &etat);
     void setHeures(int heures);
     void setSeuil(int seuil);
+    void setDateM(QDate dateM);
 
     // CRUD Operations
     bool ajouter();
@@ -42,6 +45,7 @@ private:
     QString etat;
     int heures;
     int seuilMaintenance;
+    QDate dateDerniereMaintenance;
     QString lastError;
 };
 

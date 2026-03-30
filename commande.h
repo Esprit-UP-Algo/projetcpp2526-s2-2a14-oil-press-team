@@ -40,6 +40,10 @@ public:
     QSqlQueryModel* afficher();
     bool supprimer(int id);
     bool modifier();
+    QString getLastError() const { return lastError; }
+
+private:
+    QString lastError;
 };
 
 #endif // COMMANDE_H

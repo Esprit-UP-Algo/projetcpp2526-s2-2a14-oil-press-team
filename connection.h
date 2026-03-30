@@ -9,6 +9,10 @@ class Connection
 public:
     Connection();
     bool createconnect();
+    QString getLastError() const { return lastError; }
+
+private:
+    QString lastError;
 };
 
 #endif // CONNECTION_H

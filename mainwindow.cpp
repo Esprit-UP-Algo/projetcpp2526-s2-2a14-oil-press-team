@@ -2077,6 +2077,15 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
       formLayout->addWidget(lblQty);
       formLayout->addWidget(inputQty);
 
+      // UNITE
+      QLabel *lblUnt = new QLabel("Unit:");
+      lblUnt->setStyleSheet(labelStyle);
+      QLineEdit *inputUnt = new QLineEdit();
+      inputUnt->setStyleSheet(inputStyle);
+      inputUnt->setPlaceholderText("Liters / Kg / Units");
+      formLayout->addWidget(lblUnt);
+      formLayout->addWidget(inputUnt);
+
       // SEUIL MINIMAL
       QLabel *lblSeuil = new QLabel("Min Threshold:");
       lblSeuil->setStyleSheet(labelStyle);
@@ -2096,7 +2105,7 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
 
       // Connect Add Button -> Article::ajouter()
       QObject::connect(
-          btnSubmit, &QPushButton::clicked, [inputNom, inputQty, inputSeuil]() {
+          btnSubmit, &QPushButton::clicked, [inputNom, inputQty, inputUnt, inputSeuil]() {
             // Input validation
             if (inputNom->text().trimmed().isEmpty()) {
               QMessageBox::warning(nullptr, "Validation Error",
@@ -2107,6 +2116,7 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
             Article a;
             a.setNom(inputNom->text().trimmed());
             a.setQuantite(inputQty->text().toInt());
+            a.setUnite(inputUnt->text().trimmed());
             a.setSeuilMinimal(inputSeuil->text().toInt());
 
             if (a.ajouter()) {
@@ -2115,6 +2125,7 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
               // Clear the form
               inputNom->clear();
               inputQty->clear();
+              inputUnt->clear();
               inputSeuil->clear();
             } else {
               QMessageBox::critical(
@@ -2178,7 +2189,7 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
 
       // 2. Table
       stockTable = new QTableWidget();
-      QStringList headers = {"ID", "Item Name", "Current Qty", "Min Threshold",
+      QStringList headers = {"ID", "Item Name", "Current Qty", "Unit", "Min Threshold",
                              "Actions"};
       stockTable->setColumnCount(headers.size());
       stockTable->setHorizontalHeaderLabels(headers);
@@ -2227,12 +2238,14 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
           QString id = model->data(model->index(i, 0)).toString();
           QString nom = model->data(model->index(i, 1)).toString();
           QString qty = model->data(model->index(i, 2)).toString();
-          QString seuil = model->data(model->index(i, 3)).toString();
+          QString unt = model->data(model->index(i, 3)).toString();
+          QString seuil = model->data(model->index(i, 4)).toString();
 
           stockTable->setItem(i, 0, new QTableWidgetItem(id));
           stockTable->setItem(i, 1, new QTableWidgetItem(nom));
           stockTable->setItem(i, 2, new QTableWidgetItem(qty));
-          stockTable->setItem(i, 3, new QTableWidgetItem(seuil));
+          stockTable->setItem(i, 3, new QTableWidgetItem(unt));
+          stockTable->setItem(i, 4, new QTableWidgetItem(seuil));
 
           // --- Action Buttons (Modify + Delete) ---
           QWidget *actionWidget = new QWidget();
@@ -2317,7 +2330,7 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
           // --- MODIFIER (UPDATE) ---
           QObject::connect(
               btnModify, &QPushButton::clicked,
-              [stockTable, itemId, nom, qty, seuil]() {
+              [stockTable, itemId, nom, qty, unt, seuil]() {
                 QDialog *dialog = new QDialog(stockTable->window());
                 dialog->setWindowTitle("Modify Item");
                 dialog->setMinimumWidth(450);
@@ -2348,6 +2361,11 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
                 QLineEdit *editQty = new QLineEdit(qty);
                 dialogLayout->addWidget(lblQty);
                 dialogLayout->addWidget(editQty);
+
+                QLabel *lblUnt = new QLabel("Unit:");
+                QLineEdit *editUnt = new QLineEdit(unt);
+                dialogLayout->addWidget(lblUnt);
+                dialogLayout->addWidget(editUnt);
 
                 QLabel *lblSeuil = new QLabel("Min Threshold:");
                 QLineEdit *editSeuil = new QLineEdit(seuil);
@@ -2389,12 +2407,13 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
                                  &QDialog::reject);
                 QObject::connect(
                     saveBtn, &QPushButton::clicked,
-                    [dialog, editNom, editQty, editSeuil, itemId,
+                    [dialog, editNom, editQty, editUnt, editSeuil, itemId,
                      stockTable]() {
                       Article a;
                       a.setId(itemId);
                       a.setNom(editNom->text().trimmed());
                       a.setQuantite(editQty->text().toInt());
+                      a.setUnite(editUnt->text().trimmed());
                       a.setSeuilMinimal(editSeuil->text().toInt());
 
                       if (a.modifier()) {
@@ -2408,7 +2427,8 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
                             stockTable->item(r, 1)->setText(
                                 editNom->text().trimmed());
                             stockTable->item(r, 2)->setText(editQty->text());
-                            stockTable->item(r, 3)->setText(editSeuil->text());
+                            stockTable->item(r, 3)->setText(editUnt->text());
+                            stockTable->item(r, 4)->setText(editSeuil->text());
                             break;
                           }
                         }
@@ -2423,7 +2443,7 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
                 dialog->deleteLater();
               });
 
-          stockTable->setCellWidget(i, 4, actionWidget);
+          stockTable->setCellWidget(i, 5, actionWidget);
         }
 
         delete model;
@@ -2968,13 +2988,13 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
     for (int i = 0; i < rows; ++i) {
       int pid = model->data(model->index(i, 0)).toInt();
       productTable->setItem(i, 0, new QTableWidgetItem(QString::number(pid)));
-      productTable->setItem(i, 1, new QTableWidgetItem(model->data(model->index(i, 1)).toString()));
-      productTable->setItem(i, 2, new QTableWidgetItem(model->data(model->index(i, 2)).toDate().toString("yyyy-MM-dd")));
-      productTable->setItem(i, 3, new QTableWidgetItem(QString::number(model->data(model->index(i, 3)).toDouble(), 'f', 2)));
+      productTable->setItem(i, 1, new QTableWidgetItem(model->data(model->index(i, 1)).toDate().toString("yyyy-MM-dd")));
+      productTable->setItem(i, 2, new QTableWidgetItem(QString::number(model->data(model->index(i, 2)).toInt())));
+      productTable->setItem(i, 3, new QTableWidgetItem(model->data(model->index(i, 3)).toString()));
       productTable->setItem(i, 4, new QTableWidgetItem(model->data(model->index(i, 4)).toString()));
-      productTable->setItem(i, 5, new QTableWidgetItem(QString::number(model->data(model->index(i, 5)).toDouble(), 'f', 2)));
+      productTable->setItem(i, 5, new QTableWidgetItem(model->data(model->index(i, 5)).toString()));
       productTable->setItem(i, 6, new QTableWidgetItem(model->data(model->index(i, 6)).toString()));
-      productTable->setItem(i, 7, new QTableWidgetItem(model->data(model->index(i, 7)).toString()));
+      productTable->setItem(i, 7, new QTableWidgetItem(QString::number(model->data(model->index(i, 7)).toInt())));
       productTable->setItem(i, 8, new QTableWidgetItem(model->data(model->index(i, 8)).toString()));
 
       // Action Buttons
@@ -3040,11 +3060,13 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
           };
 
           // Removing eIdC and eRef as requested
-          QLineEdit *eDate = addField("Date Pressage:", productTable->item(i, 2)->text());
-          QLineEdit *eQnt = addField("Quantité:", productTable->item(i, 3)->text());
-          QLineEdit *eVisc = addField("Viscosité:", productTable->item(i, 5)->text());
-          QLineEdit *eCol = addField("Couleur:", productTable->item(i, 6)->text());
-          QLineEdit *eTst = addField("Test:", productTable->item(i, 7)->text());
+          QLineEdit *eDate = addField("Date Pressage:", productTable->item(i, 1)->text());
+          QLineEdit *eQnt = addField("Quantité:", productTable->item(i, 2)->text());
+          QLineEdit *eRef = addField("Ref:", productTable->item(i, 3)->text());
+          QLineEdit *eVisc = addField("Viscosité:", productTable->item(i, 4)->text());
+          QLineEdit *eCol = addField("Couleur:", productTable->item(i, 5)->text());
+          QLineEdit *eTst = addField("Test:", productTable->item(i, 6)->text());
+          QLineEdit *eCap = addField("Capacité:", productTable->item(i, 7)->text());
           QLineEdit *eIdM = addField("ID Machine:", productTable->item(i, 8)->text());
 
           QPushButton *btnSave = new QPushButton("Save Changes");
@@ -3052,15 +3074,16 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
                                  "border-radius: 8px; padding: 12px; font-weight: 700; }");
           mainV->addWidget(btnSave);
 
-          QObject::connect(btnSave, &QPushButton::clicked, [&dlg, eDate, eQnt, eVisc, eCol, eTst, eIdM, pid, refreshProductTable]() {
+          QObject::connect(btnSave, &QPushButton::clicked, [&dlg, eDate, eQnt, eRef, eVisc, eCol, eTst, eCap, eIdM, pid, refreshProductTable]() {
               Produit p;
-              p.setIdProduit(pid);
-              // idContenair and ref remain null/unchanged if not provided
+              p.setIdContenair(pid);
               p.setDatePress(QDate::fromString(eDate->text(), "yyyy-MM-dd"));
-              p.setQuantite(eQnt->text().toDouble());
-              p.setViscosite(eVisc->text().toDouble());
+              p.setQuantite(eQnt->text().toInt());
+              p.setRef(eRef->text());
+              p.setViscosite(eVisc->text());
               p.setCouleur(eCol->text());
               p.setTest(eTst->text());
+              p.setCapacite(eCap->text().toInt());
               p.setIdMachine(eIdM->text().toInt());
 
               if (p.modifier()) {
@@ -3119,8 +3142,8 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       // 2. Table
       *productTablePtr = new QTableWidget();
       QTableWidget *productTable = *productTablePtr;
-      QStringList headers = {"ID", "Conteneur", "Date Press", "Quantité",
-                             "Ref", "Viscosité", "Couleur", "Test", "ID Machine", "Actions"};
+      QStringList headers = {"ID Contenair", "Date Press", "Quantité",
+                             "Ref", "Viscosité", "Couleur", "Test", "Capacité", "ID Machine", "Actions"};
       productTable->setColumnCount(headers.size());
       productTable->setHorizontalHeaderLabels(headers);
       productTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -3183,10 +3206,12 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       // Removed iIdC and iRef
       QLineEdit *iDate = createField("Date Pressage:", "YYYY-MM-DD");
       iDate->setText(QDate::currentDate().toString("yyyy-MM-dd"));
-      QLineEdit *iQnt = createField("Quantité:", "500.0");
+      QLineEdit *iQnt = createField("Quantité:", "500");
+      QLineEdit *iRef = createField("Ref:", "PRD-001");
       QLineEdit *iVisc = createField("Viscosité:", "0.85");
       QLineEdit *iCol = createField("Couleur:", "Golden");
       QLineEdit *iTst = createField("Test:", "Compliant");
+      QLineEdit *iCap = createField("Capacité:", "1000");
       QLineEdit *iIdM = createField("ID Machine:", "101");
 
       formLayout->addSpacing(20);
@@ -3197,14 +3222,15 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       formLayout->addWidget(btnAdd);
       formLayout->addStretch();
 
-      QObject::connect(btnAdd, &QPushButton::clicked, [=]() {
+        QObject::connect(btnAdd, &QPushButton::clicked, [=]() {
           Produit p;
-          // idContenair and ref remain null
           p.setDatePress(QDate::fromString(iDate->text(), "yyyy-MM-dd"));
-          p.setQuantite(iQnt->text().toDouble());
-          p.setViscosite(iVisc->text().toDouble());
+          p.setQuantite(iQnt->text().toInt());
+          p.setRef(iRef->text());
+          p.setViscosite(iVisc->text());
           p.setCouleur(iCol->text());
           p.setTest(iTst->text());
+          p.setCapacite(iCap->text().toInt());
           p.setIdMachine(iIdM->text().toInt());
 
           if (p.ajouter()) {
