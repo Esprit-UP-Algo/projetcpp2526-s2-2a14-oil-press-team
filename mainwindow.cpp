@@ -733,7 +733,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
   actionLayout->setSpacing(12);
 
   outNestedStack = new QStackedWidget();
-  QStringList tabNames = {"New Order", "Edit Order", "Order Hub", "Analytics"};
+  QStringList tabNames = {"New Order", "Order Hub", "Analytics"};
   QList<QPushButton *> tabButtons;
 
   // Helper functions used internally to build repetitive UI
@@ -859,7 +859,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
               // Automatically refresh and switch to Order Hub
               QPushButton *refreshBtn = outNestedStack->findChild<QPushButton*>("orderHubRefreshBtn");
               if (refreshBtn) refreshBtn->click();
-              outNestedStack->setCurrentIndex(2); // Order Hub is index 2
+              outNestedStack->setCurrentIndex(1); // Order Hub is index 1
               for(QPushButton *btn : tabButtons) {
                   btn->setChecked(btn->text() == "Order Hub");
               }
@@ -868,131 +868,6 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
           }
       });
 
-    } else if (name == "Edit Order") {
-      QWidget *searchBar = new QWidget();
-      searchBar->setStyleSheet(getCardStyle());
-      QHBoxLayout *sLayout = new QHBoxLayout(searchBar);
-      QLineEdit *searchInp = new QLineEdit();
-      searchInp->setStyleSheet("border: none; font-size: 14px;");
-      searchInp->setPlaceholderText("Search Order ID...");
-      QPushButton *sBtn = new QPushButton("Search (Not used yet)");
-      sBtn->setStyleSheet(getButtonStyle());
-      sBtn->setFixedWidth(150);
-      sLayout->addWidget(searchInp);
-      sLayout->addWidget(sBtn);
-      cLayout->addWidget(searchBar);
-      cLayout->addSpacing(15);
-      
-      // Inline edit form
-      QWidget *formContainer = new QWidget();
-      formContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-      formContainer->setStyleSheet(".QWidget { background-color: #ffffff; border-radius: 10px; border: 1px solid #eee; }");
-      QVBoxLayout *outerLayout = new QVBoxLayout(formContainer);
-      outerLayout->setContentsMargins(30, 30, 30, 30);
-      
-      QWidget *formContent = new QWidget();
-      QVBoxLayout *formLayout = new QVBoxLayout(formContent);
-      formLayout->setContentsMargins(0, 0, 10, 0);
-      formLayout->setSpacing(15);
-
-      QLabel *titleLabel = new QLabel("Edit Order Details");
-      titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 25px; border: none;");
-      formLayout->addWidget(titleLabel);
-
-      QString labelStyle = getLabelStyle();
-      QString inputStyle = getInputStyle();
-
-      QWidget *wId, *wDate, *wClient, *wAddress, *wDelivery;
-      addField(formLayout, labelStyle, inputStyle, "ID:", "Enter order ID", wId, false);
-      static_cast<QLineEdit*>(wId)->setReadOnly(true);
-      addField(formLayout, labelStyle, inputStyle, "Order Date:", "", wDate, true);
-      addField(formLayout, labelStyle, inputStyle, "Client's Name:", "Enter client's name", wClient, false);
-      static_cast<QLineEdit*>(wClient)->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z \\.]*$"), page));
-      addField(formLayout, labelStyle, inputStyle, "Client's Address:", "Enter address", wAddress, false);
-      addField(formLayout, labelStyle, inputStyle, "Delivery Date:", "", wDelivery, true);
-
-      QLabel *stateLbl = new QLabel("State:");
-      stateLbl->setStyleSheet(labelStyle);
-      formLayout->addWidget(stateLbl);
-
-      QWidget *radioWidget = new QWidget();
-      QHBoxLayout *radioLayout = new QHBoxLayout(radioWidget);
-      radioLayout->setContentsMargins(0, 0, 0, 0);
-      QRadioButton *pendingRadio = new QRadioButton("Pending");
-      QRadioButton *completedRadio = new QRadioButton("Completed");
-      pendingRadio->setChecked(true);
-      pendingRadio->setStyleSheet("QRadioButton { font-size: 14px; color: #333; }");
-      completedRadio->setStyleSheet("QRadioButton { font-size: 14px; color: #333; }");
-      radioLayout->addWidget(pendingRadio);
-      radioLayout->addWidget(completedRadio);
-      radioLayout->addStretch();
-      formLayout->addWidget(radioWidget);
-
-      formLayout->addSpacing(20);
-      QPushButton *btnSubmit = new QPushButton("Update Order");
-      btnSubmit->setStyleSheet(getButtonStyle());
-      btnSubmit->setCursor(Qt::PointingHandCursor);
-      btnSubmit->setFixedHeight(45);
-      formLayout->addWidget(btnSubmit);
-      formLayout->addStretch();
-
-      QScrollArea *scrollArea = new QScrollArea();
-      scrollArea->setWidgetResizable(true);
-      scrollArea->setFrameShape(QFrame::NoFrame);
-      scrollArea->setStyleSheet("QScrollArea { background: transparent; border: none; } QWidget { background: transparent; }");
-      scrollArea->setWidget(formContent);
-      outerLayout->addWidget(scrollArea);
-
-      cLayout->addWidget(formContainer);
-
-      QObject::connect(sBtn, &QPushButton::clicked, [=]() {
-          int searchId = searchInp->text().toInt();
-          QSqlQuery query;
-          query.prepare("SELECT DATE_COMMANDE, ETAT_COMMANDE, NOM_CLIENT, ADRESSE_CLIENT, DATE_LIVRAISON FROM COMMANDE WHERE ID_COMMANDE = :id");
-          query.bindValue(":id", searchId);
-          if (query.exec() && query.next()) {
-              static_cast<QLineEdit*>(wId)->setText(QString::number(searchId));
-              static_cast<QDateEdit*>(wDate)->setDate(query.value(0).toDate());
-              QString etat = query.value(1).toString();
-              if (etat == "Completed") completedRadio->setChecked(true);
-              else pendingRadio->setChecked(true);
-              static_cast<QLineEdit*>(wClient)->setText(query.value(2).toString());
-              static_cast<QLineEdit*>(wAddress)->setText(query.value(3).toString());
-              static_cast<QDateEdit*>(wDelivery)->setDate(query.value(4).toDate());
-              QMessageBox::information(nullptr, "Found", "Order details loaded.");
-          } else {
-              QMessageBox::warning(nullptr, "Not Found", "Order ID not found.");
-          }
-      });
-
-      QObject::connect(btnSubmit, &QPushButton::clicked, [=]() {
-          int id = static_cast<QLineEdit*>(wId)->text().toInt();
-          if (id <= 0) {
-              QMessageBox::warning(nullptr, "Error", "Please search and load an order first.");
-              return;
-          }
-          QDate date = static_cast<QDateEdit*>(wDate)->date();
-          QString client = static_cast<QLineEdit*>(wClient)->text().trimmed();
-          QString address = static_cast<QLineEdit*>(wAddress)->text().trimmed();
-          QDate delivery = static_cast<QDateEdit*>(wDelivery)->date();
-          QString state = pendingRadio->isChecked() ? "Pending" : "Completed";
-
-          if (client.isEmpty()) {
-              QMessageBox::warning(nullptr, "Validation Error", "Client Name cannot be empty.");
-              return;
-          }
-          if (delivery < date) {
-              QMessageBox::warning(nullptr, "Validation Error", "Delivery date must be on or after the order date.");
-              return;
-          }
-
-          Commande c(id, date, state, client, address, delivery);
-          if (c.modifier()) {
-              QMessageBox::information(nullptr, "Success", "Order updated successfully!");
-          } else {
-              QMessageBox::critical(nullptr, "Error", "Failed to update order. Ensure ID is correct.");
-          }
-      });
     } else if (name == "Order Hub") {
       // --- Order History with Search & Sort ---
 
