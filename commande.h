@@ -11,6 +11,7 @@ class Commande
 {
 private:
     int id_commande;
+    QString reference;
     QDate date_commande;
     QString etat_commande;
     QString nom_client;
@@ -20,10 +21,11 @@ private:
 public:
     // Constructors
     Commande();
-    Commande(int, QDate, QString, QString, QString, QDate);
+    Commande(int, QString, QDate, QString, QString, QString, QDate);
 
     // Getters
     int getID() const { return id_commande; }
+    QString getReference() const { return reference; }
     QDate getDateCommande() const { return date_commande; }
     QString getEtat() const { return etat_commande; }
     QString getNomClient() const { return nom_client; }
@@ -32,6 +34,7 @@ public:
 
     // Setters
     void setID(int id) { id_commande = id; }
+    void setReference(QString ref) { reference = ref; }
     void setDateCommande(QDate date) { date_commande = date; }
     void setEtat(QString etat) { etat_commande = etat; }
     void setNomClient(QString nom) { nom_client = nom; }

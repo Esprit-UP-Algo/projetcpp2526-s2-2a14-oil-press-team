@@ -792,9 +792,12 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       QString labelStyle = getLabelStyle();
       QString inputStyle = getInputStyle();
 
-      QWidget *wId, *wDate, *wClient, *wAddress, *wDelivery;
-      addField(formLayout, labelStyle, inputStyle, "ID:", "Auto-generated", wId, false);
-      static_cast<QLineEdit*>(wId)->setReadOnly(true);
+      QWidget *wRef, *wDate, *wClient, *wAddress, *wDelivery;
+      addField(formLayout, labelStyle, inputStyle, "Reference: (e.g. AB12)", "e.g. AB12", wRef, false);
+      // Reference: exactly 2 letters then one or more digits (e.g. AB12, OP999)
+      static_cast<QLineEdit*>(wRef)->setValidator(
+          new QRegularExpressionValidator(QRegularExpression("^[A-Za-z]{0,2}[0-9]*$"), page));
+      static_cast<QLineEdit*>(wRef)->setPlaceholderText("e.g. AB12");
       addField(formLayout, labelStyle, inputStyle, "Order Date:", "", wDate, true);
       static_cast<QDateEdit*>(wDate)->setMinimumDate(QDate::currentDate());
       addField(formLayout, labelStyle, inputStyle, "Client's Name:", "Enter client's name", wClient, false);
@@ -840,14 +843,31 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       // Connect Button
       QObject::connect(btnSubmit, &QPushButton::clicked, [=]() {
           int id = 0; // ID will be auto-generated
+          QString ref = static_cast<QLineEdit*>(wRef)->text().trimmed();
           QDate date = static_cast<QDateEdit*>(wDate)->date();
           QString client = static_cast<QLineEdit*>(wClient)->text().trimmed();
           QString address = static_cast<QLineEdit*>(wAddress)->text().trimmed();
           QDate delivery = static_cast<QDateEdit*>(wDelivery)->date();
           QString state = pendingRadio->isChecked() ? "Pending" : "Completed";
 
+          // Validate Reference: must be exactly 2 letters then 1+ digits
+          QRegularExpression refRegex("^[A-Za-z]{2}[0-9]+$");
+          if (ref.isEmpty()) {
+              QMessageBox::warning(nullptr, "Validation Error", "Reference cannot be empty.");
+              return;
+          }
+          if (!refRegex.match(ref).hasMatch()) {
+              QMessageBox::warning(nullptr, "Validation Error",
+                  "Reference must start with exactly 2 letters followed by at least 1 digit.\n"
+                  "Example: AB12, OP999");
+              return;
+          }
           if (client.isEmpty()) {
-              QMessageBox::warning(nullptr, "Validation Error", "Client Name cannot be empty.");
+              QMessageBox::warning(nullptr, "Validation Error", "Client's Name cannot be empty.");
+              return;
+          }
+          if (address.isEmpty()) {
+              QMessageBox::warning(nullptr, "Validation Error", "Client's Address cannot be empty.");
               return;
           }
           if (delivery < date) {
@@ -855,9 +875,10 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
               return;
           }
 
-          Commande c(id, date, state, client, address, delivery);
+          Commande c(id, ref, date, state, client, address, delivery);
           if (c.ajouter()) {
               QMessageBox::information(nullptr, "Success", "Order added successfully!");
+              static_cast<QLineEdit*>(wRef)->clear();
               static_cast<QLineEdit*>(wClient)->clear();
               static_cast<QLineEdit*>(wAddress)->clear();
               static_cast<QDateEdit*>(wDate)->setDate(QDate::currentDate());
@@ -891,23 +912,20 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
       // Search
       QLineEdit *searchEdit = new QLineEdit();
-      searchEdit->setPlaceholderText("Search Orders...");
+      searchEdit->setPlaceholderText("Search by Client Name or Reference...");
       searchEdit->setStyleSheet(getInputStyle());
-      searchEdit->setMinimumWidth(200);
+      searchEdit->setMinimumWidth(260);
 
       // Sort
       QLabel *lblSort = new QLabel("Sort by:");
       lblSort->setStyleSheet(getLabelStyle());
-      lblSort->setSizePolicy(QSizePolicy::Fixed,
-                             QSizePolicy::Fixed); // scanning fix
+      lblSort->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 
       QComboBox *sortCombo = new QComboBox();
-      sortCombo->addItems({"Date (Newest)", "Date (Oldest)",
-                           "Amount (High-Low)", "Amount (Low-High)"});
+      sortCombo->addItems({"Date (Newest First)", "Date (Oldest First)",
+                           "Client Name (A → Z)", "Client Name (Z → A)"});
       sortCombo->setStyleSheet(getInputStyle());
-      sortCombo->setFixedWidth(180);
-
-      sortCombo->setFixedWidth(180);
+      sortCombo->setFixedWidth(200);
 
       // Print PDF Button
       QPushButton *btnPrint = new QPushButton("Print PDF");
@@ -934,7 +952,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       histLayout->addWidget(controlBar);
 
       // 2. Table
-      QStringList headers = {"ID", "Date", "State", "Client", "Address", "Delivery", "Actions"};
+      QStringList headers = {"Reference", "Date", "State", "Client", "Address", "Delivery", "Actions"};
       QTableWidget *table = new QTableWidget();
       table->setColumnCount(headers.size());
       table->setHorizontalHeaderLabels(headers);
@@ -956,8 +974,8 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
       histLayout->addWidget(table);
 
-      // Connect Print (Moved here to capture 'table' correctly)
-      QObject::connect(btnPrint, &QPushButton::clicked, [table]() {
+      // Connect Print — exports exactly what is currently visible in the table
+      QObject::connect(btnPrint, &QPushButton::clicked, [table, searchEdit]() {
         QString fileName = QFileDialog::getSaveFileName(
             table->window(), "Export Order History", QString(),
             "PDF Files (*.pdf)");
@@ -968,36 +986,42 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
         QPrinter printer(QPrinter::PrinterResolution);
         printer.setOutputFormat(QPrinter::PdfFormat);
-        printer.setPageSize(
-            QPageSize(QPageSize::A4)); // Updated for Qt6 compatibility
+        printer.setPageSize(QPageSize(QPageSize::A4));
         printer.setOutputFileName(fileName);
 
         QTextDocument doc;
-        QString html = "<h1 style='text-align:center; color:#333;'>Order "
-                       "History Report</h1>";
+        QString html = "<h1 style='text-align:center; color:#333;'>Order History Report</h1>";
         html += "<h3 style='text-align:center; color:#666;'>" +
-                QDate::currentDate().toString("dd MMMM yyyy") + "</h3><br>";
-        html +=
-            "<table border='1' cellspacing='0' cellpadding='6' width='100%' "
-            "style='border-collapse:collapse; border-color:#ccc;'>";
+                QDate::currentDate().toString("dd MMMM yyyy") + "</h3>";
 
-        // Headers
+        // Show active filter in report if search is active
+        QString activeSearch = searchEdit->text().trimmed();
+        if (!activeSearch.isEmpty()) {
+            html += "<p style='text-align:center; color:#888; font-size:12px;'>"
+                    "Filtered by: <b>" + activeSearch.toHtmlEscaped() + "</b></p>";
+        }
+        html += "<br>";
+        html += "<table border='1' cellspacing='0' cellpadding='6' width='100%' "
+                "style='border-collapse:collapse; border-color:#ccc;'>";
+
+        // Headers — skip hidden ID column (col 0 is Reference, all cols visible)
         html += "<thead style='background-color:#f2f2f2;'><tr>";
-        for (int c = 0; c < table->columnCount() - 1;
-             ++c) { // Skip 'Actions' column
-          html += "<th style='padding:8px;'>" +
-                  table->horizontalHeaderItem(c)->text() + "</th>";
+        for (int c = 0; c < table->columnCount() - 1; ++c) { // Skip 'Actions'
+          if (!table->isColumnHidden(c))
+            html += "<th style='padding:8px; text-align:left;'>" +
+                    table->horizontalHeaderItem(c)->text() + "</th>";
         }
         html += "</tr></thead>";
 
-        // Body
+        // Body — only currently visible rows
         html += "<tbody>";
         for (int r = 0; r < table->rowCount(); ++r) {
+          if (table->isRowHidden(r)) continue;
           html += "<tr>";
           for (int c = 0; c < table->columnCount() - 1; ++c) {
+            if (table->isColumnHidden(c)) continue;
             QTableWidgetItem *item = table->item(r, c);
-            html += "<td style='padding:8px;'>" + (item ? item->text() : "") +
-                    "</td>";
+            html += "<td style='padding:8px;'>" + (item ? item->text().toHtmlEscaped() : "") + "</td>";
           }
           html += "</tr>";
         }
@@ -1017,25 +1041,65 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
         QSqlQueryModel *model = c.afficher();
         if (!model) return;
 
-        QString query = searchEdit->text().toLower();
-        // Sorting might be complex to implement purely in C++ with QSqlQueryModel if we don't use QSortFilterProxyModel,
-        // For now, we will just filter visually or fetch sorted from DB. This is a simple visual filter.
+        QString query = searchEdit->text().toLower().trimmed();
+        QString sortOpt = sortCombo->currentText();
+
+        // Collect all rows first
+        struct Row {
+            QString id, ref, date, etat, client, address, livraison;
+        };
+        QVector<Row> rows;
+        for (int i = 0; i < model->rowCount(); ++i) {
+          Row row;
+          row.id       = model->record(i).value("ID_COMMANDE").toString();
+          row.ref      = model->record(i).value("REFERENCE").toString();
+          row.date     = model->record(i).value("DATE_COMMANDE").toDate().toString("yyyy-MM-dd");
+          row.etat     = model->record(i).value("ETAT_COMMANDE").toString();
+          row.client   = model->record(i).value("NOM_CLIENT").toString();
+          row.address  = model->record(i).value("ADRESSE_CLIENT").toString();
+          row.livraison= model->record(i).value("DATE_LIVRAISON").toDate().toString("yyyy-MM-dd");
+
+          // Filter: only by client name OR reference
+          if (!query.isEmpty()) {
+            bool matchClient = row.client.toLower().contains(query);
+            bool matchRef    = row.ref.toLower().contains(query);
+            if (!matchClient && !matchRef) continue;
+          }
+          rows.append(row);
+        }
+
+        // Sort
+        if (sortOpt == "Date (Newest First)") {
+          std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
+            return a.date > b.date; // descending
+          });
+        } else if (sortOpt == "Date (Oldest First)") {
+          std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
+            return a.date < b.date; // ascending
+          });
+        } else if (sortOpt == "Client Name (A \u2192 Z)") {
+          std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
+            return a.client.toLower() < b.client.toLower();
+          });
+        } else if (sortOpt == "Client Name (Z \u2192 A)") {
+          std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
+            return a.client.toLower() > b.client.toLower();
+          });
+        }
 
         table->setRowCount(0);
         int rowIdx = 0;
-        for (int i = 0; i < model->rowCount(); ++i) {
-          QString id = model->record(i).value("ID_COMMANDE").toString();
-          QString date = model->record(i).value("DATE_COMMANDE").toDate().toString("yyyy-MM-dd");
-          QString etat = model->record(i).value("ETAT_COMMANDE").toString();
-          QString client = model->record(i).value("NOM_CLIENT").toString();
-          QString address = model->record(i).value("ADRESSE_CLIENT").toString();
-          QString livraison = model->record(i).value("DATE_LIVRAISON").toDate().toString("yyyy-MM-dd");
-
-          bool match = client.toLower().contains(query) || id.contains(query) || etat.toLower().contains(query) || address.toLower().contains(query);
-          if (!match && !query.isEmpty()) continue;
+        for (const Row &row : rows) {
+          QString id       = row.id;
+          QString ref      = row.ref;
+          QString date     = row.date;
+          QString etat     = row.etat;
+          QString client   = row.client;
+          QString address  = row.address;
+          QString livraison= row.livraison;
 
           table->insertRow(rowIdx);
-          table->setItem(rowIdx, 0, new QTableWidgetItem(id));
+          table->setItem(rowIdx, 0, new QTableWidgetItem(ref));
           table->setItem(rowIdx, 1, new QTableWidgetItem(date));
           table->setItem(rowIdx, 2, new QTableWidgetItem(etat));
           table->setItem(rowIdx, 3, new QTableWidgetItem(client));
@@ -1077,7 +1141,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
           int orderId = id.toInt();
 
           // Connect Modify
-          QObject::connect(btnModify, &QPushButton::clicked, [table, orderId, id, date, etat, client, address, livraison]() {
+          QObject::connect(btnModify, &QPushButton::clicked, [table, orderId, ref, date, etat, client, address, livraison]() {
                 QDialog dlg(table->window());
                 dlg.setWindowTitle("Edit Order Details");
                 dlg.setModal(true);
@@ -1098,10 +1162,14 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                 form->setLabelAlignment(Qt::AlignLeft);
                 
                 // Fields
+                QLineEdit *refEdit = new QLineEdit(ref);
+                refEdit->setReadOnly(true);  // Reference cannot be changed after creation
                 QDateEdit *dateEdit = new QDateEdit(QDate::fromString(date, "yyyy-MM-dd"));
                 dateEdit->setDisplayFormat("yyyy-MM-dd");
                 dateEdit->setCalendarPopup(true);
+                dateEdit->setMinimumDate(QDate::currentDate().addYears(-10)); // allow past dates when editing
                 QLineEdit *clientEdit = new QLineEdit(client);
+                clientEdit->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z \\.]*$"), &dlg));
                 QLineEdit *addressEdit = new QLineEdit(address);
                 QDateEdit *livraisonEdit = new QDateEdit(QDate::fromString(livraison, "yyyy-MM-dd"));
                 livraisonEdit->setDisplayFormat("yyyy-MM-dd");
@@ -1115,7 +1183,15 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                       "border-color: #3DDC84; background-color: #ffffff; }");
                   w->setFixedHeight(35);
                 };
+                auto styleReadOnly = [&](QLineEdit *w) {
+                  w->setStyleSheet(
+                      "QLineEdit { background-color: #f0f0f0; border: 1px solid #d0d0d0; "
+                      "border-radius: 6px; padding: 6px 10px; font-size: 13px; color: #888; "
+                      "font-style: italic; }");
+                  w->setFixedHeight(35);
+                };
 
+                styleReadOnly(refEdit);
                 styleField(dateEdit);
                 styleField(clientEdit);
                 styleField(addressEdit);
@@ -1144,6 +1220,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                   form->addRow(l, w);
                 };
 
+                addRow("Reference:", refEdit);
                 addRow("Order Date:", dateEdit);
                 addRow("Client Name:", clientEdit);
                 addRow("Address:", addressEdit);
@@ -1168,12 +1245,27 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                     "#f9fafb; }");
                 mainV->addWidget(bbox);
 
-                QObject::connect(bbox, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
                 QObject::connect(bbox, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+                // Validate before accepting
+                QObject::connect(bbox, &QDialogButtonBox::accepted, [&]() {
+                    if (clientEdit->text().trimmed().isEmpty()) {
+                        QMessageBox::warning(&dlg, "Validation Error", "Client's Name cannot be empty.");
+                        return;
+                    }
+                    if (addressEdit->text().trimmed().isEmpty()) {
+                        QMessageBox::warning(&dlg, "Validation Error", "Client's Address cannot be empty.");
+                        return;
+                    }
+                    if (livraisonEdit->date() < dateEdit->date()) {
+                        QMessageBox::warning(&dlg, "Validation Error", "Delivery date must be on or after the order date.");
+                        return;
+                    }
+                    dlg.accept();
+                });
 
                 if (dlg.exec() == QDialog::Accepted) {
                     QString newState = pendingRadio->isChecked() ? "Pending" : "Completed";
-                    Commande c(orderId, dateEdit->date(), newState, clientEdit->text().trimmed(), addressEdit->text().trimmed(), livraisonEdit->date());
+                    Commande c(orderId, refEdit->text().trimmed(), dateEdit->date(), newState, clientEdit->text().trimmed(), addressEdit->text().trimmed(), livraisonEdit->date());
                     if (c.modifier()) {
                         QMessageBox::information(table->window(), "Success", "Order updated successfully!");
                         // Ideally we'd refresh the table here. In the full application, we should trigger the outer updateTable() to re-query the DB.
