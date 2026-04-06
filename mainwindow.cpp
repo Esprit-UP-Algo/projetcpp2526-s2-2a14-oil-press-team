@@ -2918,8 +2918,23 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           };
 
           QLineEdit *edName = addField("Name:", currentName);
-          QLineEdit *edType = addField("Type:", currentType);
-          QLineEdit *edStatus = addField("Status:", currentStatus);
+          edName->setMaxLength(50);
+          edName->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z0-9\\s\\-_]+$"), edName));
+          
+          mainV->addWidget(new QLabel("Type:"));
+          QComboBox *edType = new QComboBox();
+          edType->addItems({"press", "filter"});
+          edType->setCurrentText(currentType);
+          edType->setStyleSheet("QComboBox { background-color: #f9fafb; border: 1px solid #eaeaea; border-radius: 8px; padding: 10px; font-size: 14px; }");
+          mainV->addWidget(edType);
+          
+          mainV->addWidget(new QLabel("Status:"));
+          QComboBox *edStatus = new QComboBox();
+          edStatus->addItems({"Normal", "En panne", "En maintenance"});
+          edStatus->setCurrentText(currentStatus);
+          edStatus->setStyleSheet("QComboBox { background-color: #f9fafb; border: 1px solid #eaeaea; border-radius: 8px; padding: 10px; font-size: 14px; }");
+          mainV->addWidget(edStatus);
+
           QLineEdit *edHours = addField("Hours:", QString::number(currentHours));
           edHours->setValidator(new QIntValidator(0, 9999999, edHours));
           QLineEdit *edSeuil = addField("Threshold:", QString::number(currentSeuil));
@@ -2930,11 +2945,35 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           mainV->addWidget(btnSave);
 
           QObject::connect(btnSave, &QPushButton::clicked, [=, &dlg]() {
-              if (edName->text().trimmed().isEmpty() || edType->text().trimmed().isEmpty() || edHours->text().isEmpty() || edSeuil->text().isEmpty()) {
-                  QMessageBox::warning(&dlg, "Erreur de Saisie", "Veuillez remplir tous les champs obligatoires (Nom, Type, Heures, Seuil).");
+              QString nom = edName->text().trimmed();
+              QString heuresStr = edHours->text().trimmed();
+              QString seuilStr = edSeuil->text().trimmed();
+
+              if (nom.isEmpty() || heuresStr.isEmpty() || seuilStr.isEmpty()) {
+                  QMessageBox::warning(&dlg, "Erreur de Saisie", "Veuillez remplir tous les champs obligatoires (Nom, Heures, Seuil).");
                   return;
               }
-              Machine updateObj(mid, edName->text(), edType->text(), edStatus->text(), edHours->text().toInt(), edSeuil->text().toInt());
+
+              QRegularExpression nomRegex("^[a-zA-Z0-9\\s\\-_]+$");
+              if (!nomRegex.match(nom).hasMatch()) {
+                  QMessageBox::warning(&dlg, "Erreur de Saisie", "Le nom de la machine contient des caractères non autorisés.");
+                  return;
+              }
+
+              int heures = heuresStr.toInt();
+              int seuil = seuilStr.toInt();
+
+              if (heures < 0) {
+                  QMessageBox::warning(&dlg, "Erreur de Saisie", "Les heures de fonctionnement doivent être positives ou nulles.");
+                  return;
+              }
+
+              if (seuil <= 0) {
+                  QMessageBox::warning(&dlg, "Erreur de Saisie", "Le seuil de maintenance doit être strictement supérieur à 0.");
+                  return;
+              }
+
+              Machine updateObj(mid, nom, edType->currentText(), edStatus->currentText(), heures, seuil);
               if (updateObj.modifier()) {
                   dlg.accept();
                   (*refreshMachineTable)();
@@ -2950,6 +2989,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           if (QMessageBox::warning(table->window(), "Confirm Delete", "Are you sure you want to remove this machine?", QMessageBox::Yes | QMessageBox::No) == QMessageBox::Yes) {
               Machine deleteObj;
               if (deleteObj.supprimer(mid)) {
+                  QMessageBox::information(table->window(), "Succès", "La machine a été supprimée avec succès.");
                   (*refreshMachineTable)();
               } else {
                   QMessageBox::critical(table->window(), "Error", "Delete failed: " + deleteObj.getLastError());
@@ -2982,14 +3022,18 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       formLayout->addWidget(titleLabel);
 
       QLineEdit *nameInput = new QLineEdit();
-      QLineEdit *typeInput = new QLineEdit();
-      QLineEdit *statusInput = new QLineEdit();
+      nameInput->setMaxLength(50);
+      nameInput->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z0-9\\s\\-_]+$"), nameInput));
+      QComboBox *typeInput = new QComboBox();
+      typeInput->addItems({"press", "filter"});
+      QComboBox *statusInput = new QComboBox();
+      statusInput->addItems({"Normal", "En panne", "En maintenance"});
       QLineEdit *hoursInput = new QLineEdit("0");
       hoursInput->setValidator(new QIntValidator(0, 9999999, hoursInput));
       QLineEdit *seuilInput = new QLineEdit("100");
       seuilInput->setValidator(new QIntValidator(0, 9999999, seuilInput));
 
-      auto addInput = [&](const QString &txt, QLineEdit *le) {
+      auto addInput = [&](const QString &txt, QWidget *le) {
           QLabel *l = new QLabel(txt);
           l->setStyleSheet(getLabelStyle());
           l->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
@@ -3017,19 +3061,43 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       cLayout->addWidget(formContainer);
 
       QObject::connect(btnAdd, &QPushButton::clicked, [=]() {
-          if (nameInput->text().trimmed().isEmpty() || typeInput->text().trimmed().isEmpty()) {
-              QMessageBox::warning(nullptr, "Erreur de Saisie", "Les champs 'Nom' et 'Type' sont obligatoires.");
+          QString nom = nameInput->text().trimmed();
+          QString heuresStr = hoursInput->text().trimmed();
+          QString seuilStr = seuilInput->text().trimmed();
+
+          if (nom.isEmpty()) {
+              QMessageBox::warning(nullptr, "Erreur de Saisie", "Le champ 'Nom' est obligatoire.");
               return;
           }
-          if (hoursInput->text().isEmpty() || seuilInput->text().isEmpty()) {
+
+          QRegularExpression nomRegex("^[a-zA-Z0-9\\s\\-_]+$");
+          if (!nomRegex.match(nom).hasMatch()) {
+              QMessageBox::warning(nullptr, "Erreur de Saisie", "Le nom de la machine contient des caractères non autorisés.");
+              return;
+          }
+
+          if (heuresStr.isEmpty() || seuilStr.isEmpty()) {
               QMessageBox::warning(nullptr, "Erreur de Saisie", "Les heures et le seuil ne peuvent pas être vides.");
               return;
           }
 
-          Machine newM(0, nameInput->text(), typeInput->text(), statusInput->text().isEmpty() ? "Normal" : statusInput->text(), hoursInput->text().toInt(), seuilInput->text().toInt());
+          int heures = heuresStr.toInt();
+          int seuil = seuilStr.toInt();
+
+          if (heures < 0) {
+              QMessageBox::warning(nullptr, "Erreur de Saisie", "Les heures de fonctionnement doivent être positives ou nulles.");
+              return;
+          }
+
+          if (seuil <= 0) {
+              QMessageBox::warning(nullptr, "Erreur de Saisie", "Le seuil de maintenance doit être strictement supérieur à 0.");
+              return;
+          }
+
+          Machine newM(0, nom, typeInput->currentText(), statusInput->currentText(), heures, seuil);
           if (newM.ajouter()) {
               QMessageBox::information(nullptr, "Success", "Machine added with persistence!");
-              nameInput->clear(); typeInput->clear(); statusInput->clear(); hoursInput->setText("0"); seuilInput->setText("100");
+              nameInput->clear(); typeInput->setCurrentIndex(0); statusInput->setCurrentIndex(0); hoursInput->setText("0"); seuilInput->setText("100");
               
               if (refreshMachineTable) {
                   (*refreshMachineTable)();
@@ -3169,64 +3237,69 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
 
       QObject::connect(btnPrint, &QPushButton::clicked, [table]() {
           if (!table) return;
-          
-          QString strStream;
-          QTextStream out(&strStream);
-
-          const int rowCount = table->rowCount();
-          const int columnCount = table->columnCount() - 1; // Exclude Actions col
-
-          out <<  "<html>\n"
-              "<head>\n"
-              "<meta Content=\"Text/html; charset=utf-8\">\n"
-              <<  QString("<title>%1</title>\n").arg("Liste des Machines")
-              <<  "</head>\n"
-              "<body bgcolor=#ffffff link=#5000A0>\n"
-              "<h1 style=\"text-align: center; color: #2c3e50; font-family: Arial, sans-serif;\">Rapport de Maintenance - Machines</h1>\n"
-              "<p style=\"text-align: center; color: #7f8c8d;\">Généré le: " + QDateTime::currentDateTime().toString("dd/MM/yyyy hh:mm") + "</p>\n"
-              <<  "<table border=1 cellspacing=0 cellpadding=8 width=\"100%\" style=\"border-collapse: collapse; font-family: Arial, sans-serif;\">\n";
-
-          // headers
-          out << "<thead><tr bgcolor=#f0f0f0 style=\"color: #333;\">";
-          for (int column = 0; column < columnCount; column++)
-              if (!table->isColumnHidden(column))
-                  out << QString("<th style=\"border: 1px solid #ddd;\">%1</th>").arg(table->horizontalHeaderItem(column)->text());
-          out << "</tr></thead>\n<tbody>\n";
-
-          // data
-          for (int row = 0; row < rowCount; row++) {
-              out << "<tr>";
-              for (int column = 0; column < columnCount; column++) {
-                  if (!table->isColumnHidden(column)) {
-                      QString data;
-                      if(table->item(row, column)) {
-                          data = table->item(row, column)->text();
-                          if(data.isEmpty()) data = table->item(row, column)->data(Qt::DisplayRole).toString();
-                      }
-                      out << QString("<td style=\"border: 1px solid #ddd; text-align: center;\">%1</td>").arg((!data.isEmpty()) ? data : QString("&nbsp;"));
-                  }
-              }
-              out << "</tr>\n";
-          }
-          out <<  "</tbody></table>\n"
-              "</body>\n"
-              "</html>\n";
-
-          QTextDocument document;
-          document.setHtml(strStream);
 
           QString defaultName = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + "_Rapport_Machines.pdf";
           QString fileName = QFileDialog::getSaveFileName(table->window(), "Exporter en PDF", defaultName, "PDF Files (*.pdf)");
-          
           if (fileName.isEmpty()) return;
 
-          QPrinter printer(QPrinter::PrinterResolution);
+          // Build HTML
+          const int rowCount = table->rowCount();
+          const int columnCount = table->columnCount() - 1; // Exclude Actions col
+
+          QString strStream;
+          QTextStream out(&strStream);
+          out << "<html><head><meta charset='utf-8'></head>"
+              << "<body style='font-family:Arial,sans-serif;'>"
+              << "<h1 style='text-align:center;color:#2c3e50;'>Rapport Maintenance - Machines</h1>"
+              << "<p style='text-align:center;color:#7f8c8d;'>Genere le: "
+              << QDateTime::currentDateTime().toString("dd/MM/yyyy hh:mm")
+              << "</p>"
+              << "<table border='1' cellspacing='0' cellpadding='8' width='100%' "
+              << "style='border-collapse:collapse;'><thead><tr style='background:#f0f0f0;'>";
+
+          for (int c = 0; c < columnCount; ++c)
+              if (!table->isColumnHidden(c) && table->horizontalHeaderItem(c))
+                  out << "<th style='border:1px solid #ccc;'>" << table->horizontalHeaderItem(c)->text() << "</th>";
+          out << "</tr></thead><tbody>";
+
+          for (int r = 0; r < rowCount; ++r) {
+              if (table->isRowHidden(r)) continue;
+              out << "<tr>";
+              for (int c = 0; c < columnCount; ++c) {
+                  if (table->isColumnHidden(c)) continue;
+                  QString cellData;
+                  if (table->item(r, c)) {
+                      cellData = table->item(r, c)->text();
+                      if (cellData.isEmpty())
+                          cellData = table->item(r, c)->data(Qt::DisplayRole).toString();
+                  }
+                  out << "<td style='border:1px solid #ccc;text-align:center;'>" << (cellData.isEmpty() ? "&nbsp;" : cellData.toHtmlEscaped()) << "</td>";
+              }
+              out << "</tr>";
+          }
+          out << "</tbody></table></body></html>";
+
+          // Render to PDF
+          QPrinter printer(QPrinter::HighResolution);
           printer.setOutputFormat(QPrinter::PdfFormat);
           printer.setOutputFileName(fileName);
-          printer.setPageMargins(QMarginsF(10, 10, 10, 10), QPageLayout::Millimeter);
-          
+          printer.setPageSize(QPageSize(QPageSize::A4));
+          printer.setPageOrientation(QPageLayout::Landscape);
+          printer.setPageMargins(QMarginsF(15, 15, 15, 15), QPageLayout::Millimeter);
+
+          QTextDocument document;
+          document.setPageSize(printer.pageRect(QPrinter::Point).size());
+          document.setHtml(strStream);
           document.print(&printer);
-          QMessageBox::information(table->window(), "Succès", "Le PDF a été généré avec succès !\nEmplacement: " + fileName);
+
+          // Verify file was created
+          if (QFileInfo::exists(fileName)) {
+              QMessageBox::information(table->window(), "Succes",
+                  "Le PDF a ete genere avec succes !\nEmplacement: " + fileName);
+          } else {
+              QMessageBox::critical(table->window(), "Erreur",
+                  "La generation du PDF a echoue.\nVerifiez les permissions du dossier.");
+          }
       });
 
       (*refreshMachineTable)();
