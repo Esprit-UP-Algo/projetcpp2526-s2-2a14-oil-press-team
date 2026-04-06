@@ -1,8 +1,12 @@
+<<<<<<< HEAD
 QT       += core gui printsupport widgets
 <<<<<<< HEAD
 
 CONFIG += c++17
 =======
+=======
+QT       += core gui printsupport widgets network
+>>>>>>> dc185cb74cfe3fdfe3b5f96ea6f317761d8ccd9a
 QT+= sql
 CONFIG += c++17
 CONFIG += console
@@ -28,7 +32,10 @@ HEADERS += \
     EyeSaverButton.cpp \
     AuthWidgets.cpp \
     produit.cpp \
-    commande.cpp
+    commande.cpp \
+    personnel.cpp \
+    machine.cpp \
+    smtp.cpp
 
 HEADERS += \
     article.h \
@@ -38,8 +45,15 @@ HEADERS += \
     EyeSaverButton.h \
     AuthWidgets.h \
     produit.h \
+<<<<<<< HEAD
     commande.h
 >>>>>>> main
+=======
+    commande.h \
+    personnel.h \
+    machine.h \
+    smtp.h
+>>>>>>> dc185cb74cfe3fdfe3b5f96ea6f317761d8ccd9a
 
 FORMS += \
     mainwindow.ui

@@ -13,20 +13,30 @@ int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
 <<<<<<< HEAD
+<<<<<<< HEAD
     MainWindow w;
     w.show();
     return a.exec();
 }
 =======
+=======
+    a.setStyleSheet(
+        "QCalendarWidget QWidget { color: #1a1a1a; }"
+        "QCalendarWidget QWidget#qt_calendar_navigationbar { background-color: #f0f0f0; }"
+        "QCalendarWidget QTableView#qt_calendar_calendarview { background-color: #ffffff; color: #1a1a1a; selection-background-color: #3ddc84; selection-color: white; alternate-background-color: #f9f9f9; }"
+        "QCalendarWidget QAbstractItemView:enabled { color: #1a1a1a; background-color: #ffffff; }"
+        "QCalendarWidget QAbstractItemView:disabled { color: #999999; }"
+        "QCalendarWidget QToolButton { color: #1a1a1a; background-color: transparent; border: none; font-weight: bold; margin: 2px; }"
+    );
+>>>>>>> dc185cb74cfe3fdfe3b5f96ea6f317761d8ccd9a
 
     Connection c;
     bool test = c.createconnect();
 
     if(!test)
     {
-
         QMessageBox::critical(nullptr, QObject::tr("database is not open"),
-                              QObject::tr("connection failed.\nClick Cancel to exit."),
+                              QObject::tr("connection failed.\nError: ") + c.getLastError() + QObject::tr("\nClick Cancel to exit."),
                               QMessageBox::Cancel);
         return 0;
     }

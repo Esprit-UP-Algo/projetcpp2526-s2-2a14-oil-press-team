@@ -4,24 +4,29 @@
 #include <QSqlQuery>
 #include <QSqlQueryModel>
 #include <QString>
+#include <QDate>
 
 class Article {
 public:
   // Constructors
   Article();
-  Article(int id, QString nom, int quantite, int seuilMinimal);
+  Article(int id, QString nom, int quantite, QString unite, int prixUnitaire, QDate dateAchat);
 
   // Getters
   int getId() const;
   QString getNom() const;
   int getQuantite() const;
-  int getSeuilMinimal() const;
+  QString getUnite() const;
+  int getPrixUnitaire() const;
+  QDate getDateAchat() const;
 
   // Setters
   void setId(int id);
   void setNom(const QString &nom);
   void setQuantite(int quantite);
-  void setSeuilMinimal(int seuil);
+  void setUnite(const QString &unite);
+  void setPrixUnitaire(int prix);
+  void setDateAchat(const QDate &date);
 
   // CRUD
   bool ajouter();
@@ -34,7 +39,9 @@ private:
   int id;
   QString nom;
   int quantite;
-  int seuilMinimal;
+  QString unite;
+  int prixUnitaire;
+  QDate dateAchat;
   QString lastError;
 };
 

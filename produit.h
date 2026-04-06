@@ -10,29 +10,29 @@ class Produit {
 public:
   // Constructors
   Produit();
-  Produit(int idProduit, QString idContenair, QDate datePress, double quantite,
-          QString ref, double viscosite, QString couleur, QString test, int idMachine);
+  Produit(int idContenair, QDate datePress, int quantite, QString ref, 
+          QString viscosite, QString couleur, QString test, int capacite, int idMachine);
 
   // Getters
-  int getIdProduit() const;
-  QString getIdContenair() const;
+  int getIdContenair() const;
   QDate getDatePress() const;
-  double getQuantite() const;
+  int getQuantite() const;
   QString getRef() const;
-  double getViscosite() const;
+  QString getViscosite() const;
   QString getCouleur() const;
   QString getTest() const;
+  int getCapacite() const;
   int getIdMachine() const;
 
   // Setters
-  void setIdProduit(int id);
-  void setIdContenair(QString id);
+  void setIdContenair(int id);
   void setDatePress(QDate date);
-  void setQuantite(double val);
+  void setQuantite(int val);
   void setRef(QString val);
-  void setViscosite(double val);
+  void setViscosite(QString val);
   void setCouleur(QString val);
   void setTest(QString val);
+  void setCapacite(int val);
   void setIdMachine(int id);
 
   // CRUD
@@ -43,14 +43,14 @@ public:
   QString getLastError() const;
 
 private:
-  int idProduit;
-  QString idContenair;
+  int idContenair;
   QDate datePress;
-  double quantite;
+  int quantite;
   QString ref;
-  double viscosite;
+  QString viscosite;
   QString couleur;
   QString test;
+  int capacite;
   int idMachine;
   QString lastError;
 };

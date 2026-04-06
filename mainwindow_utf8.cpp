@@ -1,29 +1,4 @@
-#include "mainwindow.h"
-<<<<<<< HEAD
-#include <QWidget>
-#include <QHBoxLayout>
-#include <QVBoxLayout>
-#include <QGridLayout>
-#include <QPushButton>
-#include <QLabel>
-#include <QStackedWidget>
-#include <QLineEdit>
-#include <QLinearGradient>
-#include <QPalette>
-#include <QPixmap>
-#include <QTableWidget>
-#include <QHeaderView>
-#include <QMessageBox>
-#include <QDate>
-#include <QDate>
-#include <QDateTime>
-#include <QScrollArea>
-#include <QPrinter>
-#include <QPainter>
-#include <QFileDialog>
-#include <QDir>
-#include <QFileInfo>
-=======
+﻿#include "mainwindow.h"
 #include "AuthWidgets.h"
 #include "EyeSaverButton.h"
 #include "article.h"
@@ -32,7 +7,6 @@
 #include "produit.h"
 #include "personnel.h"
 #include "machine.h"
-#include "smtp.h"
 #include <functional>
 #include <QComboBox>
 #include <QDate>
@@ -43,23 +17,9 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
-#include <QIntValidator>
 #include <QRadioButton>
 #include <QGridLayout>
 #include <QHBoxLayout>
-#include <QPrinter>
-#include <QNetworkAccessManager>
-#include <QNetworkRequest>
-#include <QNetworkReply>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonArray>
-#include <QUrl>
-#include <QPrintDialog>
-#include <QRegularExpressionValidator>
-#include <QRegularExpression>
-#include <QTextDocument>
-#include <QTextStream>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
@@ -173,21 +133,21 @@ QWidget *MainWindow::createTitleBar() {
   layout->addStretch();
 
   // Buttons on the RIGHT - Opposite size (Rectangular 45x35)
-  QPushButton *minBtn = new QPushButton("−");
+  QPushButton *minBtn = new QPushButton("âˆ’");
   minBtn->setFixedSize(45, 35);
   minBtn->setCursor(Qt::PointingHandCursor);
   minBtn->setStyleSheet("QPushButton { background: transparent; border: none; "
                         "color: #999; font-size: 16px; } QPushButton:hover { "
                         "background-color: #333; color: white; }");
 
-  QPushButton *maxBtn = new QPushButton("▢");
+  QPushButton *maxBtn = new QPushButton("â–¢");
   maxBtn->setFixedSize(45, 35);
   maxBtn->setCursor(Qt::PointingHandCursor);
   maxBtn->setStyleSheet("QPushButton { background: transparent; border: none; "
                         "color: #999; font-size: 14px; } QPushButton:hover { "
                         "background-color: #333; color: white; }");
 
-  QPushButton *closeBtn = new QPushButton("✕");
+  QPushButton *closeBtn = new QPushButton("âœ•");
   closeBtn->setFixedSize(45, 35);
   closeBtn->setCursor(Qt::PointingHandCursor);
   closeBtn->setStyleSheet(
@@ -360,94 +320,25 @@ private:
   QString m_title;
   QList<BarData> m_bars;
 };
->>>>>>> main
 
 // --- Style Helpers ---
 
 static QString getLabelStyle() {
-<<<<<<< HEAD
-<<<<<<< HEAD
-    return "font-size: 14px; font-weight: 700; color: #333; margin-top: 10px; margin-bottom: 6px;";
-}
-
-static QString getInputStyle() {
-    return "QLineEdit {"
-           "background-color: #fcfcfc;"
-           "border: 1px solid #e0e0e0;"
-           "border-radius: 8px;"
-           "padding: 10px 14px;"
-           "font-size: 14px;"
-           "color: #333;"
-           "min-height: 45px;" /* Fix for squashed inputs */
-           "}"
-           "QLineEdit:focus {"
-           "border: 2px solid #3DDC84;"
-           "background-color: #ffffff;"
-           "outline: none;"
-           "}";
-}
-
-static QString getButtonStyle() {
-    return "QPushButton {"
-           "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3DDC84, stop:1 #2DB66F);"
-           "color: #FFFFFF;"
-           "border: none;"
-           "border-radius: 8px;"
-           "padding: 12px 24px;"
-           "font-size: 14px;"
-           "font-weight: 700;"
-           "} "
-           "QPushButton:hover {"
-           "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4EED95, stop:1 #3DDC84);"
-           "margin-top: -1px;" // Subtle lift effect
-           "} "
-           "QPushButton:pressed {"
-           "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2DB66F, stop:1 #228B5A);"
-           "margin-top: 1px;"
-           "}";
-}
-
-static QString getTabButtonStyle() {
-    return "QPushButton {"
-           "background-color: #ffffff;"
-           "color: #555;"
-           "border: 1px solid #ddd;"
-           "border-radius: 6px;"
-           "padding: 8px 16px;"
-           "font-size: 13px;"
-           "font-weight: 600;"
-           "}"
-           "QPushButton:checked { background-color: #e6f9ef; color: #3DDC84; border-color: #3DDC84; }"
-           "QPushButton:hover { border-color: #bbb; color: #333; }";
-}
-
-static QString getCardStyle() {
-    return "QWidget {"
-           "background-color: #ffffff;"
-           "border: 1px solid #eaeaea;"
-           "border-radius: 12px;"
-           "border-bottom: 2px solid #e0e0e0;"
-           "}";
-=======
   return "font-size: 14px; font-weight: 700; color: #333; margin-top: 10px; "
          "margin-bottom: 6px;";
-=======
-  return "font-size: 14px; font-weight: 700; color: #333; margin-top: 5px; "
-         "margin-bottom: 3px;";
->>>>>>> dc185cb74cfe3fdfe3b5f96ea6f317761d8ccd9a
 }
 
 static QString getInputStyle() {
-  return "QLineEdit, QDateEdit, QComboBox {"
+  return "QLineEdit {"
          "background-color: #fcfcfc;"
          "border: 1px solid #e0e0e0;"
-         "border-radius: 6px;"
-         "padding: 6px 10px;"
-         "font-size: 13px;"
+         "border-radius: 8px;"
+         "padding: 10px 14px;"
+         "font-size: 14px;"
          "color: #333;"
-         "min-height: 35px;" /* Fix for squashed inputs */
+         "min-height: 45px;" /* Fix for squashed inputs */
          "}"
-         "QLineEdit:focus, QDateEdit:focus, QComboBox:focus {"
+         "QLineEdit:focus {"
          "border: 2px solid #3DDC84;"
          "background-color: #ffffff;"
          "outline: none;"
@@ -499,56 +390,10 @@ static QString getCardStyle() {
          "border-radius: 12px;"
          "border-bottom: 2px solid #e0e0e0;"
          "}";
->>>>>>> main
 }
 
 // --- Component Helpers ---
 
-<<<<<<< HEAD
-static QWidget* createStatCard(const QString &title, const QString &value, const QString &change, const QString &color) {
-    QWidget *card = new QWidget();
-    card->setStyleSheet(
-        "QWidget { background-color: #ffffff; border-radius: 12px; border: 1px solid #f0f0f0; }"
-        "QLabel { border: none; background: transparent; }"
-    );
-    card->setMinimumHeight(100);
-
-    QVBoxLayout *layout = new QVBoxLayout(card);
-    layout->setContentsMargins(20, 20, 20, 20);
-    
-    QLabel *lblTitle = new QLabel(title);
-    lblTitle->setStyleSheet("font-size: 13px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;");
-    
-    QLabel *lblValue = new QLabel(value);
-    lblValue->setStyleSheet("font-size: 28px; color: #1a1a1a; font-weight: 800; margin-top: 5px;");
-    
-    QLabel *lblChange = new QLabel(change);
-    lblChange->setStyleSheet("font-size: 12px; color: " + color + "; font-weight: 700; margin-top: 5px;");
-
-    layout->addWidget(lblTitle);
-    layout->addWidget(lblValue);
-    layout->addWidget(lblChange);
-    layout->addStretch();
-    
-    // Add a colored bottom strip
-    QWidget *strip = new QWidget();
-    strip->setFixedHeight(4);
-    strip->setStyleSheet(QString("background-color: %1; border-radius: 2px;").arg(color));
-    layout->addWidget(strip);
-
-    return card;
-}
-
-static QWidget* createStyledForm(const QString &title, const QList<QPair<QString, QString>> &fields, const QString &submitText, int spacing = 15) {
-    QWidget *formContainer = new QWidget();
-    formContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    formContainer->setStyleSheet(".QWidget { background-color: #ffffff; border-radius: 10px; border: 1px solid #eee; }");
-    
-    QVBoxLayout *outerLayout = new QVBoxLayout(formContainer);
-    outerLayout->setContentsMargins(30, 30, 30, 30);
-    
-    // --- Scroll Area Setup ---
-=======
 static QWidget *createStatCard(const QString &title, const QString &value,
                                const QString &change, const QString &color) {
   QWidget *card = new QWidget();
@@ -588,187 +433,6 @@ static QWidget *createStatCard(const QString &title, const QString &value,
 }
 
 
-<<<<<<< HEAD
-  if (!title.isEmpty()) {
-    QLabel *titleLabel = new QLabel(title);
-    titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: "
-                              "#1a1a1a; margin-bottom: 25px; border: none;");
-    layout->addWidget(titleLabel);
-  }
-
-  QString labelStyle = getLabelStyle();
-  QString inputStyle = getInputStyle();
-
-  for (const auto &field : fields) {
-    QLabel *lbl = new QLabel(field.first);
-    lbl->setStyleSheet(labelStyle);
-    QLineEdit *input = new QLineEdit();
-    input->setStyleSheet(inputStyle);
-    input->setPlaceholderText(field.second);
-
-    layout->addWidget(lbl);
-    layout->addWidget(input);
-  }
-
-  if (!submitText.isEmpty()) {
-    layout->addSpacing(20);
-    QPushButton *btnSubmit = new QPushButton(submitText);
-    btnSubmit->setStyleSheet(getButtonStyle());
-    btnSubmit->setCursor(Qt::PointingHandCursor);
-    btnSubmit->setFixedHeight(45);
-    layout->addWidget(btnSubmit);
-  }
-
-  layout->addStretch();
-
-  // 2. Create container
-  QWidget *formContainer = new QWidget();
-  formContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-  formContainer->setStyleSheet(
-      ".QWidget { background-color: #ffffff; border-radius: 10px; border: 1px "
-      "solid #eee; }");
-
-  QVBoxLayout *outerLayout = new QVBoxLayout(formContainer);
-  outerLayout->setContentsMargins(30, 30, 30, 30);
-
-  if (useScroll) {
->>>>>>> main
-    QScrollArea *scrollArea = new QScrollArea();
-    scrollArea->setWidgetResizable(true);
-    scrollArea->setFrameShape(QFrame::NoFrame);
-    scrollArea->setStyleSheet(
-        "QScrollArea { background: transparent; border: none; }"
-        "QWidget { background: transparent; }"
-<<<<<<< HEAD
-        "QScrollBar:vertical { border: none; background: #f0f0f0; width: 10px; margin: 0px 0px 0px 0px; border-radius: 5px; }"
-        "QScrollBar::handle:vertical { background: #cdcdcd; min-height: 20px; border-radius: 5px; }"
-        "QScrollBar::handle:vertical:hover { background: #3DDC84; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }"
-        "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }"
-    );
-
-    QWidget *formContent = new QWidget();
-    QVBoxLayout *layout = new QVBoxLayout(formContent);
-    layout->setContentsMargins(0, 0, 10, 0); // Right padding for scrollbar
-    layout->setSpacing(spacing); 
-
-    if (!title.isEmpty()) {
-        QLabel *titleLabel = new QLabel(title);
-        titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 25px; border: none;");
-        layout->addWidget(titleLabel);
-    }
-
-    QString labelStyle = getLabelStyle();
-    QString inputStyle = getInputStyle();
-
-    for (const auto &field : fields) {
-        QLabel *lbl = new QLabel(field.first);
-        lbl->setStyleSheet(labelStyle);
-        QLineEdit *input = new QLineEdit();
-        input->setStyleSheet(inputStyle);
-        input->setPlaceholderText(field.second);
-        
-        layout->addWidget(lbl);
-        layout->addWidget(input);
-    }
-
-    if (!submitText.isEmpty()) {
-        layout->addSpacing(20);
-        QPushButton *btnSubmit = new QPushButton(submitText);
-        btnSubmit->setStyleSheet(getButtonStyle());
-        btnSubmit->setCursor(Qt::PointingHandCursor);
-        btnSubmit->setFixedHeight(45);
-        layout->addWidget(btnSubmit);
-    }
-
-    layout->addStretch();
-    
-    scrollArea->setWidget(formContent);
-    outerLayout->addWidget(scrollArea);
-
-    return formContainer;
-}
-
-static QWidget* createStyledTable(const QString &title, const QStringList &headers, const QVector<QStringList> &data, bool showActions = false) {
-    QWidget *tableWidget = new QWidget();
-    QVBoxLayout *layout = new QVBoxLayout(tableWidget);
-    layout->setContentsMargins(0, 0, 0, 0);
-
-    if (!title.isEmpty()) {
-        QLabel *titleLabel = new QLabel(title);
-        titleLabel->setStyleSheet("font-size: 20px; font-weight: 700; color: #1a1a1a; margin-bottom: 15px;");
-        layout->addWidget(titleLabel);
-    }
-
-    QStringList finalHeaders = headers;
-    if (showActions) {
-        finalHeaders << "Actions";
-    }
-
-    QTableWidget *table = new QTableWidget();
-    table->setColumnCount(finalHeaders.size());
-    table->setHorizontalHeaderLabels(finalHeaders);
-    table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    table->verticalHeader()->setVisible(false);
-    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    table->setSelectionBehavior(QAbstractItemView::SelectRows);
-    table->setAlternatingRowColors(true);
-    table->setStyleSheet(
-        "QTableWidget { border: 1px solid #eaeaea; background-color: #ffffff; gridline-color: transparent; border-radius: 8px; alternate-background-color: #f9fafb; }"
-        "QHeaderView::section { background-color: #ffffff; padding: 12px; border: none; border-bottom: 2px solid #f0f0f0; font-weight: 700; color: #666; text-transform: uppercase; font-size: 12px; }"
-        "QTableWidget::item { padding: 12px; border-bottom: 1px solid #f5f5f5; color: #333; }"
-        "QTableWidget::item:selected { background-color: #e6f9ef; color: #1a1a1a; }"
-    );
-
-    table->setRowCount(data.size());
-    for (int i = 0; i < data.size(); ++i) {
-        for (int j = 0; j < data[i].size(); ++j) {
-            table->setItem(i, j, new QTableWidgetItem(data[i][j]));
-        }
-        
-        if (showActions) {
-            QWidget *actionWidget = new QWidget();
-            QHBoxLayout *actionLayout = new QHBoxLayout(actionWidget);
-            actionLayout->setContentsMargins(4, 4, 4, 4);
-            actionLayout->setSpacing(8);
-            
-            
-            QPushButton *btnDelete = new QPushButton("Delete");
-            btnDelete->setCursor(Qt::PointingHandCursor);
-            btnDelete->setStyleSheet("QPushButton { background-color: #e74c3c; color: white; border: none; border-radius: 4px; padding: 6px 10px; font-size: 11px; font-weight: bold; } QPushButton:hover { background-color: #c0392b; }");
-
-            // actionLayout->addWidget(btnEdit); // Removed Edit button as requested
-            actionLayout->addWidget(btnDelete);
-            actionLayout->addStretch();
-            
-            table->setCellWidget(i, finalHeaders.size() - 1, actionWidget);
-        }
-    }
-
-    layout->addWidget(table);
-    return tableWidget;
-=======
-        "QScrollBar:vertical { border: none; background: #f0f0f0; width: 10px; "
-        "margin: 0px 0px 0px 0px; border-radius: 5px; }"
-        "QScrollBar::handle:vertical { background: #cdcdcd; min-height: 20px; "
-        "border-radius: 5px; }"
-        "QScrollBar::handle:vertical:hover { background: #3DDC84; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { "
-        "height: 0px; }"
-        "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { "
-        "background: none; }");
-    scrollArea->setWidget(formContent);
-    outerLayout->addWidget(scrollArea);
-  } else {
-    formContent->setAttribute(Qt::WA_TranslucentBackground);
-    formContent->setStyleSheet("background: transparent;");
-    outerLayout->addWidget(formContent);
-  }
-
-  return formContainer;
-}
-=======
->>>>>>> dc185cb74cfe3fdfe3b5f96ea6f317761d8ccd9a
 
 static QWidget *
 createStyledTable(const QString &title, const QStringList &headers,
@@ -1032,645 +696,10 @@ createStyledTable(const QString &title, const QStringList &headers,
 
   layout->addWidget(table);
   return tableWidget;
->>>>>>> main
 }
 
 // --- Specific Page Factories ---
 
-<<<<<<< HEAD
-static void setupTabNavigation(const QList<QPushButton*> &buttons, QStackedWidget *stack) {
-    for (int i = 0; i < buttons.size(); ++i) {
-        QPushButton* btn = buttons[i];
-        QObject::connect(btn, &QPushButton::clicked, [=]() {
-            stack->setCurrentIndex(i);
-            for(auto *b : buttons) b->setChecked(b == btn);
-        });
-    }
-}
-
-static QWidget* createClientPage(QStackedWidget* &outNestedStack) {
-    QWidget *page = new QWidget();
-    QVBoxLayout *layout = new QVBoxLayout(page);
-    layout->setContentsMargins(40, 40, 40, 40);
-    layout->setSpacing(25);
-    
-    layout->addWidget(new QLabel("Order Management")); 
-    
-    QWidget *actionBar = new QWidget();
-    QHBoxLayout *actionLayout = new QHBoxLayout(actionBar);
-    actionLayout->setSpacing(12);
-
-    outNestedStack = new QStackedWidget();
-    QStringList tabNames = {"Add Order", "Edit Order", "Order History", "Statistics"};
-    QList<QPushButton*> tabButtons;
-
-    for (const auto &name : tabNames) {
-        QPushButton *btn = new QPushButton(name);
-        btn->setCheckable(true);
-        btn->setStyleSheet(getTabButtonStyle());
-        actionLayout->addWidget(btn);
-        tabButtons.append(btn);
-
-        QWidget *content = new QWidget();
-        QVBoxLayout *cLayout = new QVBoxLayout(content);
-        
-        if (name == "Add Order") {
-             cLayout->addWidget(createStyledForm("New Order Registration", {
-                {"Company Name:", "Enter company name"},
-                {"Contact Person:", "Enter contact person name"},
-                {"Email Address:", "email@example.com"},
-                {"Phone Number:", "+1 (555) ..."},
-                {"Address:", "Street, City, Zip"}
-            }, "Register Client"));
-        } else if (name == "Edit Order") {
-            QWidget *searchBar = new QWidget();
-            searchBar->setStyleSheet(getCardStyle());
-            QHBoxLayout *sLayout = new QHBoxLayout(searchBar);
-            QLineEdit *searchInp = new QLineEdit();
-            searchInp->setStyleSheet("border: none; font-size: 14px;");
-            searchInp->setPlaceholderText("Search Client ID or Name...");
-            QPushButton *sBtn = new QPushButton("Search");
-            sBtn->setStyleSheet(getButtonStyle());
-            sBtn->setFixedWidth(100);
-            sLayout->addWidget(searchInp);
-            sLayout->addWidget(sBtn);
-            cLayout->addWidget(searchBar);
-            cLayout->addSpacing(15);
-            cLayout->addWidget(createStyledForm("Edit Details", {{"Company Name:", "Acme Corp"}, {"Email:", "contact@acme.com"}}, "Update Profile"));
-        } else if (name == "Order History") {
-            cLayout->addWidget(createStyledTable("Client Interaction History", {"Date", "Client", "Action", "Notes"}, {
-                {"2023-10-25", "Acme Corp", "Meeting", "Discussed Q4 Renewal"},
-                {"2023-10-24", "Globex Inc", "Support", "Fixed login API issue"},
-                {"2023-10-22", "Soylent Corp", "Order", "Placed bulk order #992"},
-                {"2023-10-20", "Umbrella Corp", "Call", "Security audit check"}
-            }, true)); // Actions enabled
-        } else {
-             // Container for statistics page to hold button + table
-             QWidget *statsPageWidget = new QWidget();
-             QVBoxLayout *statsPageLayout = new QVBoxLayout(statsPageWidget);
-             statsPageLayout->setContentsMargins(0,0,0,0);
-             statsPageLayout->setSpacing(10);
-
-             // Add "PRINT PDF" button aligned to right (Inactive/Non-functional as requested)
-             QPushButton *btnPrint = new QPushButton("PRINT PDF");
-             btnPrint->setStyleSheet(getButtonStyle());
-             // btnPrint->setCursor(Qt::PointingHandCursor); // Removed to signify inactivity if needed, but keeping style uniform
-             btnPrint->setFixedWidth(150);
-             // btnPrint->setEnabled(false); // Can uncomment if "inactif" meant disabled. For now, just non-functional.
-             
-             statsPageLayout->addWidget(btnPrint, 0, Qt::AlignRight);
-
-             QWidget *tableWidget = createStyledTable("Statistics", {"Period", "New Clients", "Churn Rate", "Revenue"}, {
-                 {"Q3 2023", "45", "2.1%", "$120,000"},
-                 {"Q2 2023", "52", "1.5%", "$145,000"}
-             });
-             
-             statsPageLayout->addWidget(tableWidget);
-             cLayout->addWidget(statsPageWidget);
-        }
-        cLayout->addStretch();
-        outNestedStack->addWidget(content);
-    }
-    
-    actionLayout->addStretch();
-    setupTabNavigation(tabButtons, outNestedStack);
-    tabButtons.first()->setChecked(true); // Default
-
-    layout->addWidget(actionBar);
-    layout->addWidget(outNestedStack);
-    return page;
-}
-
-static QWidget* createFinancePage(QStackedWidget* &outNestedStack) {
-    QWidget *page = new QWidget();
-    QVBoxLayout *layout = new QVBoxLayout(page);
-    layout->setContentsMargins(40, 40, 40, 40);
-    layout->setSpacing(25);
-    layout->addWidget(new QLabel("Financial Management"));
-
-    QWidget *actionBar = new QWidget();
-    QHBoxLayout *actionLayout = new QHBoxLayout(actionBar);
-    actionLayout->setSpacing(12);
-
-    outNestedStack = new QStackedWidget();
-    QStringList tabNames = {"Create Invoice", "View Transactions", "Expense Tracking", "Financial Reports"};
-    QList<QPushButton*> tabButtons;
-
-    for (const auto &name : tabNames) {
-        QPushButton *btn = new QPushButton(name);
-        btn->setCheckable(true);
-        btn->setStyleSheet(getTabButtonStyle());
-        actionLayout->addWidget(btn);
-        tabButtons.append(btn);
-
-        QWidget *content = new QWidget();
-        QVBoxLayout *cLayout = new QVBoxLayout(content);
-        
-        if (name == "Create Invoice") {
-             cLayout->addWidget(createStyledForm("Invoice Creation Form", {{"Customer Name:", "Enter customer name"}, {"Amount:", "0.00"}, {"Date:", "YYYY-MM-DD"}}, "Submit Invoice"));
-        } else if (name == "View Transactions") {
-             cLayout->addWidget(createStyledTable("Recent Transactions", {"ID", "Date", "Description", "Amount", "Status"}, {
-                 {"TRX-1024", "2023-10-25", "Office Supplies", "$150.00", "Completed"},
-                 {"TRX-1023", "2023-10-24", "Client Payment - Acme", "$1,200.00", "Completed"},
-                 {"TRX-1022", "2023-10-24", "Server Hosting", "$340.50", "Pending"}
-             }, true));
-        } else if (name == "Expense Tracking") {
-             cLayout->addWidget(createStyledTable("Expense Log", {"Date", "Category", "Description", "Amount"}, {
-                 {"2023-10-25", "Travel", "Flight to NY Conference", "$450.00"},
-                 {"2023-10-24", "Meals", "Team Lunch", "$125.00"}
-             }, true));
-        } else {
-             cLayout->addWidget(createStyledTable("Financial Summary (YTD)", {"Metric", "Value", "Change"}, {
-                 {"Total Revenue", "$1,250,500", "+15%"},
-                 {"Total Expenses", "$850,000", "+5%"}
-             }));
-        }
-        cLayout->addStretch();
-        outNestedStack->addWidget(content);
-    }
-    
-    actionLayout->addStretch();
-    setupTabNavigation(tabButtons, outNestedStack);
-    tabButtons.first()->setChecked(true);
-
-    layout->addWidget(actionBar);
-    layout->addWidget(outNestedStack);
-    return page;
-}
-
-static QWidget* createInventoryPage(QStackedWidget* &outNestedStack) {
-    QWidget *page = new QWidget();
-    QVBoxLayout *layout = new QVBoxLayout(page);
-    layout->setContentsMargins(40, 40, 40, 40);
-    layout->setSpacing(25);
-    layout->addWidget(new QLabel("Inventory Management"));
-
-    QWidget *actionBar = new QWidget();
-    QHBoxLayout *actionLayout = new QHBoxLayout(actionBar);
-    actionLayout->setSpacing(12);
-
-    outNestedStack = new QStackedWidget();
-    QStringList tabNames = {"Add Stock Item", "Update Stock Levels", "Supplier Management", "Inventory Reports"};
-    QList<QPushButton*> tabButtons;
-
-    for (const auto &name : tabNames) {
-        QPushButton *btn = new QPushButton(name);
-        btn->setCheckable(true);
-        btn->setStyleSheet(getTabButtonStyle());
-        actionLayout->addWidget(btn);
-        tabButtons.append(btn);
-
-        QWidget *content = new QWidget();
-        QVBoxLayout *cLayout = new QVBoxLayout(content);
-        
-        if (name == "Add Stock Item") {
-             cLayout->addWidget(createStyledForm("Add New Inventory Item", {{"Item Name:", "Widget A"}, {"SKU:", "WGT-001"}}, "Add Item"));
-        } else if (name == "Update Stock Levels") {
-             cLayout->addWidget(createStyledForm("Adjust Stock Quantity", {{"SKU / Item ID:", "Scan or type SKU"}, {"Quantity:", "0"}}, "Update Stock"));
-        } else if (name == "Supplier Management") {
-             cLayout->addWidget(createStyledTable("Supplier Directory", {"Supplier Name", "Contact", "Phone", "Rating"}, {
-                 {"Alpha Supplies", "Alice Johnson", "(555) 123-4567", "5/5"},
-                 {"Beta Logistics", "Bob Smith", "(555) 987-6543", "4/5"}
-             }, true));
-        } else {
-             cLayout->addWidget(createStyledTable("Low Stock Alert", {"Item Name", "SKU", "Current Qty", "Status"}, {
-                 {"Printer Paper", "OFF-001", "5", "CRITICAL"},
-                 {"HDMI Cables", "CBL-202", "12", "LOW"}
-             }));
-        }
-        cLayout->addStretch();
-        outNestedStack->addWidget(content);
-    }
-    
-    actionLayout->addStretch();
-    setupTabNavigation(tabButtons, outNestedStack);
-    tabButtons.first()->setChecked(true);
-
-    layout->addWidget(actionBar);
-    layout->addWidget(outNestedStack);
-    return page;
-}
-
-static QWidget* createMaintenancePage(QStackedWidget* &outNestedStack) {
-    QWidget *page = new QWidget();
-    QVBoxLayout *layout = new QVBoxLayout(page);
-    layout->setContentsMargins(40, 40, 40, 40);
-    layout->setSpacing(25);
-    layout->addWidget(new QLabel("Maintenance Management"));
-
-    QWidget *actionBar = new QWidget();
-    QHBoxLayout *actionLayout = new QHBoxLayout(actionBar);
-    actionLayout->setSpacing(12);
-
-    outNestedStack = new QStackedWidget();
-    QStringList tabNames = {"Schedule Maintenance", "Work Orders", "Equipment Status", "Maintenance Logs"};
-    QList<QPushButton*> tabButtons;
-
-    for (const auto &name : tabNames) {
-        QPushButton *btn = new QPushButton(name);
-        btn->setCheckable(true);
-        btn->setStyleSheet(getTabButtonStyle());
-        actionLayout->addWidget(btn);
-        tabButtons.append(btn);
-
-        QWidget *content = new QWidget();
-        QVBoxLayout *cLayout = new QVBoxLayout(content);
-        
-        if (name == "Schedule Maintenance") {
-             cLayout->addWidget(createStyledForm("Schedule Maintenance Task", {{"Equipment Name:", "Conveyor Belt A"}, {"Scheduled Date:", "YYYY-MM-DD"}}, "Schedule Task"));
-        } else if (name == "Work Orders") {
-             cLayout->addWidget(createStyledTable("Active Work Orders", {"Order ID", "Equipment", "Issue", "Status"}, {
-                 {"WO-101", "Hydraulic Press", "Oil Leak", "In Progress"},
-                 {"WO-102", "Forklift 3", "Battery Replace", "Pending"}
-             }, true));
-        } else if (name == "Equipment Status") {
-             cLayout->addWidget(createStyledTable("Equipment Status Overview", {"Equipment ID", "Name", "Location", "Status"}, {
-                 {"EQ-001", "CNC Machine", "Floor 1", "Operational"},
-                 {"EQ-002", "Lathe A", "Floor 1", "Maintenance"}
-             }, true));
-        } else {
-             cLayout->addWidget(createStyledTable("Historical Maintenance Logs", {"Date", "Equipment", "Action", "Result"}, {
-                 {"2023-09-01", "EQ-001", "Belt Replacement", "Fixed"}
-             }, true));
-        }
-        cLayout->addStretch();
-        outNestedStack->addWidget(content);
-    }
-    
-    actionLayout->addStretch();
-    setupTabNavigation(tabButtons, outNestedStack);
-    tabButtons.first()->setChecked(true);
-
-    layout->addWidget(actionBar);
-    layout->addWidget(outNestedStack);
-    return page;
-}
-
-static QWidget* createProductPage(QStackedWidget* &outNestedStack) {
-    QWidget *page = new QWidget();
-    QVBoxLayout *layout = new QVBoxLayout(page);
-    layout->setContentsMargins(40, 40, 40, 40);
-    layout->setSpacing(25);
-    layout->addWidget(new QLabel("Product Management"));
-
-    QWidget *actionBar = new QWidget();
-    QHBoxLayout *actionLayout = new QHBoxLayout(actionBar);
-    actionLayout->setSpacing(12);
-
-    outNestedStack = new QStackedWidget();
-    QStringList tabNames = {"Product List", "Add Item", "Remove Item"};
-    QList<QPushButton*> tabButtons;
-
-    for (const auto &name : tabNames) {
-        QPushButton *btn = new QPushButton(name);
-        btn->setCheckable(true);
-        btn->setStyleSheet(getTabButtonStyle());
-        actionLayout->addWidget(btn);
-        tabButtons.append(btn);
-
-        QWidget *content = new QWidget();
-        QVBoxLayout *cLayout = new QVBoxLayout(content);
-        
-        if (name == "Product List") {
-             // Container for list page to hold button + table
-             QWidget *listPageWidget = new QWidget();
-             QVBoxLayout *listPageLayout = new QVBoxLayout(listPageWidget);
-             listPageLayout->setContentsMargins(0,0,0,0);
-             listPageLayout->setSpacing(10);
-
-             // Add "PRINT PDF" button aligned to right
-             QPushButton *btnPrint = new QPushButton("PRINT PDF");
-             btnPrint->setStyleSheet(getButtonStyle());
-             btnPrint->setCursor(Qt::PointingHandCursor);
-             btnPrint->setFixedWidth(150);
-             listPageLayout->addWidget(btnPrint, 0, Qt::AlignRight);
-
-             // Create table
-             QWidget *tableWidget = createStyledTable("Current Product Catalog", 
-                {"ID Container", "Date Pressage", "Capacité", "Ref Testeur", "Qualité", "Viscosity", "Color", "Ref Press"}, {
-                 {"CONT-001", "2023-10-25", "500L", "TEST-A1", "Premium", "0.85", "Golden", "PRESS-X1"},
-                 {"CONT-002", "2023-10-26", "200L", "TEST-B2", "Standard", "0.90", "Yellow", "PRESS-X2"},
-                 {"CONT-003", "2023-10-27", "1000L", "TEST-A1", "Premium", "0.84", "Golden", "PRESS-X1"}
-             }, true);
-             
-             listPageLayout->addWidget(tableWidget);
-
-             // Connect print button
-             // PDF Export functionality removed as per request
-             // The button remains visible but inactive
-
-             cLayout->addWidget(listPageWidget); 
-        } else if (name == "Add Item") {
-             cLayout->addWidget(createStyledForm("Add New Product", {
-                 {"ID Container:", "Enter Container ID"},
-                 {"Date Pressage:", "YYYY-MM-DD"},
-                 {"Capacité:", "e.g., 500L"},
-                 {"Ref Testeur:", "Enter Tester Ref"},
-                 {"Qualité:", "Enter Quality Grade"},
-                 {"Viscosity:", "Enter Viscosity"},
-                 {"Color:", "Enter Color"},
-                 {"Ref Press:", "Enter Press Ref"}
-             }, "Add Product", 25));
-        } else if (name == "Remove Item") {
-             QWidget *removeContainer = new QWidget();
-             QVBoxLayout *rLayout = new QVBoxLayout(removeContainer);
-             rLayout->setContentsMargins(0,0,0,0);
-             rLayout->addWidget(createStyledForm("Remove Product from Inventory", {
-                 {"ID Container:", "Enter Container ID to Remove"}
-             }, "Delete Product Permanently"));
-             QLabel *warning = new QLabel("Warning: This action cannot be undone.");
-             warning->setStyleSheet("color: #e74c3c; font-style: italic; margin-top: 10px; margin-left: 30px;");
-             rLayout->addWidget(warning);
-             rLayout->addStretch();
-             cLayout->addWidget(removeContainer);
-        }
-        cLayout->addStretch();
-        outNestedStack->addWidget(content);
-    }
-    
-    actionLayout->addStretch();
-    setupTabNavigation(tabButtons, outNestedStack);
-    tabButtons.first()->setChecked(true);
-
-    layout->addWidget(actionBar);
-    layout->addWidget(outNestedStack);
-    return page;
-}
-
-static QWidget* createPersonnelPage(QStackedWidget* &outNestedStack) {
-    QWidget *page = new QWidget();
-    QVBoxLayout *layout = new QVBoxLayout(page);
-    layout->setContentsMargins(40, 40, 40, 40);
-    layout->setSpacing(25);
-    layout->addWidget(new QLabel("Personnel Management"));
-
-    QWidget *actionBar = new QWidget();
-    QHBoxLayout *actionLayout = new QHBoxLayout(actionBar);
-    actionLayout->setSpacing(12);
-
-    outNestedStack = new QStackedWidget();
-    QStringList tabNames = {"Employee Directory", "Add Employee", "Payroll", "Leave Requests"};
-    QList<QPushButton*> tabButtons;
-
-    for (const auto &name : tabNames) {
-        QPushButton *btn = new QPushButton(name);
-        btn->setCheckable(true);
-        btn->setStyleSheet(getTabButtonStyle());
-        actionLayout->addWidget(btn);
-        tabButtons.append(btn);
-
-        QWidget *content = new QWidget();
-        QVBoxLayout *cLayout = new QVBoxLayout(content);
-        
-        if (name == "Employee Directory") {
-             cLayout->addWidget(createStyledTable("Staff Directory", {"ID", "Name", "Position", "Department", "Start Date"}, {
-                 {"EMP-001", "John Doe", "Manager", "Sales", "2020-01-15"},
-                 {"EMP-002", "Jane Smith", "Engineer", "Product", "2021-03-22"},
-                 {"EMP-003", "Robert Brown", "Technician", "Maintenance", "2019-11-05"},
-                 {"EMP-004", "Emily White", "Accountant", "Finance", "2022-06-01"}
-             }, true));
-        } else if (name == "Add Employee") {
-             cLayout->addWidget(createStyledForm("New Employee Registration", {
-                 {"Full Name:", "Enter full name"},
-                 {"Position:", "Job Title"},
-                 {"Department:", "Select Department"},
-                 {"Email:", "company@email.com"},
-                 {"Start Date:", "YYYY-MM-DD"}
-             }, "Hire Employee"));
-        } else if (name == "Payroll") {
-             cLayout->addWidget(createStyledTable("Recent Payroll Runs", {"Period", "Total Payout", "Status", "Date Processed"}, {
-                 {"October 2023", "$145,000", "Completed", "2023-10-31"},
-                 {"September 2023", "$142,500", "Completed", "2023-09-30"}
-             }, true));
-        } else {
-             cLayout->addWidget(createStyledTable("Pending Leave Requests", {"Employee", "Type", "Dates", "Status"}, {
-                 {"Jane Smith", "Vacation", "Nov 5 - Nov 12", "Pending Approval"},
-                 {"Robert Brown", "Sick Leave", "Oct 26", "Approved"}
-             }, true));
-        }
-        cLayout->addStretch();
-        outNestedStack->addWidget(content);
-    }
-    
-    actionLayout->addStretch();
-    setupTabNavigation(tabButtons, outNestedStack);
-    tabButtons.first()->setChecked(true);
-
-    layout->addWidget(actionBar);
-    layout->addWidget(outNestedStack);
-    return page;
-}
-
-MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent)
-{
-    setMinimumSize(1200, 800);
-
-    QWidget *centralWidget = new QWidget(this);
-    setCentralWidget(centralWidget);
-    centralWidget->setStyleSheet("background-color: #f4f6f8;");
-
-    QVBoxLayout *verticalRoot = new QVBoxLayout(centralWidget);
-    verticalRoot->setContentsMargins(0, 0, 0, 0);
-    verticalRoot->setSpacing(0);
-
-    // Sidebar
-    QWidget *sidebar = new QWidget();
-    sidebar->setFixedWidth(280);
-    sidebar->setStyleSheet(
-        "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #111111, stop:1 #1a1a1a);"
-        "border-right: 1px solid #333;"
-        );
-
-    QVBoxLayout *sidebarLayout = new QVBoxLayout(sidebar);
-    sidebarLayout->setContentsMargins(20, 30, 20, 40);
-    sidebarLayout->setSpacing(10);
-
-    // LOGO INTEGRATION
-    QLabel *brand = new QLabel();
-    QPixmap logoPixmap("C:/Users/Samik/OneDrive/Dokumente/untitled/logo.png");
-    if(!logoPixmap.isNull()) {
-        brand->setPixmap(logoPixmap.scaledToHeight(45, Qt::SmoothTransformation));
-        brand->setAlignment(Qt::AlignCenter);
-    } else {
-        brand->setText("NEXUS ERP"); 
-        brand->setStyleSheet("color: white; font-size: 24px; font-weight: 900;");
-    }
-    
-    sidebarLayout->addWidget(brand);
-    sidebarLayout->addSpacing(20);
-
-    QString sidebarButtonStyle =
-        "QPushButton {"
-        "color: #999;"
-        "background-color: transparent;"
-        "border: none;"
-        "border-radius: 8px;"
-        "padding: 14px 20px;"
-        "text-align: left;"
-        "font-size: 14px;"
-        "font-weight: 500;"
-        "} "
-        "QPushButton:hover {"
-        "background-color: rgba(255, 255, 255, 0.05);"
-        "color: #fff;"
-        "} "
-        "QPushButton:checked {"
-        "background-color: #3DDC84;"
-        "color: #ffffff;"
-        "font-weight: 700;"
-        "box-shadow: 0 4px 6px rgba(61, 220, 132, 0.3);"
-        "}";
-
-    struct NavItem { QString title; QPushButton *btn; };
-    QList<NavItem> navItems;
-    
-    auto addNav = [&](const QString &title) {
-        QPushButton *btn = new QPushButton(title);
-        btn->setCheckable(true);
-        btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(sidebarButtonStyle);
-        sidebarLayout->addWidget(btn);
-        navItems.append({title, btn});
-        return btn;
-    };
-
-    QPushButton *btnHome = addNav("Overview");
-    sidebarLayout->addSpacing(10);
-    QLabel *menuLabel = new QLabel("MODULES");
-    menuLabel->setStyleSheet("color: #444; font-weight: bold; font-size: 10px; margin-top: 10px; margin-bottom: 5px; padding-left: 10px;");
-    sidebarLayout->addWidget(menuLabel);
-
-    QPushButton *btnClient = addNav("Order Management");
-    QPushButton *btnFinance = addNav("Financial Management");
-    QPushButton *btnInventory = addNav("Inventory Management");
-    QPushButton *btnMaintenance = addNav("Maintenance");
-    QPushButton *btnProduct = addNav("Product");
-    QPushButton *btnPersonnel = addNav("Personnel Management"); // NEW BUTTON
-
-    sidebarLayout->addStretch();
-    sidebarLayout->addWidget(new QLabel("v1.3.0")); 
-
-    stackedWidget = new QStackedWidget();
-
-    // --- HOME DASHBOARD ---
-    QWidget *homePage = new QWidget();
-    QVBoxLayout *homeLayout = new QVBoxLayout(homePage);
-    homeLayout->setContentsMargins(50, 50, 50, 50);
-    homeLayout->setSpacing(30);
-
-    QWidget *topBar = new QWidget();
-    QHBoxLayout *topLayout = new QHBoxLayout(topBar);
-    topLayout->setContentsMargins(0,0,0,0);
-    QLabel *welcome = new QLabel("Welcome back, Admin");
-    welcome->setStyleSheet("font-size: 36px; font-weight: 800; color: #1a1a1a; letter-spacing: -1px;");
-    QLabel *dateLabel = new QLabel(QDate::currentDate().toString("dddd, MMMM d"));
-    dateLabel->setStyleSheet("font-size: 16px; color: #777; font-weight: 500;");
-    topLayout->addWidget(welcome);
-    topLayout->addStretch();
-    topLayout->addWidget(dateLabel);
-    homeLayout->addWidget(topBar);
-
-    QWidget *statsContainer = new QWidget();
-    QHBoxLayout *statsLayout = new QHBoxLayout(statsContainer);
-    statsLayout->setContentsMargins(0,0,0,0);
-    statsLayout->setSpacing(20);
-    statsLayout->addWidget(createStatCard("Total Revenue", "$128,400", "+12% this month", "#3DDC84"));
-    statsLayout->addWidget(createStatCard("Active Clients", "1,245", "+5 new today", "#3498db"));
-    statsLayout->addWidget(createStatCard("Pending Orders", "18", "Requires attention", "#e74c3c"));
-    statsLayout->addWidget(createStatCard("System Status", "99.9%", "All systems operational", "#f1c40f"));
-    homeLayout->addWidget(statsContainer);
-
-    QWidget *bottomSection = new QWidget();
-    QHBoxLayout *splitLayout = new QHBoxLayout(bottomSection);
-    splitLayout->setContentsMargins(0,0,0,0);
-    splitLayout->setSpacing(30);
-
-    QWidget *quickActions = new QWidget();
-    quickActions->setStyleSheet(getCardStyle());
-    QVBoxLayout *qaLayout = new QVBoxLayout(quickActions);
-    qaLayout->setContentsMargins(25,25,25,25);
-    QLabel *qaTitle = new QLabel("Quick Actions");
-    qaTitle->setStyleSheet("font-size: 18px; font-weight: 700; color: #222; margin-bottom: 15px;");
-    qaLayout->addWidget(qaTitle);
-
-    QString actionBtnStyle = "QPushButton { text-align: left; padding: 15px; border: 1px solid #eee; border-radius: 8px; background-color: #fafafa; font-weight: 600; color: #444; } QPushButton:hover { background-color: #f0f0f0; border-color: #ddd; }";
-    
-    QPushButton *btnQInvoice = new QPushButton("Draft New Invoice"); btnQInvoice->setStyleSheet(actionBtnStyle);
-    QPushButton *btnQClient = new QPushButton("Register New Client"); btnQClient->setStyleSheet(actionBtnStyle);
-    QPushButton *btnQStock = new QPushButton("Add Inventory Stock"); btnQStock->setStyleSheet(actionBtnStyle);
-    
-    qaLayout->addWidget(btnQInvoice);
-    qaLayout->addSpacing(5);
-    qaLayout->addWidget(btnQClient);
-    qaLayout->addSpacing(5);
-    qaLayout->addWidget(btnQStock);
-    qaLayout->addStretch();
-
-    QWidget *activityWidget = new QWidget();
-    activityWidget->setStyleSheet(getCardStyle());
-    QVBoxLayout *actLayout = new QVBoxLayout(activityWidget);
-    actLayout->setContentsMargins(25,25,25,25);
-    actLayout->addWidget(new QLabel("Recent Activity")); // Placeholder for brevity
-    actLayout->addStretch();
-    splitLayout->addWidget(quickActions, 1);
-    splitLayout->addWidget(activityWidget, 2);
-    homeLayout->addWidget(bottomSection, 1);
-    
-    stackedWidget->addWidget(homePage);
-
-    // --- SUB PAGES & Internal Logic ---
-    QStackedWidget *stackClient, *stackFinance, *stackInventory, *stackMaintenance, *stackProduct, *stackPersonnel;
-    
-    stackedWidget->addWidget(createClientPage(stackClient));
-    stackedWidget->addWidget(createFinancePage(stackFinance));
-    stackedWidget->addWidget(createInventoryPage(stackInventory));
-    stackedWidget->addWidget(createMaintenancePage(stackMaintenance));
-    stackedWidget->addWidget(createProductPage(stackProduct));
-    stackedWidget->addWidget(createPersonnelPage(stackPersonnel)); // Add to stack
-
-    // Finish Root Layout
-    QWidget *contentArea = new QWidget();
-    QHBoxLayout *contentLayout = new QHBoxLayout(contentArea);
-    contentLayout->setContentsMargins(0,0,0,0);
-    contentLayout->addWidget(sidebar);
-    contentLayout->addWidget(stackedWidget);
-    verticalRoot->addWidget(contentArea);
-
-    // Sidebar Navigation
-    // CAPTURE BY VALUE FIX: [=] instead of [&]
-    auto setActive = [=](int index, QPushButton* activeBtn) {
-        stackedWidget->setCurrentIndex(index);
-        for(auto& item : navItems) item.btn->setChecked(item.btn == activeBtn);
-    };
-
-    connect(btnHome, &QPushButton::clicked, this, [=](){ setActive(0, btnHome); });
-    connect(btnClient, &QPushButton::clicked, this, [=](){ setActive(1, btnClient); });
-    connect(btnFinance, &QPushButton::clicked, this, [=](){ setActive(2, btnFinance); });
-    connect(btnInventory, &QPushButton::clicked, this, [=](){ setActive(3, btnInventory); });
-    connect(btnMaintenance, &QPushButton::clicked, this, [=](){ setActive(4, btnMaintenance); });
-    connect(btnProduct, &QPushButton::clicked, this, [=](){ setActive(5, btnProduct); });
-    connect(btnPersonnel, &QPushButton::clicked, this, [=](){ setActive(6, btnPersonnel); }); // Link button
-
-    // Quick Action Signal Connections
-    connect(btnQClient, &QPushButton::clicked, this, [=](){ 
-        setActive(1, btnClient); // Switch to Client Page
-        stackClient->setCurrentIndex(0); // Add New Client tab
-    });
-    
-    connect(btnQInvoice, &QPushButton::clicked, this, [=](){ 
-        setActive(2, btnFinance); // Switch to Finance Page
-        stackFinance->setCurrentIndex(0); // Create Invoice tab
-    });
-
-    connect(btnQStock, &QPushButton::clicked, this, [=](){ 
-        setActive(3, btnInventory); // Switch to Inventory Page
-        stackInventory->setCurrentIndex(0); // Add Stock Item tab
-    });
-
-    // Start at Home
-    btnHome->click();
-=======
 static void setupTabNavigation(const QList<QPushButton *> &buttons,
                                QStackedWidget *stack) {
   for (int i = 0; i < buttons.size(); ++i) {
@@ -1696,7 +725,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
   actionLayout->setSpacing(12);
 
   outNestedStack = new QStackedWidget();
-  QStringList tabNames = {"New Order", "Order Hub", "Analytics"};
+  QStringList tabNames = {"New Order", "Edit Order", "Order Hub", "Analytics"};
   QList<QPushButton *> tabButtons;
 
   // Helper functions used internally to build repetitive UI
@@ -1748,19 +777,11 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       QString labelStyle = getLabelStyle();
       QString inputStyle = getInputStyle();
 
-      QWidget *wRef, *wDate, *wClient, *wAddress, *wDelivery;
-      addField(formLayout, labelStyle, inputStyle, "Reference: (e.g. AB12)", "e.g. AB12", wRef, false);
-      // Reference: exactly 2 letters then one or more digits (e.g. AB12, OP999)
-      static_cast<QLineEdit*>(wRef)->setValidator(
-          new QRegularExpressionValidator(QRegularExpression("^[A-Za-z]{0,2}[0-9]*$"), page));
-      static_cast<QLineEdit*>(wRef)->setPlaceholderText("e.g. AB12");
+      QWidget *wId, *wDate, *wClient, *wDelivery;
+      addField(formLayout, labelStyle, inputStyle, "ID:", "Enter order ID", wId, false);
       addField(formLayout, labelStyle, inputStyle, "Order Date:", "", wDate, true);
-      static_cast<QDateEdit*>(wDate)->setMinimumDate(QDate::currentDate());
       addField(formLayout, labelStyle, inputStyle, "Client's Name:", "Enter client's name", wClient, false);
-      static_cast<QLineEdit*>(wClient)->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z \\.]*$"), page));
-      addField(formLayout, labelStyle, inputStyle, "Client's Address:", "Enter address", wAddress, false);
       addField(formLayout, labelStyle, inputStyle, "Delivery Date:", "", wDelivery, true);
-      static_cast<QDateEdit*>(wDelivery)->setMinimumDate(QDate::currentDate());
 
       QLabel *stateLbl = new QLabel("State:");
       stateLbl->setStyleSheet(labelStyle);
@@ -1798,60 +819,110 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
       // Connect Button
       QObject::connect(btnSubmit, &QPushButton::clicked, [=]() {
-          int id = 0; // ID will be auto-generated
-          QString ref = static_cast<QLineEdit*>(wRef)->text().trimmed();
+          int id = static_cast<QLineEdit*>(wId)->text().toInt();
           QDate date = static_cast<QDateEdit*>(wDate)->date();
-          QString client = static_cast<QLineEdit*>(wClient)->text().trimmed();
-          QString address = static_cast<QLineEdit*>(wAddress)->text().trimmed();
+          QString client = static_cast<QLineEdit*>(wClient)->text();
           QDate delivery = static_cast<QDateEdit*>(wDelivery)->date();
           QString state = pendingRadio->isChecked() ? "Pending" : "Completed";
 
-          // Validate Reference: must be exactly 2 letters then 1+ digits
-          QRegularExpression refRegex("^[A-Za-z]{2}[0-9]+$");
-          if (ref.isEmpty()) {
-              QMessageBox::warning(nullptr, "Validation Error", "Reference cannot be empty.");
-              return;
-          }
-          if (!refRegex.match(ref).hasMatch()) {
-              QMessageBox::warning(nullptr, "Validation Error",
-                  "Reference must start with exactly 2 letters followed by at least 1 digit.\n"
-                  "Example: AB12, OP999");
-              return;
-          }
-          if (client.isEmpty()) {
-              QMessageBox::warning(nullptr, "Validation Error", "Client's Name cannot be empty.");
-              return;
-          }
-          if (address.isEmpty()) {
-              QMessageBox::warning(nullptr, "Validation Error", "Client's Address cannot be empty.");
-              return;
-          }
-          if (delivery < date) {
-              QMessageBox::warning(nullptr, "Validation Error", "Delivery date must be on or after the order date.");
-              return;
-          }
-
-          Commande c(id, ref, date, state, client, address, delivery);
+          Commande c(id, date, state, client, delivery);
           if (c.ajouter()) {
               QMessageBox::information(nullptr, "Success", "Order added successfully!");
-              static_cast<QLineEdit*>(wRef)->clear();
-              static_cast<QLineEdit*>(wClient)->clear();
-              static_cast<QLineEdit*>(wAddress)->clear();
-              static_cast<QDateEdit*>(wDate)->setDate(QDate::currentDate());
-              static_cast<QDateEdit*>(wDelivery)->setDate(QDate::currentDate());
-
-              // Automatically refresh and switch to Order Hub
-              QPushButton *refreshBtn = outNestedStack->findChild<QPushButton*>("orderHubRefreshBtn");
-              if (refreshBtn) refreshBtn->click();
-              outNestedStack->setCurrentIndex(1); // Order Hub is index 1
-              for(QPushButton *btn : tabButtons) {
-                  btn->setChecked(btn->text() == "Order Hub");
-              }
           } else {
-              QMessageBox::critical(nullptr, "Error", "Failed to add order.\n\nDB Error: " + c.getLastError());
+              QMessageBox::critical(nullptr, "Error", "Failed to add order.");
           }
       });
 
+    } else if (name == "Edit Order") {
+      QWidget *searchBar = new QWidget();
+      searchBar->setStyleSheet(getCardStyle());
+      QHBoxLayout *sLayout = new QHBoxLayout(searchBar);
+      QLineEdit *searchInp = new QLineEdit();
+      searchInp->setStyleSheet("border: none; font-size: 14px;");
+      searchInp->setPlaceholderText("Search Order ID...");
+      QPushButton *sBtn = new QPushButton("Search (Not used yet)");
+      sBtn->setStyleSheet(getButtonStyle());
+      sBtn->setFixedWidth(150);
+      sLayout->addWidget(searchInp);
+      sLayout->addWidget(sBtn);
+      cLayout->addWidget(searchBar);
+      cLayout->addSpacing(15);
+      
+      // Inline edit form
+      QWidget *formContainer = new QWidget();
+      formContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+      formContainer->setStyleSheet(".QWidget { background-color: #ffffff; border-radius: 10px; border: 1px solid #eee; }");
+      QVBoxLayout *outerLayout = new QVBoxLayout(formContainer);
+      outerLayout->setContentsMargins(30, 30, 30, 30);
+      
+      QWidget *formContent = new QWidget();
+      QVBoxLayout *formLayout = new QVBoxLayout(formContent);
+      formLayout->setContentsMargins(0, 0, 10, 0);
+      formLayout->setSpacing(15);
+
+      QLabel *titleLabel = new QLabel("Edit Order Details");
+      titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 25px; border: none;");
+      formLayout->addWidget(titleLabel);
+
+      QString labelStyle = getLabelStyle();
+      QString inputStyle = getInputStyle();
+
+      QWidget *wId, *wDate, *wClient, *wDelivery;
+      addField(formLayout, labelStyle, inputStyle, "ID:", "Enter order ID", wId, false);
+      static_cast<QLineEdit*>(wId)->setReadOnly(true); // Don't let users edit ID in this static form directly without searching
+      addField(formLayout, labelStyle, inputStyle, "Order Date:", "", wDate, true);
+      addField(formLayout, labelStyle, inputStyle, "Client's Name:", "Enter client's name", wClient, false);
+      addField(formLayout, labelStyle, inputStyle, "Delivery Date:", "", wDelivery, true);
+
+      QLabel *stateLbl = new QLabel("State:");
+      stateLbl->setStyleSheet(labelStyle);
+      formLayout->addWidget(stateLbl);
+
+      QWidget *radioWidget = new QWidget();
+      QHBoxLayout *radioLayout = new QHBoxLayout(radioWidget);
+      radioLayout->setContentsMargins(0, 0, 0, 0);
+      QRadioButton *pendingRadio = new QRadioButton("Pending");
+      QRadioButton *completedRadio = new QRadioButton("Completed");
+      pendingRadio->setChecked(true);
+      pendingRadio->setStyleSheet("QRadioButton { font-size: 14px; color: #333; }");
+      completedRadio->setStyleSheet("QRadioButton { font-size: 14px; color: #333; }");
+      radioLayout->addWidget(pendingRadio);
+      radioLayout->addWidget(completedRadio);
+      radioLayout->addStretch();
+      formLayout->addWidget(radioWidget);
+
+      formLayout->addSpacing(20);
+      QPushButton *btnSubmit = new QPushButton("Update Order");
+      btnSubmit->setStyleSheet(getButtonStyle());
+      btnSubmit->setCursor(Qt::PointingHandCursor);
+      btnSubmit->setFixedHeight(45);
+      formLayout->addWidget(btnSubmit);
+      formLayout->addStretch();
+
+      QScrollArea *scrollArea = new QScrollArea();
+      scrollArea->setWidgetResizable(true);
+      scrollArea->setFrameShape(QFrame::NoFrame);
+      scrollArea->setStyleSheet("QScrollArea { background: transparent; border: none; } QWidget { background: transparent; }");
+      scrollArea->setWidget(formContent);
+      outerLayout->addWidget(scrollArea);
+
+      cLayout->addWidget(formContainer);
+
+      // We will implement searching and full update logic later.
+      QObject::connect(btnSubmit, &QPushButton::clicked, [=]() {
+          int id = static_cast<QLineEdit*>(wId)->text().toInt();
+          QDate date = static_cast<QDateEdit*>(wDate)->date();
+          QString client = static_cast<QLineEdit*>(wClient)->text();
+          QDate delivery = static_cast<QDateEdit*>(wDelivery)->date();
+          QString state = pendingRadio->isChecked() ? "Pending" : "Completed";
+
+          Commande c(id, date, state, client, delivery);
+          if (c.modifier()) {
+              QMessageBox::information(nullptr, "Success", "Order updated successfully!");
+          } else {
+              QMessageBox::critical(nullptr, "Error", "Failed to update order. Ensure ID is correct.");
+          }
+      });
     } else if (name == "Order Hub") {
       // --- Order History with Search & Sort ---
 
@@ -1868,20 +939,23 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
       // Search
       QLineEdit *searchEdit = new QLineEdit();
-      searchEdit->setPlaceholderText("Search by Client Name or Reference...");
+      searchEdit->setPlaceholderText("Search Orders...");
       searchEdit->setStyleSheet(getInputStyle());
-      searchEdit->setMinimumWidth(260);
+      searchEdit->setMinimumWidth(200);
 
       // Sort
       QLabel *lblSort = new QLabel("Sort by:");
       lblSort->setStyleSheet(getLabelStyle());
-      lblSort->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+      lblSort->setSizePolicy(QSizePolicy::Fixed,
+                             QSizePolicy::Fixed); // scanning fix
 
       QComboBox *sortCombo = new QComboBox();
-      sortCombo->addItems({"Date (Newest First)", "Date (Oldest First)",
-                           "Client Name (A → Z)", "Client Name (Z → A)"});
+      sortCombo->addItems({"Date (Newest)", "Date (Oldest)",
+                           "Amount (High-Low)", "Amount (Low-High)"});
       sortCombo->setStyleSheet(getInputStyle());
-      sortCombo->setFixedWidth(200);
+      sortCombo->setFixedWidth(180);
+
+      sortCombo->setFixedWidth(180);
 
       // Print PDF Button
       QPushButton *btnPrint = new QPushButton("Print PDF");
@@ -1891,7 +965,6 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
       // Refresh Button
       QPushButton *btnRefresh = new QPushButton("Refresh");
-      btnRefresh->setObjectName("orderHubRefreshBtn");
       btnRefresh->setCursor(Qt::PointingHandCursor);
       btnRefresh->setStyleSheet(getButtonStyle());
       btnRefresh->setFixedWidth(100);
@@ -1908,7 +981,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       histLayout->addWidget(controlBar);
 
       // 2. Table
-      QStringList headers = {"Reference", "Date", "State", "Client", "Address", "Delivery", "Actions"};
+      QStringList headers = {"ID", "Date", "State", "Client", "Delivery", "Actions"};
       QTableWidget *table = new QTableWidget();
       table->setColumnCount(headers.size());
       table->setHorizontalHeaderLabels(headers);
@@ -1930,8 +1003,8 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
       histLayout->addWidget(table);
 
-      // Connect Print — exports exactly what is currently visible in the table
-      QObject::connect(btnPrint, &QPushButton::clicked, [table, searchEdit]() {
+      // Connect Print (Moved here to capture 'table' correctly)
+      QObject::connect(btnPrint, &QPushButton::clicked, [table]() {
         QString fileName = QFileDialog::getSaveFileName(
             table->window(), "Export Order History", QString(),
             "PDF Files (*.pdf)");
@@ -1942,42 +1015,36 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
         QPrinter printer(QPrinter::PrinterResolution);
         printer.setOutputFormat(QPrinter::PdfFormat);
-        printer.setPageSize(QPageSize(QPageSize::A4));
+        printer.setPageSize(
+            QPageSize(QPageSize::A4)); // Updated for Qt6 compatibility
         printer.setOutputFileName(fileName);
 
         QTextDocument doc;
-        QString html = "<h1 style='text-align:center; color:#333;'>Order History Report</h1>";
+        QString html = "<h1 style='text-align:center; color:#333;'>Order "
+                       "History Report</h1>";
         html += "<h3 style='text-align:center; color:#666;'>" +
-                QDate::currentDate().toString("dd MMMM yyyy") + "</h3>";
+                QDate::currentDate().toString("dd MMMM yyyy") + "</h3><br>";
+        html +=
+            "<table border='1' cellspacing='0' cellpadding='6' width='100%' "
+            "style='border-collapse:collapse; border-color:#ccc;'>";
 
-        // Show active filter in report if search is active
-        QString activeSearch = searchEdit->text().trimmed();
-        if (!activeSearch.isEmpty()) {
-            html += "<p style='text-align:center; color:#888; font-size:12px;'>"
-                    "Filtered by: <b>" + activeSearch.toHtmlEscaped() + "</b></p>";
-        }
-        html += "<br>";
-        html += "<table border='1' cellspacing='0' cellpadding='6' width='100%' "
-                "style='border-collapse:collapse; border-color:#ccc;'>";
-
-        // Headers — skip hidden ID column (col 0 is Reference, all cols visible)
+        // Headers
         html += "<thead style='background-color:#f2f2f2;'><tr>";
-        for (int c = 0; c < table->columnCount() - 1; ++c) { // Skip 'Actions'
-          if (!table->isColumnHidden(c))
-            html += "<th style='padding:8px; text-align:left;'>" +
-                    table->horizontalHeaderItem(c)->text() + "</th>";
+        for (int c = 0; c < table->columnCount() - 1;
+             ++c) { // Skip 'Actions' column
+          html += "<th style='padding:8px;'>" +
+                  table->horizontalHeaderItem(c)->text() + "</th>";
         }
         html += "</tr></thead>";
 
-        // Body — only currently visible rows
+        // Body
         html += "<tbody>";
         for (int r = 0; r < table->rowCount(); ++r) {
-          if (table->isRowHidden(r)) continue;
           html += "<tr>";
           for (int c = 0; c < table->columnCount() - 1; ++c) {
-            if (table->isColumnHidden(c)) continue;
             QTableWidgetItem *item = table->item(r, c);
-            html += "<td style='padding:8px;'>" + (item ? item->text().toHtmlEscaped() : "") + "</td>";
+            html += "<td style='padding:8px;'>" + (item ? item->text() : "") +
+                    "</td>";
           }
           html += "</tr>";
         }
@@ -1997,70 +1064,28 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
         QSqlQueryModel *model = c.afficher();
         if (!model) return;
 
-        QString query = searchEdit->text().toLower().trimmed();
-        QString sortOpt = sortCombo->currentText();
-
-        // Collect all rows first
-        struct Row {
-            QString id, ref, date, etat, client, address, livraison;
-        };
-        QVector<Row> rows;
-        for (int i = 0; i < model->rowCount(); ++i) {
-          Row row;
-          row.id       = model->record(i).value("ID_COMMANDE").toString();
-          row.ref      = model->record(i).value("REFERENCE").toString();
-          row.date     = model->record(i).value("DATE_COMMANDE").toDate().toString("yyyy-MM-dd");
-          row.etat     = model->record(i).value("ETAT_COMMANDE").toString();
-          row.client   = model->record(i).value("NOM_CLIENT").toString();
-          row.address  = model->record(i).value("ADRESSE_CLIENT").toString();
-          row.livraison= model->record(i).value("DATE_LIVRAISON").toDate().toString("yyyy-MM-dd");
-
-          // Filter: only by client name OR reference
-          if (!query.isEmpty()) {
-            bool matchClient = row.client.toLower().contains(query);
-            bool matchRef    = row.ref.toLower().contains(query);
-            if (!matchClient && !matchRef) continue;
-          }
-          rows.append(row);
-        }
-
-        // Sort
-        if (sortOpt == "Date (Newest First)") {
-          std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
-            return a.date > b.date; // descending
-          });
-        } else if (sortOpt == "Date (Oldest First)") {
-          std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
-            return a.date < b.date; // ascending
-          });
-        } else if (sortOpt == "Client Name (A \u2192 Z)") {
-          std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
-            return a.client.toLower() < b.client.toLower();
-          });
-        } else if (sortOpt == "Client Name (Z \u2192 A)") {
-          std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
-            return a.client.toLower() > b.client.toLower();
-          });
-        }
+        QString query = searchEdit->text().toLower();
+        // Sorting might be complex to implement purely in C++ with QSqlQueryModel if we don't use QSortFilterProxyModel,
+        // For now, we will just filter visually or fetch sorted from DB. This is a simple visual filter.
 
         table->setRowCount(0);
         int rowIdx = 0;
-        for (const Row &row : rows) {
-          QString id       = row.id;
-          QString ref      = row.ref;
-          QString date     = row.date;
-          QString etat     = row.etat;
-          QString client   = row.client;
-          QString address  = row.address;
-          QString livraison= row.livraison;
+        for (int i = 0; i < model->rowCount(); ++i) {
+          QString id = model->record(i).value("ID_COMMANDE").toString();
+          QString date = model->record(i).value("DATE_COMMANDE").toDate().toString("yyyy-MM-dd");
+          QString etat = model->record(i).value("ETAT_COMMANDE").toString();
+          QString client = model->record(i).value("NOM_CLIENT").toString();
+          QString livraison = model->record(i).value("DATE_LIVRAISON").toDate().toString("yyyy-MM-dd");
+
+          bool match = client.toLower().contains(query) || id.contains(query) || etat.toLower().contains(query);
+          if (!match && !query.isEmpty()) continue;
 
           table->insertRow(rowIdx);
-          table->setItem(rowIdx, 0, new QTableWidgetItem(ref));
+          table->setItem(rowIdx, 0, new QTableWidgetItem(id));
           table->setItem(rowIdx, 1, new QTableWidgetItem(date));
           table->setItem(rowIdx, 2, new QTableWidgetItem(etat));
           table->setItem(rowIdx, 3, new QTableWidgetItem(client));
-          table->setItem(rowIdx, 4, new QTableWidgetItem(address));
-          table->setItem(rowIdx, 5, new QTableWidgetItem(livraison));
+          table->setItem(rowIdx, 4, new QTableWidgetItem(livraison));
 
           // Action Column
           QWidget *actionWidget = new QWidget();
@@ -2092,12 +1117,12 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
           actionLayout->addWidget(btnModify);
           actionLayout->addWidget(btnDelete);
-          table->setCellWidget(rowIdx, 6, actionWidget);
+          table->setCellWidget(rowIdx, 5, actionWidget);
 
           int orderId = id.toInt();
 
           // Connect Modify
-          QObject::connect(btnModify, &QPushButton::clicked, [table, orderId, ref, date, etat, client, address, livraison]() {
+          QObject::connect(btnModify, &QPushButton::clicked, [table, orderId, id, date, etat, client, livraison]() {
                 QDialog dlg(table->window());
                 dlg.setWindowTitle("Edit Order Details");
                 dlg.setModal(true);
@@ -2113,44 +1138,29 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                 mainV->addWidget(title);
 
                 QFormLayout *form = new QFormLayout();
-                form->setSpacing(10);
-                form->setRowWrapPolicy(QFormLayout::WrapAllRows);
+                form->setSpacing(15);
                 form->setLabelAlignment(Qt::AlignLeft);
                 
                 // Fields
-                QLineEdit *refEdit = new QLineEdit(ref);
-                refEdit->setReadOnly(true);  // Reference cannot be changed after creation
                 QDateEdit *dateEdit = new QDateEdit(QDate::fromString(date, "yyyy-MM-dd"));
                 dateEdit->setDisplayFormat("yyyy-MM-dd");
                 dateEdit->setCalendarPopup(true);
-                dateEdit->setMinimumDate(QDate::currentDate().addYears(-10)); // allow past dates when editing
                 QLineEdit *clientEdit = new QLineEdit(client);
-                clientEdit->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z \\.]*$"), &dlg));
-                QLineEdit *addressEdit = new QLineEdit(address);
                 QDateEdit *livraisonEdit = new QDateEdit(QDate::fromString(livraison, "yyyy-MM-dd"));
                 livraisonEdit->setDisplayFormat("yyyy-MM-dd");
                 livraisonEdit->setCalendarPopup(true);
 
                 auto styleField = [&](QWidget *w) {
                   w->setStyleSheet(
-                      "QLineEdit, QDateEdit, QComboBox { background-color: #f9fafb; border: 1px "
-                      "solid #eaeaea; border-radius: 6px; padding: 6px 10px; "
-                      "font-size: 13px; color: #333; } QLineEdit:focus, QDateEdit:focus, QComboBox:focus { "
+                      "QWidget { background-color: #f9fafb; border: 1px "
+                      "solid #eaeaea; border-radius: 8px; padding: 10px; "
+                      "font-size: 14px; color: #333; } QWidget:focus { "
                       "border-color: #3DDC84; background-color: #ffffff; }");
-                  w->setFixedHeight(35);
-                };
-                auto styleReadOnly = [&](QLineEdit *w) {
-                  w->setStyleSheet(
-                      "QLineEdit { background-color: #f0f0f0; border: 1px solid #d0d0d0; "
-                      "border-radius: 6px; padding: 6px 10px; font-size: 13px; color: #888; "
-                      "font-style: italic; }");
-                  w->setFixedHeight(35);
+                  w->setFixedHeight(40);
                 };
 
-                styleReadOnly(refEdit);
                 styleField(dateEdit);
                 styleField(clientEdit);
-                styleField(addressEdit);
                 styleField(livraisonEdit);
 
                 QWidget *radioWidget = new QWidget();
@@ -2176,10 +1186,8 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                   form->addRow(l, w);
                 };
 
-                addRow("Reference:", refEdit);
                 addRow("Order Date:", dateEdit);
                 addRow("Client Name:", clientEdit);
-                addRow("Address:", addressEdit);
                 addRow("Delivery Date:", livraisonEdit);
                 addRow("State:", radioWidget);
 
@@ -2201,27 +1209,12 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                     "#f9fafb; }");
                 mainV->addWidget(bbox);
 
+                QObject::connect(bbox, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
                 QObject::connect(bbox, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
-                // Validate before accepting
-                QObject::connect(bbox, &QDialogButtonBox::accepted, [&]() {
-                    if (clientEdit->text().trimmed().isEmpty()) {
-                        QMessageBox::warning(&dlg, "Validation Error", "Client's Name cannot be empty.");
-                        return;
-                    }
-                    if (addressEdit->text().trimmed().isEmpty()) {
-                        QMessageBox::warning(&dlg, "Validation Error", "Client's Address cannot be empty.");
-                        return;
-                    }
-                    if (livraisonEdit->date() < dateEdit->date()) {
-                        QMessageBox::warning(&dlg, "Validation Error", "Delivery date must be on or after the order date.");
-                        return;
-                    }
-                    dlg.accept();
-                });
 
                 if (dlg.exec() == QDialog::Accepted) {
                     QString newState = pendingRadio->isChecked() ? "Pending" : "Completed";
-                    Commande c(orderId, refEdit->text().trimmed(), dateEdit->date(), newState, clientEdit->text().trimmed(), addressEdit->text().trimmed(), livraisonEdit->date());
+                    Commande c(orderId, dateEdit->date(), newState, clientEdit->text(), livraisonEdit->date());
                     if (c.modifier()) {
                         QMessageBox::information(table->window(), "Success", "Order updated successfully!");
                         // Ideally we'd refresh the table here. In the full application, we should trigger the outer updateTable() to re-query the DB.
@@ -2326,11 +1319,11 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
     if (name == "New Invoice") {
       // ========== AJOUTER (CREATE) ==========
 
-      // Solid white card container — no transparency that bleeds dark bg
+      // Solid white card container â€” no transparency that bleeds dark bg
       QWidget *formContainer = new QWidget();
       formContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
       formContainer->setStyleSheet(
-          ".QWidget {"
+          "QWidget {"
           "  background-color: #ffffff;"
           "  border-radius: 12px;"
           "}");
@@ -2345,16 +1338,16 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
           "font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 18px;");
       outerLayout->addWidget(titleLabel);
 
-      // Field style — explicitly covers QLineEdit, QDateEdit AND QComboBox
+      // Field style â€” explicitly covers QLineEdit, QDateEdit AND QComboBox
       QString fieldStyle =
           "QLineEdit, QDateEdit, QComboBox {"
           "  background-color: #f8f9fb;"
           "  border: 1.5px solid #d0d5dd;"
-          "  border-radius: 6px;"
-          "  padding: 6px 10px;"
-          "  font-size: 13px;"
+          "  border-radius: 8px;"
+          "  padding: 10px 14px;"
+          "  font-size: 14px;"
           "  color: #1a1a1a;"
-          "  min-height: 35px;"
+          "  min-height: 42px;"
           "}"
           "QLineEdit:focus, QDateEdit:focus, QComboBox:focus {"
           "  border: 2px solid #3DDC84;"
@@ -2371,38 +1364,26 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
 
       QString lblStyle =
           "font-size: 13px; font-weight: 600; color: #374151;"
-          "margin-top: 5px; margin-bottom: 2px;";
+          "margin-top: 14px; margin-bottom: 5px;";
 
       // Helper to add a label + widget pair
-      auto createErrLabel = []() {
-        QLabel *lbl = new QLabel("");
-        lbl->setStyleSheet("color: #d32f2f; font-size: 11px; font-weight: 600; margin-top: -3px; margin-bottom: 2px;");
-        lbl->hide();
-        return lbl;
-      };
-
-      auto addField = [&](const QString &label, QWidget *w, QLabel *errLbl = nullptr) {
+      auto addField = [&](const QString &label, QWidget *w) {
         QLabel *lbl = new QLabel(label);
         lbl->setStyleSheet(lblStyle);
         w->setStyleSheet(fieldStyle);
         outerLayout->addWidget(lbl);
         outerLayout->addWidget(w);
-        if (errLbl) {
-            outerLayout->addWidget(errLbl);
-        }
       };
 
       // --- Fields ---
       QLineEdit *inputMontant = new QLineEdit();
       inputMontant->setPlaceholderText("e.g. 1500.00");
-      QLabel *errMontant = createErrLabel();
-      addField("Amount (TND):", inputMontant, errMontant);
+      addField("Amount (TND):", inputMontant);
 
       QDateEdit *inputDate = new QDateEdit(QDate::currentDate());
       inputDate->setCalendarPopup(true);
       inputDate->setDisplayFormat("yyyy-MM-dd");
-      QLabel *errDate = createErrLabel();
-      addField("Transaction Date:", inputDate, errDate);
+      addField("Transaction Date:", inputDate);
 
       QComboBox *inputType = new QComboBox();
       inputType->addItems({"Revenue", "Expense", "Refund", "Transfer"});
@@ -2414,16 +1395,14 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
 
       QLineEdit *inputDesc = new QLineEdit();
       inputDesc->setPlaceholderText("Enter description...");
-      QLabel *errDesc = createErrLabel();
-      addField("Description:", inputDesc, errDesc);
+      addField("Description:", inputDesc);
 
       QLineEdit *inputCommande = new QLineEdit();
       inputCommande->setPlaceholderText("0");
-      QLabel *errCommande = createErrLabel();
-      addField("Order ID:", inputCommande, errCommande);
+      addField("Order ID:", inputCommande);
 
       // --- Submit Button ---
-      outerLayout->addSpacing(10);
+      outerLayout->addSpacing(22);
       QPushButton *btnSubmit = new QPushButton("Submit Transaction");
       btnSubmit->setStyleSheet(
           "QPushButton {"
@@ -2448,54 +1427,18 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
       QObject::connect(
           btnSubmit, &QPushButton::clicked,
           [inputMontant, inputDate, inputType, inputMode, inputDesc,
-           inputCommande, &transTable, errMontant, errDate, errCommande, errDesc]() {
-            
-            errMontant->hide();
-            errDate->hide();
-            errCommande->hide();
-            errDesc->hide();
-
-            bool isValid = true;
-            double montant = 0;
-
+           inputCommande, &transTable]() {
             if (inputMontant->text().trimmed().isEmpty()) {
-              errMontant->setText("Amount is required.");
-              errMontant->show();
-              isValid = false;
-            } else {
-              bool ok = false;
-              montant = inputMontant->text().toDouble(&ok);
-              if (!ok || montant < 0) {
-                errMontant->setText("Amount must be a valid positive number.");
-                errMontant->show();
-                isValid = false;
-              }
+              QMessageBox::warning(nullptr, "Validation Error", "Amount is required.");
+              return;
             }
-
-            if (inputDate->date() > QDate::currentDate()) {
-              errDate->setText("Transaction Date cannot be in the future.");
-              errDate->show();
-              isValid = false;
+            bool ok = false;
+            double montant = inputMontant->text().toDouble(&ok);
+            if (!ok) {
+              QMessageBox::warning(nullptr, "Validation Error",
+                                   "Amount must be a valid number.");
+              return;
             }
-
-            if (inputDesc->text().trimmed().isEmpty()) {
-              errDesc->setText("Description is required.");
-              errDesc->show();
-              isValid = false;
-            }
-
-            if (!inputCommande->text().trimmed().isEmpty()) {
-              bool cmdOk = false;
-              int cmdId = inputCommande->text().toInt(&cmdOk);
-              if (!cmdOk || cmdId < 0) {
-                errCommande->setText("Order ID must be a valid positive number.");
-                errCommande->show();
-                isValid = false;
-              }
-            }
-
-            if (!isValid) return;
-
             Transaction t;
             t.setMontant(montant);
             t.setDateTransaction(inputDate->date());
@@ -2720,18 +1663,17 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
                 mainV->addWidget(title);
 
                 QFormLayout *form = new QFormLayout();
-                form->setSpacing(10);
-                form->setRowWrapPolicy(QFormLayout::WrapAllRows);
+                form->setSpacing(15);
                 form->setLabelAlignment(Qt::AlignLeft);
 
                 auto styleField = [&](QWidget *w) {
                   w->setStyleSheet(
                       "QLineEdit, QDateEdit, QComboBox { background-color: #f9fafb; border: 1px "
-                      "solid #eaeaea; border-radius: 6px; padding: 6px 10px; "
-                      "font-size: 13px; color: #333; } "
+                      "solid #eaeaea; border-radius: 8px; padding: 10px; "
+                      "font-size: 14px; color: #333; } "
                       "QLineEdit:focus, QDateEdit:focus, QComboBox:focus { "
                       "border-color: #3DDC84; background-color: #ffffff; }");
-                  w->setFixedHeight(35);
+                  w->setFixedHeight(40);
                 };
 
                 QLineEdit *editMontant = new QLineEdit(transTable->item(row, 1)->text());
@@ -2759,40 +1701,19 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
                 QLineEdit *editCommande = new QLineEdit(transTable->item(row, 6)->text());
                 styleField(editCommande);
 
-                auto createErrLabelDlg = []() {
-                  QLabel *lbl = new QLabel("");
-                  lbl->setStyleSheet("color: #d32f2f; font-size: 11px; font-weight: 600; margin-top: -3px; background: transparent;");
-                  lbl->hide();
-                  return lbl;
-                };
-
-                QLabel *errMontant = createErrLabelDlg();
-                QLabel *errDate = createErrLabelDlg();
-                QLabel *errCommande = createErrLabelDlg();
-                QLabel *errDesc = createErrLabelDlg();
-
-                auto addRow = [&](const QString &label, QWidget *w, QLabel *errLbl = nullptr) {
+                auto addRow = [&](const QString &label, QWidget *w) {
                   QLabel *l = new QLabel(label);
                   l->setStyleSheet(
                       "font-weight: 600; color: #444; font-size: 13px;");
-                  if (errLbl) {
-                      QVBoxLayout *v = new QVBoxLayout();
-                      v->setContentsMargins(0,0,0,0);
-                      v->setSpacing(0);
-                      v->addWidget(w);
-                      v->addWidget(errLbl);
-                      form->addRow(l, v);
-                  } else {
-                      form->addRow(l, w);
-                  }
+                  form->addRow(l, w);
                 };
 
-                addRow("Amount:", editMontant, errMontant);
-                addRow("Date:", editDate, errDate);
+                addRow("Amount:", editMontant);
+                addRow("Date:", editDate);
                 addRow("Type:", editType);
                 addRow("Payment Mode:", editMode);
-                addRow("Description:", editDesc, errDesc);
-                addRow("Order ID:", editCommande, errCommande);
+                addRow("Description:", editDesc);
+                addRow("Order ID:", editCommande);
 
                 mainV->addLayout(form);
                 mainV->addSpacing(10);
@@ -2812,53 +1733,8 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
                     "#f9fafb; }");
                 mainV->addWidget(bbox);
 
-                QObject::connect(bbox, &QDialogButtonBox::accepted, [&]() {
-                  errMontant->hide();
-                  errDate->hide();
-                  errCommande->hide();
-                  errDesc->hide();
-
-                  bool isValid = true;
-                  if (editMontant->text().trimmed().isEmpty()) {
-                    errMontant->setText("Amount is required.");
-                    errMontant->show();
-                    isValid = false;
-                  } else {
-                    bool ok = false;
-                    double montant = editMontant->text().toDouble(&ok);
-                    if (!ok || montant < 0) {
-                      errMontant->setText("Amount must be a valid positive number.");
-                      errMontant->show();
-                      isValid = false;
-                    }
-                  }
-
-                  if (editDate->date() > QDate::currentDate()) {
-                    errDate->setText("Transaction Date cannot be in the future.");
-                    errDate->show();
-                    isValid = false;
-                  }
-
-                  if (editDesc->text().trimmed().isEmpty()) {
-                    errDesc->setText("Description is required.");
-                    errDesc->show();
-                    isValid = false;
-                  }
-
-                  if (!editCommande->text().trimmed().isEmpty()) {
-                    bool cmdOk = false;
-                    int cmdId = editCommande->text().toInt(&cmdOk);
-                    if (!cmdOk || cmdId < 0) {
-                      errCommande->setText("Order ID must be a valid positive number.");
-                      errCommande->show();
-                      isValid = false;
-                    }
-                  }
-
-                  if (isValid) {
-                      dlg.accept();
-                  }
-                });
+                QObject::connect(bbox, &QDialogButtonBox::accepted, &dlg,
+                                 &QDialog::accept);
                 QObject::connect(bbox, &QDialogButtonBox::rejected, &dlg,
                                  &QDialog::reject);
 
@@ -2967,7 +1843,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
       cLayout->addWidget(transContainer);
 
     } else if (name == "Expense Tracking") {
-      // ========== Filtered view — Expenses only ==========
+      // ========== Filtered view â€” Expenses only ==========
       QPushButton *btnPrint = new QPushButton("PRINT PDF");
       btnPrint->setStyleSheet(getButtonStyle());
       btnPrint->setCursor(Qt::PointingHandCursor);
@@ -3055,7 +1931,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
       });
 
     } else if (name == "Analytics") {
-      // ========== Analytics — Aggregated from DB ==========
+      // ========== Analytics â€” Aggregated from DB ==========
       QPushButton *btnPrint = new QPushButton("PRINT REPORT");
       btnPrint->setStyleSheet(getButtonStyle());
       btnPrint->setCursor(Qt::PointingHandCursor);
@@ -3160,29 +2036,22 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
           "1px solid #eee; }");
 
       QVBoxLayout *outerLayout = new QVBoxLayout(formContainer);
-      outerLayout->setContentsMargins(15, 15, 15, 15);
+      outerLayout->setContentsMargins(30, 30, 30, 30);
 
       QWidget *formContent = new QWidget();
       formContent->setAttribute(Qt::WA_TranslucentBackground);
       formContent->setStyleSheet("background: transparent;");
       QVBoxLayout *formLayout = new QVBoxLayout(formContent);
       formLayout->setContentsMargins(0, 0, 0, 0);
-      formLayout->setSpacing(8);
+      formLayout->setSpacing(15);
 
       QLabel *titleLabel = new QLabel("Add New Stock Item");
       titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: "
-                                "#1a1a1a; margin-bottom: 10px; border: none;");
+                                "#1a1a1a; margin-bottom: 25px; border: none;");
       formLayout->addWidget(titleLabel);
 
       QString labelStyle = getLabelStyle();
       QString inputStyle = getInputStyle();
-
-      auto createErrLabel = []() {
-        QLabel *lbl = new QLabel("");
-        lbl->setStyleSheet("color: #d32f2f; font-size: 11px; font-weight: 600; margin-top: -3px; margin-bottom: 2px;");
-        lbl->hide();
-        return lbl;
-      };
 
       // NOM
       QLabel *lblNom = new QLabel("Item Name:");
@@ -3190,10 +2059,8 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
       QLineEdit *inputNom = new QLineEdit();
       inputNom->setStyleSheet(inputStyle);
       inputNom->setPlaceholderText("Extra Virgin 1L");
-      QLabel *errNom = createErrLabel();
       formLayout->addWidget(lblNom);
       formLayout->addWidget(inputNom);
-      formLayout->addWidget(errNom);
 
       // QUANTITE
       QLabel *lblQty = new QLabel("Quantity:");
@@ -3201,46 +2068,20 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
       QLineEdit *inputQty = new QLineEdit();
       inputQty->setStyleSheet(inputStyle);
       inputQty->setPlaceholderText("0");
-      QLabel *errQty = createErrLabel();
       formLayout->addWidget(lblQty);
       formLayout->addWidget(inputQty);
-      formLayout->addWidget(errQty);
 
-      // UNITE
-      QLabel *lblUnt = new QLabel("Unit:");
-      lblUnt->setStyleSheet(labelStyle);
-      QLineEdit *inputUnt = new QLineEdit();
-      inputUnt->setStyleSheet(inputStyle);
-      inputUnt->setPlaceholderText("Liters / Kg / Units");
-      QLabel *errUnt = createErrLabel();
-      formLayout->addWidget(lblUnt);
-      formLayout->addWidget(inputUnt);
-      formLayout->addWidget(errUnt);
-
-      // PRIX UNITAIRE
-      QLabel *lblPrix = new QLabel("Unit Price:");
-      lblPrix->setStyleSheet(labelStyle);
-      QLineEdit *inputPrix = new QLineEdit();
-      inputPrix->setStyleSheet(inputStyle);
-      inputPrix->setPlaceholderText("0");
-      QLabel *errPrix = createErrLabel();
-      formLayout->addWidget(lblPrix);
-      formLayout->addWidget(inputPrix);
-      formLayout->addWidget(errPrix);
-
-      // DATE D'ACHAT
-      QLabel *lblDate = new QLabel("Date of Purchase:");
-      lblDate->setStyleSheet(labelStyle);
-      QDateEdit *inputDate = new QDateEdit(QDate::currentDate());
-      inputDate->setStyleSheet(inputStyle);
-      inputDate->setCalendarPopup(true);
-      QLabel *errDate = createErrLabel();
-      formLayout->addWidget(lblDate);
-      formLayout->addWidget(inputDate);
-      formLayout->addWidget(errDate);
+      // SEUIL MINIMAL
+      QLabel *lblSeuil = new QLabel("Min Threshold:");
+      lblSeuil->setStyleSheet(labelStyle);
+      QLineEdit *inputSeuil = new QLineEdit();
+      inputSeuil->setStyleSheet(inputStyle);
+      inputSeuil->setPlaceholderText("0");
+      formLayout->addWidget(lblSeuil);
+      formLayout->addWidget(inputSeuil);
 
       // Submit Button
-      formLayout->addSpacing(10);
+      formLayout->addSpacing(20);
       QPushButton *btnSubmit = new QPushButton("Add Item");
       btnSubmit->setStyleSheet(getButtonStyle());
       btnSubmit->setCursor(Qt::PointingHandCursor);
@@ -3249,60 +2090,18 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
 
       // Connect Add Button -> Article::ajouter()
       QObject::connect(
-          btnSubmit, &QPushButton::clicked, [inputNom, inputQty, inputUnt, inputPrix, inputDate, errNom, errQty, errUnt, errPrix, errDate]() {
-            // Reset errors
-            errNom->hide();
-            errQty->hide();
-            errUnt->hide();
-            errPrix->hide();
-            errDate->hide();
-
-            bool isValid = true;
-
+          btnSubmit, &QPushButton::clicked, [inputNom, inputQty, inputSeuil]() {
             // Input validation
             if (inputNom->text().trimmed().isEmpty()) {
-              errNom->setText("Item Name is required.");
-              errNom->show();
-              isValid = false;
+              QMessageBox::warning(nullptr, "Validation Error",
+                                   "Item Name is required.");
+              return;
             }
-
-            bool qtyOk;
-            int qty = inputQty->text().toInt(&qtyOk);
-            if (!qtyOk || qty < 0) {
-              errQty->setText("Quantity must be a valid positive number.");
-              errQty->show();
-              isValid = false;
-            }
-
-            QRegularExpression unitRegex("^[a-zA-Z\\s]+$");
-            if (!unitRegex.match(inputUnt->text().trimmed()).hasMatch()) {
-              errUnt->setText("Unit must strictly contain letters and spaces.");
-              errUnt->show();
-              isValid = false;
-            }
-
-            bool prixOk;
-            int prix = inputPrix->text().toInt(&prixOk);
-            if (!prixOk || prix < 0) {
-              errPrix->setText("Unit Price must be a valid positive number.");
-              errPrix->show();
-              isValid = false;
-            }
-
-            if (inputDate->date() > QDate::currentDate()) {
-              errDate->setText("Purchase Date cannot be in the future.");
-              errDate->show();
-              isValid = false;
-            }
-
-            if (!isValid) return;
 
             Article a;
             a.setNom(inputNom->text().trimmed());
             a.setQuantite(inputQty->text().toInt());
-            a.setUnite(inputUnt->text().trimmed());
-            a.setPrixUnitaire(inputPrix->text().toInt());
-            a.setDateAchat(inputDate->date());
+            a.setSeuilMinimal(inputSeuil->text().toInt());
 
             if (a.ajouter()) {
               QMessageBox::information(nullptr, "Success",
@@ -3310,9 +2109,7 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
               // Clear the form
               inputNom->clear();
               inputQty->clear();
-              inputUnt->clear();
-              inputPrix->clear();
-              inputDate->setDate(QDate::currentDate());
+              inputSeuil->clear();
             } else {
               QMessageBox::critical(
                   nullptr, "Error",
@@ -3375,7 +2172,7 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
 
       // 2. Table
       stockTable = new QTableWidget();
-      QStringList headers = {"ID", "Item Name", "Current Qty", "Unit", "Unit Price", "Purchase Date",
+      QStringList headers = {"ID", "Item Name", "Current Qty", "Min Threshold",
                              "Actions"};
       stockTable->setColumnCount(headers.size());
       stockTable->setHorizontalHeaderLabels(headers);
@@ -3420,20 +2217,16 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
         stockTable->setRowCount(rowCount);
 
         for (int i = 0; i < rowCount; ++i) {
-          // Columns: ID(0), NOM(1), QUANTITE(2), UNITE(3), PRIX(4), DATE(5)
+          // Columns: ID(0), NOM(1), QUANTITE(2), SEUIL(3)
           QString id = model->data(model->index(i, 0)).toString();
           QString nom = model->data(model->index(i, 1)).toString();
           QString qty = model->data(model->index(i, 2)).toString();
-          QString unt = model->data(model->index(i, 3)).toString();
-          QString prix = model->data(model->index(i, 4)).toString();
-          QString dateStr = model->data(model->index(i, 5)).toString();
+          QString seuil = model->data(model->index(i, 3)).toString();
 
           stockTable->setItem(i, 0, new QTableWidgetItem(id));
           stockTable->setItem(i, 1, new QTableWidgetItem(nom));
           stockTable->setItem(i, 2, new QTableWidgetItem(qty));
-          stockTable->setItem(i, 3, new QTableWidgetItem(unt));
-          stockTable->setItem(i, 4, new QTableWidgetItem(prix));
-          stockTable->setItem(i, 5, new QTableWidgetItem(dateStr));
+          stockTable->setItem(i, 3, new QTableWidgetItem(seuil));
 
           // --- Action Buttons (Modify + Delete) ---
           QWidget *actionWidget = new QWidget();
@@ -3518,17 +2311,17 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
           // --- MODIFIER (UPDATE) ---
           QObject::connect(
               btnModify, &QPushButton::clicked,
-              [stockTable, itemId, nom, qty, unt, prix, dateStr]() {
+              [stockTable, itemId, nom, qty, seuil]() {
                 QDialog *dialog = new QDialog(stockTable->window());
                 dialog->setWindowTitle("Modify Item");
                 dialog->setMinimumWidth(450);
                 dialog->setStyleSheet(
                     "QDialog { background-color: #ffffff; }"
                     "QLabel { font-size: 14px; font-weight: 700; color: #333; }"
-                    "QLineEdit, QDateEdit { background-color: #fcfcfc; border: 1px solid "
-                    "#e0e0e0; border-radius: 6px; padding: 6px 10px; "
-                    "font-size: 13px; color: #333; min-height: 30px; }"
-                    "QLineEdit:focus, QDateEdit:focus { border: 2px solid #3DDC84; "
+                    "QLineEdit { background-color: #fcfcfc; border: 1px solid "
+                    "#e0e0e0; border-radius: 8px; padding: 10px 14px; "
+                    "font-size: 14px; color: #333; min-height: 35px; }"
+                    "QLineEdit:focus { border: 2px solid #3DDC84; "
                     "background-color: #ffffff; }");
 
                 QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
@@ -3540,48 +2333,20 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
                                         "color: #1a1a1a; margin-bottom: 10px;");
                 dialogLayout->addWidget(dlgTitle);
 
-                auto createErrLabelDlg = []() {
-                  QLabel *lbl = new QLabel("");
-                  lbl->setStyleSheet("color: #d32f2f; font-size: 11px; font-weight: 600; margin-top: -5px; border: none; background: transparent;");
-                  lbl->hide();
-                  return lbl;
-                };
-
                 QLabel *lblNom = new QLabel("Item Name:");
                 QLineEdit *editNom = new QLineEdit(nom);
-                QLabel *errNom = createErrLabelDlg();
                 dialogLayout->addWidget(lblNom);
                 dialogLayout->addWidget(editNom);
-                dialogLayout->addWidget(errNom);
 
                 QLabel *lblQty = new QLabel("Quantity:");
                 QLineEdit *editQty = new QLineEdit(qty);
-                QLabel *errQty = createErrLabelDlg();
                 dialogLayout->addWidget(lblQty);
                 dialogLayout->addWidget(editQty);
-                dialogLayout->addWidget(errQty);
 
-                QLabel *lblUnt = new QLabel("Unit:");
-                QLineEdit *editUnt = new QLineEdit(unt);
-                QLabel *errUnt = createErrLabelDlg();
-                dialogLayout->addWidget(lblUnt);
-                dialogLayout->addWidget(editUnt);
-                dialogLayout->addWidget(errUnt);
-
-                QLabel *lblPrix = new QLabel("Unit Price:");
-                QLineEdit *editPrix = new QLineEdit(prix);
-                QLabel *errPrix = createErrLabelDlg();
-                dialogLayout->addWidget(lblPrix);
-                dialogLayout->addWidget(editPrix);
-                dialogLayout->addWidget(errPrix);
-
-                QLabel *lblDate = new QLabel("Purchase Date:");
-                QDateEdit *editDate = new QDateEdit(QDate::fromString(dateStr, Qt::ISODate));
-                editDate->setCalendarPopup(true);
-                QLabel *errDate = createErrLabelDlg();
-                dialogLayout->addWidget(lblDate);
-                dialogLayout->addWidget(editDate);
-                dialogLayout->addWidget(errDate);
+                QLabel *lblSeuil = new QLabel("Min Threshold:");
+                QLineEdit *editSeuil = new QLineEdit(seuil);
+                dialogLayout->addWidget(lblSeuil);
+                dialogLayout->addWidget(editSeuil);
 
                 dialogLayout->addSpacing(20);
 
@@ -3618,60 +2383,13 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
                                  &QDialog::reject);
                 QObject::connect(
                     saveBtn, &QPushButton::clicked,
-                    [dialog, editNom, editQty, editUnt, editPrix, editDate, itemId,
-                     stockTable, errNom, errQty, errUnt, errPrix, errDate]() {
-                      errNom->hide();
-                      errQty->hide();
-                      errUnt->hide();
-                      errPrix->hide();
-                      errDate->hide();
-
-                      bool isValid = true;
-
-                      if (editNom->text().trimmed().isEmpty()) {
-                        errNom->setText("Item Name is required.");
-                        errNom->show();
-                        isValid = false;
-                      }
-
-                      bool qtyOk;
-                      int q = editQty->text().toInt(&qtyOk);
-                      if (!qtyOk || q < 0) {
-                        errQty->setText("Quantity must be a valid positive number.");
-                        errQty->show();
-                        isValid = false;
-                      }
-
-                      QRegularExpression unitRegex("^[a-zA-Z\\s]+$");
-                      if (!unitRegex.match(editUnt->text().trimmed()).hasMatch()) {
-                        errUnt->setText("Unit must strictly contain letters and spaces.");
-                        errUnt->show();
-                        isValid = false;
-                      }
-
-                      bool prixOk;
-                      int p = editPrix->text().toInt(&prixOk);
-                      if (!prixOk || p < 0) {
-                        errPrix->setText("Unit Price must be a valid positive number.");
-                        errPrix->show();
-                        isValid = false;
-                      }
-
-                      if (editDate->date() > QDate::currentDate()) {
-                        errDate->setText("Purchase Date cannot be in the future.");
-                        errDate->show();
-                        isValid = false;
-                      }
-
-                      if (!isValid) return;
-
+                    [dialog, editNom, editQty, editSeuil, itemId,
+                     stockTable]() {
                       Article a;
                       a.setId(itemId);
                       a.setNom(editNom->text().trimmed());
                       a.setQuantite(editQty->text().toInt());
-                      a.setUnite(editUnt->text().trimmed());
-                      a.setPrixUnitaire(editPrix->text().toInt());
-                      a.setDateAchat(editDate->date());
+                      a.setSeuilMinimal(editSeuil->text().toInt());
 
                       if (a.modifier()) {
                         QMessageBox::information(nullptr, "Success",
@@ -3684,9 +2402,7 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
                             stockTable->item(r, 1)->setText(
                                 editNom->text().trimmed());
                             stockTable->item(r, 2)->setText(editQty->text());
-                            stockTable->item(r, 3)->setText(editUnt->text());
-                            stockTable->item(r, 4)->setText(editPrix->text());
-                            stockTable->item(r, 5)->setText(editDate->date().toString(Qt::ISODate));
+                            stockTable->item(r, 3)->setText(editSeuil->text());
                             break;
                           }
                         }
@@ -3701,7 +2417,7 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
                 dialog->deleteLater();
               });
 
-          stockTable->setCellWidget(i, 6, actionWidget);
+          stockTable->setCellWidget(i, 4, actionWidget);
         }
 
         delete model;
@@ -3808,10 +2524,6 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       hItem->setData(Qt::DisplayRole, model->data(model->index(i, 4)).toInt());
       table->setItem(i, 4, hItem);
 
-      QTableWidgetItem *sItem = new QTableWidgetItem();
-      sItem->setData(Qt::DisplayRole, model->data(model->index(i, 5)).toInt());
-      table->setItem(i, 5, sItem);
-
       // --- Actions ---
       QWidget *actionWidget = new QWidget();
       QHBoxLayout *al = new QHBoxLayout(actionWidget);
@@ -3836,7 +2548,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
 
       al->addWidget(btnMod);
       al->addWidget(btnDel);
-      table->setCellWidget(i, 6, actionWidget);
+      table->setCellWidget(i, 5, actionWidget);
 
       // Connect Edit
       QObject::connect(btnMod, &QPushButton::clicked, [table, mid, refreshMachineTable]() {
@@ -3854,7 +2566,6 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           QString currentType = table->item(row, 2)->text();
           QString currentStatus = table->item(row, 3)->text();
           int currentHours = table->item(row, 4)->data(Qt::DisplayRole).toInt();
-          int currentSeuil = table->item(row, 5)->data(Qt::DisplayRole).toInt();
 
           QDialog dlg(table->window());
           dlg.setWindowTitle("Modify Machine");
@@ -3874,62 +2585,16 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           };
 
           QLineEdit *edName = addField("Name:", currentName);
-          edName->setMaxLength(50);
-          edName->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z0-9\\s\\-_]+$"), edName));
-          
-          mainV->addWidget(new QLabel("Type:"));
-          QComboBox *edType = new QComboBox();
-          edType->addItems({"press", "filter"});
-          edType->setCurrentText(currentType);
-          edType->setStyleSheet("QComboBox { background-color: #f9fafb; border: 1px solid #eaeaea; border-radius: 8px; padding: 10px; font-size: 14px; }");
-          mainV->addWidget(edType);
-          
-          mainV->addWidget(new QLabel("Status:"));
-          QComboBox *edStatus = new QComboBox();
-          edStatus->addItems({"Normal", "En panne", "En maintenance"});
-          edStatus->setCurrentText(currentStatus);
-          edStatus->setStyleSheet("QComboBox { background-color: #f9fafb; border: 1px solid #eaeaea; border-radius: 8px; padding: 10px; font-size: 14px; }");
-          mainV->addWidget(edStatus);
-
+          QLineEdit *edType = addField("Type:", currentType);
+          QLineEdit *edStatus = addField("Status:", currentStatus);
           QLineEdit *edHours = addField("Hours:", QString::number(currentHours));
-          edHours->setValidator(new QIntValidator(0, 9999999, edHours));
-          QLineEdit *edSeuil = addField("Threshold:", QString::number(currentSeuil));
-          edSeuil->setValidator(new QIntValidator(0, 9999999, edSeuil));
 
           QPushButton *btnSave = new QPushButton("Save Changes");
           btnSave->setStyleSheet("QPushButton { background-color: #3DDC84; color: white; border: none; border-radius: 8px; padding: 12px; font-weight: 700; }");
           mainV->addWidget(btnSave);
 
           QObject::connect(btnSave, &QPushButton::clicked, [=, &dlg]() {
-              QString nom = edName->text().trimmed();
-              QString heuresStr = edHours->text().trimmed();
-              QString seuilStr = edSeuil->text().trimmed();
-
-              if (nom.isEmpty() || heuresStr.isEmpty() || seuilStr.isEmpty()) {
-                  QMessageBox::warning(&dlg, "Erreur de Saisie", "Veuillez remplir tous les champs obligatoires (Nom, Heures, Seuil).");
-                  return;
-              }
-
-              QRegularExpression nomRegex("^[a-zA-Z0-9\\s\\-_]+$");
-              if (!nomRegex.match(nom).hasMatch()) {
-                  QMessageBox::warning(&dlg, "Erreur de Saisie", "Le nom de la machine contient des caractères non autorisés.");
-                  return;
-              }
-
-              int heures = heuresStr.toInt();
-              int seuil = seuilStr.toInt();
-
-              if (heures < 0) {
-                  QMessageBox::warning(&dlg, "Erreur de Saisie", "Les heures de fonctionnement doivent être positives ou nulles.");
-                  return;
-              }
-
-              if (seuil <= 0) {
-                  QMessageBox::warning(&dlg, "Erreur de Saisie", "Le seuil de maintenance doit être strictement supérieur à 0.");
-                  return;
-              }
-
-              Machine updateObj(mid, nom, edType->currentText(), edStatus->currentText(), heures, seuil);
+              Machine updateObj(mid, edName->text(), edType->text(), edStatus->text(), edHours->text().toInt());
               if (updateObj.modifier()) {
                   dlg.accept();
                   (*refreshMachineTable)();
@@ -3945,7 +2610,6 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           if (QMessageBox::warning(table->window(), "Confirm Delete", "Are you sure you want to remove this machine?", QMessageBox::Yes | QMessageBox::No) == QMessageBox::Yes) {
               Machine deleteObj;
               if (deleteObj.supprimer(mid)) {
-                  QMessageBox::information(table->window(), "Succès", "La machine a été supprimée avec succès.");
                   (*refreshMachineTable)();
               } else {
                   QMessageBox::critical(table->window(), "Error", "Delete failed: " + deleteObj.getLastError());
@@ -3973,30 +2637,17 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
 
       QLabel *titleLabel = new QLabel("New Machine");
       titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 25px; border: none;");
-      titleLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-      titleLabel->setMinimumHeight(40);
       formLayout->addWidget(titleLabel);
 
       QLineEdit *nameInput = new QLineEdit();
-      nameInput->setMaxLength(50);
-      nameInput->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z0-9\\s\\-_]+$"), nameInput));
-      QComboBox *typeInput = new QComboBox();
-      typeInput->addItems({"press", "filter"});
-      QComboBox *statusInput = new QComboBox();
-      statusInput->addItems({"Normal", "En panne", "En maintenance"});
+      QLineEdit *typeInput = new QLineEdit();
+      QLineEdit *statusInput = new QLineEdit();
       QLineEdit *hoursInput = new QLineEdit("0");
-      hoursInput->setValidator(new QIntValidator(0, 9999999, hoursInput));
-      QLineEdit *seuilInput = new QLineEdit("100");
-      seuilInput->setValidator(new QIntValidator(0, 9999999, seuilInput));
 
-      auto addInput = [&](const QString &txt, QWidget *le) {
+      auto addInput = [&](const QString &txt, QLineEdit *le) {
           QLabel *l = new QLabel(txt);
           l->setStyleSheet(getLabelStyle());
-          l->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-          l->setMinimumHeight(30);
           le->setStyleSheet(getInputStyle());
-          le->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-          le->setMinimumHeight(40);
           formLayout->addWidget(l);
           formLayout->addWidget(le);
       };
@@ -4005,7 +2656,6 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       addInput("Machine Type:", typeInput);
       addInput("Machine Status:", statusInput);
       addInput("Operating Hours:", hoursInput);
-      addInput("Maintenance Threshold:", seuilInput);
 
       formLayout->addSpacing(20);
       QPushButton *btnAdd = new QPushButton("Add Machine");
@@ -4017,43 +2667,15 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       cLayout->addWidget(formContainer);
 
       QObject::connect(btnAdd, &QPushButton::clicked, [=]() {
-          QString nom = nameInput->text().trimmed();
-          QString heuresStr = hoursInput->text().trimmed();
-          QString seuilStr = seuilInput->text().trimmed();
-
-          if (nom.isEmpty()) {
-              QMessageBox::warning(nullptr, "Erreur de Saisie", "Le champ 'Nom' est obligatoire.");
+          if (nameInput->text().isEmpty() || typeInput->text().isEmpty()) {
+              QMessageBox::warning(nullptr, "Error", "Name and Type are required.");
               return;
           }
 
-          QRegularExpression nomRegex("^[a-zA-Z0-9\\s\\-_]+$");
-          if (!nomRegex.match(nom).hasMatch()) {
-              QMessageBox::warning(nullptr, "Erreur de Saisie", "Le nom de la machine contient des caractères non autorisés.");
-              return;
-          }
-
-          if (heuresStr.isEmpty() || seuilStr.isEmpty()) {
-              QMessageBox::warning(nullptr, "Erreur de Saisie", "Les heures et le seuil ne peuvent pas être vides.");
-              return;
-          }
-
-          int heures = heuresStr.toInt();
-          int seuil = seuilStr.toInt();
-
-          if (heures < 0) {
-              QMessageBox::warning(nullptr, "Erreur de Saisie", "Les heures de fonctionnement doivent être positives ou nulles.");
-              return;
-          }
-
-          if (seuil <= 0) {
-              QMessageBox::warning(nullptr, "Erreur de Saisie", "Le seuil de maintenance doit être strictement supérieur à 0.");
-              return;
-          }
-
-          Machine newM(0, nom, typeInput->currentText(), statusInput->currentText(), heures, seuil);
+          Machine newM(0, nameInput->text(), typeInput->text(), statusInput->text().isEmpty() ? "Normal" : statusInput->text(), hoursInput->text().toInt());
           if (newM.ajouter()) {
               QMessageBox::information(nullptr, "Success", "Machine added with persistence!");
-              nameInput->clear(); typeInput->setCurrentIndex(0); statusInput->setCurrentIndex(0); hoursInput->setText("0"); seuilInput->setText("100");
+              nameInput->clear(); typeInput->clear(); statusInput->clear(); hoursInput->setText("0");
               
               if (refreshMachineTable) {
                   (*refreshMachineTable)();
@@ -4096,11 +2718,6 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       sortType->setStyleSheet(getInputStyle());
       sortType->setFixedWidth(110);
 
-      QPushButton *btnAlert = new QPushButton("Check Alerts");
-      btnAlert->setStyleSheet("QPushButton { background-color: #f39c12; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; padding: 10px 18px; } QPushButton:hover { background-color: #e67e22; }");
-      btnAlert->setCursor(Qt::PointingHandCursor);
-      btnAlert->setFixedWidth(120);
-
       controlLayout->addWidget(searchType);
       controlLayout->addWidget(searchEdit);
       controlLayout->addSpacing(10);
@@ -4109,11 +2726,9 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       controlLayout->addSpacing(10);
       controlLayout->addWidget(btnRefresh);
       controlLayout->addStretch();
-      controlLayout->addWidget(btnAlert);
-      controlLayout->addSpacing(10);
       controlLayout->addWidget(btnPrint);
 
-      QStringList headers = {"ID", "Name", "Type", "Status", "Hours", "Threshold", "Actions"};
+      QStringList headers = {"ID", "Name", "Type", "Status", "Hours", "Actions"};
       QTableWidget *table = new QTableWidget();
       *machineTablePtr = table;
       table->setColumnCount(headers.size());
@@ -4157,105 +2772,9 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           (*refreshMachineTable)();
       });
 
-      QObject::connect(btnAlert, &QPushButton::clicked, [table]() {
-          if (!table) return;
-          QString alertMsg;
-          bool hasAlerts = false;
-          for (int i = 0; i < table->rowCount(); ++i) {
-             int id = table->item(i, 0)->text().toInt();
-             QString nom = table->item(i, 1)->text();
-             int heures = table->item(i, 4)->data(Qt::DisplayRole).toInt();
-             int seuil = table->item(i, 5)->data(Qt::DisplayRole).toInt();
-             if (heures >= seuil && seuil > 0) {
-                alertMsg += "Machine " + QString::number(id) + " (" + nom + ") a atteint/dépassé son seuil (" + QString::number(heures) + "/" + QString::number(seuil) + "h).\n";
-                hasAlerts = true;
-                for(int c=0; c<table->columnCount() - 1; ++c) { // Exclude actions col
-                   if(table->item(i, c)) table->item(i, c)->setBackground(QColor(255, 200, 200)); // Red tint
-                }
-             } else {
-                for(int c=0; c<table->columnCount() - 1; ++c) {
-                   if(table->item(i, c)) table->item(i, c)->setBackground(QBrush()); // Reset
-                }
-             }
-          }
-          if (hasAlerts) {
-              QMessageBox::warning(table->window(), "Alertes de Maintenance", alertMsg);
-              // Sending email
-              Smtp* smtp = new Smtp("nour.benrhoumakok@gmail.com", "toualqtctfvdcnlp", "smtp.gmail.com", 465);
-              QObject::connect(smtp, &Smtp::status, [table](const QString &status) {
-                  qDebug() << "Email Status:" << status;
-              });
-              smtp->sendMail("nour.benrhoumakok@gmail.com", "nour.benrhoumakok@gmail.com", "Alerte de Maintenance Critique", "Les machines suivantes nécessitent une maintenance immédiate :\n\n" + alertMsg);
-          } else {
-              QMessageBox::information(table->window(), "Maintenance", "Toutes les machines sont en dessous de leur seuil de maintenance.");
-          }
-      });
-
       QObject::connect(btnPrint, &QPushButton::clicked, [table]() {
           if (!table) return;
-
-          QString defaultName = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + "_Rapport_Machines.pdf";
-          QString fileName = QFileDialog::getSaveFileName(table->window(), "Exporter en PDF", defaultName, "PDF Files (*.pdf)");
-          if (fileName.isEmpty()) return;
-
-          // Build HTML
-          const int rowCount = table->rowCount();
-          const int columnCount = table->columnCount() - 1; // Exclude Actions col
-
-          QString strStream;
-          QTextStream out(&strStream);
-          out << "<html><head><meta charset='utf-8'></head>"
-              << "<body style='font-family:Arial,sans-serif;'>"
-              << "<h1 style='text-align:center;color:#2c3e50;'>Rapport Maintenance - Machines</h1>"
-              << "<p style='text-align:center;color:#7f8c8d;'>Genere le: "
-              << QDateTime::currentDateTime().toString("dd/MM/yyyy hh:mm")
-              << "</p>"
-              << "<table border='1' cellspacing='0' cellpadding='8' width='100%' "
-              << "style='border-collapse:collapse;'><thead><tr style='background:#f0f0f0;'>";
-
-          for (int c = 0; c < columnCount; ++c)
-              if (!table->isColumnHidden(c) && table->horizontalHeaderItem(c))
-                  out << "<th style='border:1px solid #ccc;'>" << table->horizontalHeaderItem(c)->text() << "</th>";
-          out << "</tr></thead><tbody>";
-
-          for (int r = 0; r < rowCount; ++r) {
-              if (table->isRowHidden(r)) continue;
-              out << "<tr>";
-              for (int c = 0; c < columnCount; ++c) {
-                  if (table->isColumnHidden(c)) continue;
-                  QString cellData;
-                  if (table->item(r, c)) {
-                      cellData = table->item(r, c)->text();
-                      if (cellData.isEmpty())
-                          cellData = table->item(r, c)->data(Qt::DisplayRole).toString();
-                  }
-                  out << "<td style='border:1px solid #ccc;text-align:center;'>" << (cellData.isEmpty() ? "&nbsp;" : cellData.toHtmlEscaped()) << "</td>";
-              }
-              out << "</tr>";
-          }
-          out << "</tbody></table></body></html>";
-
-          // Render to PDF
-          QPrinter printer(QPrinter::HighResolution);
-          printer.setOutputFormat(QPrinter::PdfFormat);
-          printer.setOutputFileName(fileName);
-          printer.setPageSize(QPageSize(QPageSize::A4));
-          printer.setPageOrientation(QPageLayout::Landscape);
-          printer.setPageMargins(QMarginsF(15, 15, 15, 15), QPageLayout::Millimeter);
-
-          QTextDocument document;
-          document.setPageSize(printer.pageRect(QPrinter::Point).size());
-          document.setHtml(strStream);
-          document.print(&printer);
-
-          // Verify file was created
-          if (QFileInfo::exists(fileName)) {
-              QMessageBox::information(table->window(), "Succes",
-                  "Le PDF a ete genere avec succes !\nEmplacement: " + fileName);
-          } else {
-              QMessageBox::critical(table->window(), "Erreur",
-                  "La generation du PDF a echoue.\nVerifiez les permissions du dossier.");
-          }
+          QMessageBox::information(table->window(), "Print", "PDF Export started...");
       });
 
       (*refreshMachineTable)();
@@ -4294,7 +2813,7 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
   actionLayout->setSpacing(12);
 
   outNestedStack = new QStackedWidget();
-  QStringList tabNames = {"Product Hub", "Add Product", "Estimation", "Analytics"};
+  QStringList tabNames = {"Product Hub", "Add Product", "Analytics"};
   QList<QPushButton *> tabButtons;
 
   // Use a shared pointer to hold the table pointer so the lambda can access it after initialization
@@ -4318,25 +2837,14 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
 
     for (int i = 0; i < rows; ++i) {
       int pid = model->data(model->index(i, 0)).toInt();
-      QTableWidgetItem *idItem = new QTableWidgetItem();
-      idItem->setData(Qt::EditRole, pid);
-      productTable->setItem(i, 0, idItem);
-      
-      productTable->setItem(i, 1, new QTableWidgetItem(model->data(model->index(i, 1)).toDate().toString("yyyy-MM-dd")));
-      
-      QTableWidgetItem *qntItem = new QTableWidgetItem();
-      qntItem->setData(Qt::EditRole, model->data(model->index(i, 2)).toInt());
-      productTable->setItem(i, 2, qntItem);
-      
-      productTable->setItem(i, 3, new QTableWidgetItem(model->data(model->index(i, 3)).toString()));
+      productTable->setItem(i, 0, new QTableWidgetItem(QString::number(pid)));
+      productTable->setItem(i, 1, new QTableWidgetItem(model->data(model->index(i, 1)).toString()));
+      productTable->setItem(i, 2, new QTableWidgetItem(model->data(model->index(i, 2)).toDate().toString("yyyy-MM-dd")));
+      productTable->setItem(i, 3, new QTableWidgetItem(QString::number(model->data(model->index(i, 3)).toDouble(), 'f', 2)));
       productTable->setItem(i, 4, new QTableWidgetItem(model->data(model->index(i, 4)).toString()));
-      productTable->setItem(i, 5, new QTableWidgetItem(model->data(model->index(i, 5)).toString()));
+      productTable->setItem(i, 5, new QTableWidgetItem(QString::number(model->data(model->index(i, 5)).toDouble(), 'f', 2)));
       productTable->setItem(i, 6, new QTableWidgetItem(model->data(model->index(i, 6)).toString()));
-      
-      QTableWidgetItem *capItem = new QTableWidgetItem();
-      capItem->setData(Qt::EditRole, model->data(model->index(i, 7)).toInt());
-      productTable->setItem(i, 7, capItem);
-      
+      productTable->setItem(i, 7, new QTableWidgetItem(model->data(model->index(i, 7)).toString()));
       productTable->setItem(i, 8, new QTableWidgetItem(model->data(model->index(i, 8)).toString()));
 
       // Action Buttons
@@ -4402,13 +2910,11 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
           };
 
           // Removing eIdC and eRef as requested
-          QLineEdit *eDate = addField("Date Pressage:", productTable->item(i, 1)->text());
-          QLineEdit *eQnt = addField("Quantité:", productTable->item(i, 2)->text());
-          QLineEdit *eRef = addField("Ref:", productTable->item(i, 3)->text());
-          QLineEdit *eVisc = addField("Viscosité:", productTable->item(i, 4)->text());
-          QLineEdit *eCol = addField("Couleur:", productTable->item(i, 5)->text());
-          QLineEdit *eTst = addField("Test:", productTable->item(i, 6)->text());
-          QLineEdit *eCap = addField("Capacité:", productTable->item(i, 7)->text());
+          QLineEdit *eDate = addField("Date Pressage:", productTable->item(i, 2)->text());
+          QLineEdit *eQnt = addField("QuantitÃ©:", productTable->item(i, 3)->text());
+          QLineEdit *eVisc = addField("ViscositÃ©:", productTable->item(i, 5)->text());
+          QLineEdit *eCol = addField("Couleur:", productTable->item(i, 6)->text());
+          QLineEdit *eTst = addField("Test:", productTable->item(i, 7)->text());
           QLineEdit *eIdM = addField("ID Machine:", productTable->item(i, 8)->text());
 
           QPushButton *btnSave = new QPushButton("Save Changes");
@@ -4416,16 +2922,15 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
                                  "border-radius: 8px; padding: 12px; font-weight: 700; }");
           mainV->addWidget(btnSave);
 
-          QObject::connect(btnSave, &QPushButton::clicked, [&dlg, eDate, eQnt, eRef, eVisc, eCol, eTst, eCap, eIdM, pid, refreshProductTable]() {
+          QObject::connect(btnSave, &QPushButton::clicked, [&dlg, eDate, eQnt, eVisc, eCol, eTst, eIdM, pid, refreshProductTable]() {
               Produit p;
-              p.setIdContenair(pid);
+              p.setIdProduit(pid);
+              // idContenair and ref remain null/unchanged if not provided
               p.setDatePress(QDate::fromString(eDate->text(), "yyyy-MM-dd"));
-              p.setQuantite(eQnt->text().toInt());
-              p.setRef(eRef->text());
-              p.setViscosite(eVisc->text());
+              p.setQuantite(eQnt->text().toDouble());
+              p.setViscosite(eVisc->text().toDouble());
               p.setCouleur(eCol->text());
               p.setTest(eTst->text());
-              p.setCapacite(eCap->text().toInt());
               p.setIdMachine(eIdM->text().toInt());
 
               if (p.modifier()) {
@@ -4458,35 +2963,11 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       listPageLayout->setContentsMargins(0, 0, 0, 0);
       listPageLayout->setSpacing(10);
 
-      // 1. Top Buttons (Refresh & Print, Search & Sort)
+      // 1. Top Buttons (Refresh & Print)
       QWidget *topButtonsWidget = new QWidget();
       QHBoxLayout *topButtonsLayout = new QHBoxLayout(topButtonsWidget);
       topButtonsLayout->setContentsMargins(0, 0, 0, 0);
       topButtonsLayout->setSpacing(10);
-      
-      QLineEdit *searchEdit = new QLineEdit();
-      searchEdit->setPlaceholderText("Search Product...");
-      searchEdit->setStyleSheet("QLineEdit { background-color: #fcfcfc; border: 1px solid #e0e0e0; border-radius: 8px; padding: 5px 10px; font-size: 13px; min-height: 35px; }");
-      searchEdit->setFixedWidth(150);
-
-      QComboBox *searchType = new QComboBox();
-      searchType->addItems({"Ref", "Couleur", "Test"});
-      searchType->setStyleSheet("QComboBox { background-color: #fcfcfc; border: 1px solid #e0e0e0; border-radius: 8px; padding: 5px 10px; font-size: 13px; min-height: 35px; }");
-      searchType->setFixedWidth(100);
-
-      QComboBox *sortType = new QComboBox();
-      sortType->addItems({"All", "Quantité", "Capacité"});
-      sortType->setStyleSheet("QComboBox { background-color: #fcfcfc; border: 1px solid #e0e0e0; border-radius: 8px; padding: 5px 10px; font-size: 13px; min-height: 35px; }");
-      sortType->setFixedWidth(100);
-
-      topButtonsLayout->addWidget(searchType);
-      topButtonsLayout->addWidget(searchEdit);
-      topButtonsLayout->addSpacing(10);
-      QLabel *sortLabel = new QLabel("Sort by:");
-      sortLabel->setStyleSheet("font-weight: 600; color: #555;");
-      topButtonsLayout->addWidget(sortLabel);
-      topButtonsLayout->addWidget(sortType);
-      
       topButtonsLayout->addStretch();
 
       QPushButton *btnRefresh = new QPushButton("REFRESH");
@@ -4508,8 +2989,8 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       // 2. Table
       *productTablePtr = new QTableWidget();
       QTableWidget *productTable = *productTablePtr;
-      QStringList headers = {"ID Contenair", "Date Press", "Quantité",
-                             "Ref", "Viscosité", "Couleur", "Test", "Capacité", "ID Machine", "Actions"};
+      QStringList headers = {"ID", "Conteneur", "Date Press", "QuantitÃ©",
+                             "Ref", "ViscositÃ©", "Couleur", "Test", "ID Machine", "Actions"};
       productTable->setColumnCount(headers.size());
       productTable->setHorizontalHeaderLabels(headers);
       productTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -4538,169 +3019,45 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       (*refreshProductTable)();
       cLayout->addWidget(listPageWidget);
 
-      // Connect Sort
-      QObject::connect(sortType, &QComboBox::currentTextChanged, [productTablePtr](const QString &text) {
-          QTableWidget *productTable = *productTablePtr;
-          if (!productTable) return;
-          if (text == "Quantité") productTable->sortItems(2, Qt::AscendingOrder);
-          else if (text == "Capacité") productTable->sortItems(7, Qt::AscendingOrder);
-          else if (text == "All") productTable->sortItems(0, Qt::AscendingOrder);
-      });
-
-      // Connect Filter
-      auto updateFilter = [productTablePtr, searchEdit, searchType]() {
-          QTableWidget *productTable = *productTablePtr;
-          if (!productTable) return;
-          QString lowerQuery = searchEdit->text().toLower();
-          int col = 3; // "Ref"
-          if (searchType->currentText() == "Couleur") col = 5;
-          else if (searchType->currentText() == "Test") col = 6;
-          
-          for (int i = 0; i < productTable->rowCount(); ++i) {
-              bool match = false;
-              if (productTable->item(i, col)) {
-                  match = productTable->item(i, col)->text().toLower().contains(lowerQuery);
-              }
-              productTable->setRowHidden(i, !match);
-          }
-      };
-
-      QObject::connect(searchEdit, &QLineEdit::textChanged, updateFilter);
-      QObject::connect(searchType, &QComboBox::currentTextChanged, updateFilter);
-
       // Connect Buttons
       QObject::connect(btnRefresh, &QPushButton::clicked, [refreshProductTable]() {
           (*refreshProductTable)();
       });
 
       QObject::connect(btnPrint, &QPushButton::clicked, [productTablePtr]() {
-          QTableWidget *table = *productTablePtr;
-          if (!table) return;
-          
-          QString strStream;
-          QTextStream out(&strStream);
-
-          const int rowCount = table->rowCount();
-          const int columnCount = table->columnCount() - 1; // Exclude Actions col
-
-          out <<  "<html>\n"
-              "<head>\n"
-              "<meta Content=\"Text/html; charset=utf-8\">\n"
-              <<  QString("<title>%1</title>\n").arg("Liste des Produits")
-              <<  "</head>\n"
-              "<body bgcolor=#ffffff link=#5000A0>\n"
-              "<h1 style=\"text-align: center; color: #3DDC84; font-family: Arial, sans-serif;\">Rapport des Produits</h1>\n"
-              "<p style=\"text-align: center; color: #7f8c8d;\">Généré le: " + QDateTime::currentDateTime().toString("dd/MM/yyyy hh:mm") + "</p>\n"
-              <<  "<table border=1 cellspacing=0 cellpadding=8 width=\"100%\" style=\"border-collapse: collapse; font-family: Arial, sans-serif;\">\n";
-
-          // headers
-          out << "<thead><tr bgcolor=#f0f0f0 style=\"color: #333;\">";
-          for (int column = 0; column < columnCount; column++)
-              if (!table->isColumnHidden(column))
-                  out << QString("<th style=\"border: 1px solid #ddd;\">%1</th>").arg(table->horizontalHeaderItem(column)->text());
-          out << "</tr></thead>\n<tbody>\n";
-
-          // data
-          for (int row = 0; row < rowCount; row++) {
-              if (table->isRowHidden(row)) continue;
-              out << "<tr>";
-              for (int column = 0; column < columnCount; column++) {
-                  if (!table->isColumnHidden(column)) {
-                      QString data;
-                      if(table->item(row, column)) {
-                          data = table->item(row, column)->text();
-                          if(data.isEmpty()) data = table->item(row, column)->data(Qt::DisplayRole).toString();
-                      }
-                      out << QString("<td style=\"border: 1px solid #ddd; text-align: center;\">%1</td>").arg((!data.isEmpty()) ? data : QString("&nbsp;"));
-                  }
-              }
-              out << "</tr>\n";
-          }
-          out <<  "</tbody></table>\n"
-              "</body>\n"
-              "</html>\n";
-
-          QTextDocument document;
-          document.setHtml(strStream);
-
-          QString defaultName = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + "_Rapport_Produits.pdf";
-          QString fileName = QFileDialog::getSaveFileName(table->window(), "Exporter en PDF", QDir::currentPath() + "/" + defaultName, "PDF Files (*.pdf)");
-          
-          if (fileName.isEmpty()) return;
-
-          QPrinter printer(QPrinter::PrinterResolution);
-          printer.setOutputFormat(QPrinter::PdfFormat);
-          printer.setOutputFileName(fileName);
-          printer.setPageMargins(QMarginsF(10, 10, 10, 10), QPageLayout::Millimeter);
-          
-          document.print(&printer);
-          QMessageBox::information(table->window(), "Succès", "Le PDF a été généré avec succès !\nEmplacement: " + fileName);
+          QTableWidget *productTable = *productTablePtr;
+          if (!productTable) return;
+          QMessageBox::information(productTable->window(), "Print", "PDF Export started...");
       });
 
     } else if (name == "Add Product") {
-      QScrollArea *scrollArea = new QScrollArea();
-      scrollArea->setWidgetResizable(true);
-      scrollArea->setFrameShape(QFrame::NoFrame);
-      scrollArea->setStyleSheet("QScrollArea { background-color: transparent; } QWidget#AddProductContainer { background-color: transparent; }");
-
       QWidget *formContainer = new QWidget();
-      formContainer->setObjectName("AddProductContainer");
       QVBoxLayout *formLayout = new QVBoxLayout(formContainer);
-      formLayout->setSpacing(28);
-      formLayout->setContentsMargins(10, 20, 30, 40);
+      formLayout->setSpacing(15);
+      formLayout->setContentsMargins(0, 0, 10, 0);
 
       QLabel *titleLabel = new QLabel("Add New Product");
-      titleLabel->setStyleSheet("font-size: 26px; font-weight: 700; color: #1a1a1a; margin-bottom: 10px;");
+      titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 25px;");
       formLayout->addWidget(titleLabel);
 
-      auto attachVisualValidation = [](QLineEdit *le) {
-          QObject::connect(le, &QLineEdit::textChanged, [le]() {
-              bool valid = true;
-              if (le->validator()) valid = le->hasAcceptableInput();
-              if (valid && !le->text().trimmed().isEmpty()) {
-                  le->setStyleSheet("QLineEdit { background-color: #fcfcfc; border: 1px solid #3DDC84; border-radius: 8px; padding: 10px 14px; font-size: 14px; min-height: 45px; }");
-              } else {
-                  le->setStyleSheet("QLineEdit { background-color: #fcfcfc; border: 1px solid #d32f2f; border-radius: 8px; padding: 10px 14px; font-size: 14px; min-height: 45px; }");
-              }
-          });
-      };
-
-      auto createField = [&](const QString &lbl, const QString &ph, QValidator *val = nullptr) {
+      auto createField = [&](const QString &lbl, const QString &ph) {
           formLayout->addWidget(new QLabel(lbl));
           QLineEdit *le = new QLineEdit();
           le->setPlaceholderText(ph);
           le->setStyleSheet("QLineEdit { background-color: #fcfcfc; border: 1px solid #e0e0e0; "
                             "border-radius: 8px; padding: 10px 14px; font-size: 14px; min-height: 45px; }");
-          if (val) le->setValidator(val);
-          attachVisualValidation(le);
           formLayout->addWidget(le);
           return le;
       };
 
-      formLayout->addWidget(new QLabel("Date Pressage:"));
-      QDateEdit *iDate = new QDateEdit(QDate::currentDate());
-      iDate->setCalendarPopup(true);
-      iDate->setMaximumDate(QDate::currentDate());
-      iDate->setDisplayFormat("yyyy-MM-dd");
-      iDate->setStyleSheet("QDateEdit { background-color: #fcfcfc; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px 14px; font-size: 14px; min-height: 45px; }");
-      formLayout->addWidget(iDate);
-
-      QLineEdit *iQnt = createField("Quantité:", "e.g., 500", new QIntValidator(1, 999999));
-      QLineEdit *iRef = createField("Ref:", "PRD-001");
-      
-      QDoubleValidator *viscVal = new QDoubleValidator(0.01, 10.0, 2);
-      viscVal->setNotation(QDoubleValidator::StandardNotation);
-      QLineEdit *iVisc = createField("Viscosité (e.g., 0.85):", "0.85", viscVal);
-      
-      formLayout->addWidget(new QLabel("Couleur:"));
-      QComboBox *iCol = new QComboBox();
-      iCol->addItems({"Golden", "Yellow-Green", "Green", "Dark Green"});
-      iCol->setStyleSheet("QComboBox { background-color: #fcfcfc; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px 14px; font-size: 14px; min-height: 45px; }");
-      formLayout->addWidget(iCol);
-
+      // Removed iIdC and iRef
+      QLineEdit *iDate = createField("Date Pressage:", "YYYY-MM-DD");
+      iDate->setText(QDate::currentDate().toString("yyyy-MM-dd"));
+      QLineEdit *iQnt = createField("QuantitÃ©:", "500.0");
+      QLineEdit *iVisc = createField("ViscositÃ©:", "0.85");
+      QLineEdit *iCol = createField("Couleur:", "Golden");
       QLineEdit *iTst = createField("Test:", "Compliant");
-      QLineEdit *iCap = createField("Capacité:", "e.g., 1000", new QIntValidator(1, 999999));
-      QLineEdit *iIdM = createField("ID Machine:", "e.g., 101", new QIntValidator(1, 999999));
+      QLineEdit *iIdM = createField("ID Machine:", "101");
 
       formLayout->addSpacing(20);
       QPushButton *btnAdd = new QPushButton("Add Product");
@@ -4710,31 +3067,19 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       formLayout->addWidget(btnAdd);
       formLayout->addStretch();
 
-        QObject::connect(btnAdd, &QPushButton::clicked, [=]() {
-          if (iQnt->text().isEmpty() || !iQnt->hasAcceptableInput() ||
-              iCap->text().isEmpty() || !iCap->hasAcceptableInput() ||
-              iIdM->text().isEmpty() || !iIdM->hasAcceptableInput() ||
-              iVisc->text().isEmpty() || !iVisc->hasAcceptableInput() ||
-              iRef->text().trimmed().isEmpty() || iTst->text().trimmed().isEmpty()) {
-              QMessageBox::warning(nullptr, "Erreur de Saisie", "Veuillez vérifier les champs en rouge. Certaines valeurs sont invalides ou manquantes.");
-              return;
-          }
-
+      QObject::connect(btnAdd, &QPushButton::clicked, [=]() {
           Produit p;
-          p.setDatePress(iDate->date());
-          p.setQuantite(iQnt->text().toInt());
-          p.setRef(iRef->text());
-          p.setViscosite(iVisc->text());
-          p.setCouleur(iCol->currentText());
+          // idContenair and ref remain null
+          p.setDatePress(QDate::fromString(iDate->text(), "yyyy-MM-dd"));
+          p.setQuantite(iQnt->text().toDouble());
+          p.setViscosite(iVisc->text().toDouble());
+          p.setCouleur(iCol->text());
           p.setTest(iTst->text());
-          p.setCapacite(iCap->text().toInt());
           p.setIdMachine(iIdM->text().toInt());
 
           if (p.ajouter()) {
               QMessageBox::information(nullptr, "Success", "Product added successfully!");
-              iQnt->clear(); iVisc->clear(); iTst->clear(); iIdM->clear(); iRef->clear(); iCap->clear();
-              iCol->setCurrentIndex(0);
-              iDate->setDate(QDate::currentDate());
+              iQnt->clear(); iVisc->clear(); iCol->clear(); iTst->clear(); iIdM->clear();
               
               // Switch to "Product Hub" tab first
               if (outNestedStack) outNestedStack->setCurrentIndex(0);
@@ -4747,104 +3092,7 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
           }
       });
 
-      scrollArea->setWidget(formContainer);
-      cLayout->addWidget(scrollArea);
-    } else if (name == "Estimation") {
-      QScrollArea *scrollArea = new QScrollArea();
-      scrollArea->setWidgetResizable(true);
-      scrollArea->setFrameShape(QFrame::NoFrame);
-      scrollArea->setStyleSheet("QScrollArea { background-color: transparent; } QWidget#EstContainer { background-color: transparent; }");
-
-      QWidget *estWidget = new QWidget();
-      estWidget->setObjectName("EstContainer");
-      QVBoxLayout *estLayout = new QVBoxLayout(estWidget);
-      estLayout->setSpacing(20);
-      estLayout->setContentsMargins(10, 20, 30, 40);
-        
-      QLabel *titleLabel = new QLabel("Olive Oil Price Estimation (API)");
-      titleLabel->setStyleSheet("font-size: 26px; font-weight: 700; color: #1a1a1a; margin-bottom: 5px;");
-      estLayout->addWidget(titleLabel);
-      
-      QLabel *subTitle = new QLabel("Connects to a predictive model to forecast future olive oil prices per liter.");
-      subTitle->setStyleSheet("color: #7f8c8d; font-size: 14px; margin-bottom: 15px;");
-      estLayout->addWidget(subTitle);
-      
-      QPushButton *btnPredict = new QPushButton("Run Prediction Model");
-      btnPredict->setStyleSheet("QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3498db, stop:1 #2980b9); color: white; border: none; border-radius: 8px; padding: 12px 20px; font-weight: 700; font-size: 14px; } QPushButton:hover { background: #3cb0fd; }");
-      btnPredict->setCursor(Qt::PointingHandCursor);
-      btnPredict->setFixedWidth(250);
-      
-      QLabel *statusLabel = new QLabel("Status: Idle");
-      statusLabel->setStyleSheet("color: #333; font-weight: bold; font-size: 14px;");
-      
-      QHBoxLayout *btnLayout = new QHBoxLayout();
-      btnLayout->addWidget(btnPredict);
-      btnLayout->addSpacing(15);
-      btnLayout->addWidget(statusLabel);
-      btnLayout->addStretch();
-      estLayout->addLayout(btnLayout);
-      estLayout->addSpacing(10);
-      
-      QTableWidget *predTable = new QTableWidget();
-      predTable->setColumnCount(2);
-      predTable->setHorizontalHeaderLabels({"Forecast Date", "Predicted Price (€ / Liter)"});
-      predTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-      predTable->verticalHeader()->setVisible(false);
-      predTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-      predTable->setStyleSheet("QTableWidget { border: 1px solid #eaeaea; background-color: #ffffff; gridline-color: transparent; border-radius: 8px; alternate-background-color: #f9fafb; }"
-          "QHeaderView::section { background-color: #ffffff; padding: 12px; border: none; border-bottom: 2px solid #f0f0f0; font-weight: 700; color: #666; text-transform: uppercase; font-size: 12px; }"
-          "QTableWidget::item { padding: 12px; border-bottom: 1px solid #f5f5f5; color: #333; }");
-      estLayout->addWidget(predTable);
-      
-      QNetworkAccessManager *manager = new QNetworkAccessManager(page);
-      
-      QObject::connect(btnPredict, &QPushButton::clicked, [manager, statusLabel, predTable]() {
-          statusLabel->setText("Status: Connecting to forecasting API...");
-          statusLabel->setStyleSheet("color: #f39c12; font-weight: bold; font-size: 14px;");
-          predTable->setRowCount(0);
-          
-          QNetworkRequest request(QUrl("https://jsonplaceholder.typicode.com/todos/1"));
-          QNetworkReply *reply = manager->get(request);
-          
-          QObject::connect(reply, &QNetworkReply::finished, [reply, statusLabel, predTable]() {
-              if (reply->error() == QNetworkReply::NoError) {
-                  QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
-                  if (!doc.isNull()) {
-                      statusLabel->setText("Status: Prediction Complete (API Success)");
-                      statusLabel->setStyleSheet("color: #27ae60; font-weight: bold; font-size: 14px;");
-                      
-                      double basePrice = 8.50; 
-                      predTable->setRowCount(6);
-                      QDate d = QDate::currentDate();
-                      for (int i = 0; i < 6; ++i) {
-                          d = d.addMonths(1);
-                          double factor = 1.0 + ((rand() % 200) - 50) / 1000.0; 
-                          basePrice *= factor;
-                          predTable->setItem(i, 0, new QTableWidgetItem(d.toString("yyyy-MM (MMM)")));
-                          predTable->setItem(i, 1, new QTableWidgetItem(QString("€ %1").arg(basePrice, 0, 'f', 2)));
-                      }
-                  }
-              } else {
-                  statusLabel->setText("Status: API Error (" + reply->errorString() + ") - Using Fallback Simulation");
-                  statusLabel->setStyleSheet("color: #e74c3c; font-weight: bold; font-size: 14px;");
-                  
-                  double basePrice = 8.00;
-                  predTable->setRowCount(4);
-                  QDate d = QDate::currentDate();
-                  for (int i = 0; i < 4; ++i) {
-                      d = d.addMonths(1);
-                      basePrice += 0.25; 
-                      predTable->setItem(i, 0, new QTableWidgetItem(d.toString("yyyy-MM")));
-                      predTable->setItem(i, 1, new QTableWidgetItem(QString("€ %1 (Fallback)").arg(basePrice, 0, 'f', 2)));
-                  }
-              }
-              reply->deleteLater();
-          });
-      });
-      
-      scrollArea->setWidget(estWidget);
-      cLayout->addWidget(scrollArea);
-
+      cLayout->addWidget(formContainer);
     } else if (name == "Analytics") {
       GenericBarChart *chart = new GenericBarChart("Product Production Overview");
       chart->addBar("Extra Virgin 1L", 450, QColor(61, 220, 132));
@@ -4852,9 +3100,7 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       chart->addBar("Economy 2L", 80, QColor(241, 196, 15));
       cLayout->addWidget(chart);
     }
-    if (name != "Add Product" && name != "Estimation") {
-        cLayout->addStretch();
-    }
+    cLayout->addStretch();
     outNestedStack->addWidget(content);
   }
 
@@ -4914,7 +3160,6 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
       searchEdit->setFixedWidth(200);
 
       QPushButton *btnRefresh = new QPushButton("Refresh");
-      btnRefresh->setObjectName("btnRefreshPersonnel");
       btnRefresh->setStyleSheet(getButtonStyle());
       btnRefresh->setCursor(Qt::PointingHandCursor);
       btnRefresh->setFixedWidth(100);
@@ -4991,8 +3236,7 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
                       Personnel p;
                       if (p.supprimer(cin)) {
                          QMessageBox::information(nullptr, "Deleted", "Employee removed successfully.");
-                         QPushButton *btn = personnelTable->window()->findChild<QPushButton*>("btnRefreshPersonnel");
-                         if (btn) btn->click();
+                         // Refresh via button or signal if needed
                       }
                   }
               });
@@ -5000,92 +3244,37 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
               QObject::connect(btnModify, &QPushButton::clicked, [personnelTable, i]() {
                   QDialog *dialog = new QDialog();
                   dialog->setWindowTitle("Modify Personnel");
-                  dialog->setMinimumWidth(450);
-                  dialog->setStyleSheet("QDialog { background-color: #f4f6f8; }");
-                  
+                  dialog->setMinimumWidth(400);
                   QVBoxLayout *dLayout = new QVBoxLayout(dialog);
-                  dLayout->setContentsMargins(25, 25, 25, 25);
-                  dLayout->setSpacing(12);
-
-                  QLabel *title = new QLabel("Update Employee Record");
-                  title->setStyleSheet("font-size: 20px; font-weight: 700; color: #1a1a1a; margin-bottom: 15px;");
-                  dLayout->addWidget(title);
                   
-                  QString inputStyle = getInputStyle();
+                  QList<QLineEdit*> inputs;
+                  QStringList fieldNames = {"CIN", "Name", "Salary", "Address", "Phone", "Experience", "Grade", "Role"};
+                  for (int c = 0; c < 8; ++c) {
+                      dLayout->addWidget(new QLabel(fieldNames[c]));
+                      QLineEdit *le = new QLineEdit(personnelTable->item(i, c)->text());
+                      if (c == 0) le->setEnabled(false); // CIN is PK
+                      dLayout->addWidget(le);
+                      inputs.append(le);
+                  }
 
-                  QLineEdit *cinInput = new QLineEdit(personnelTable->item(i, 0)->text());
-                  cinInput->setEnabled(false);
-                  QLineEdit *nameInput = new QLineEdit(personnelTable->item(i, 1)->text());
-                  QLineEdit *salInput = new QLineEdit(personnelTable->item(i, 2)->text());
-                  QLineEdit *addrInput = new QLineEdit(personnelTable->item(i, 3)->text());
-                  QLineEdit *telInput = new QLineEdit(personnelTable->item(i, 4)->text());
-                  QLineEdit *expInput = new QLineEdit(personnelTable->item(i, 5)->text());
-                  
-                  QComboBox *gradeInput = new QComboBox();
-                  gradeInput->addItems({"Junior", "Senior", "Lead", "Principal", "Chief"});
-                  gradeInput->setCurrentText(personnelTable->item(i, 6)->text());
-                  
-                  QComboBox *roleInput = new QComboBox();
-                  roleInput->addItems({"Stock Management", "Product Management", "Maintenance Management", "Personnel Management", "Order Management", "Financial Management"});
-                  roleInput->setCurrentText(personnelTable->item(i, 7)->text());
-
-                  auto addField = [&](QString label, QWidget *w) {
-                      QLabel *lbl = new QLabel(label);
-                      lbl->setStyleSheet("color: #555; font-weight: 600; font-size: 13px;");
-                      dLayout->addWidget(lbl);
-                      w->setStyleSheet(inputStyle);
-                      if (qobject_cast<QLineEdit*>(w) || qobject_cast<QComboBox*>(w)) {
-                          w->setFixedHeight(42);
-                      }
-                      dLayout->addWidget(w);
-                  };
-
-                  addField("CIN (Identifier - Cannot be changed):", cinInput);
-                  addField("Full Name:", nameInput);
-                  addField("Salary (Gross):", salInput);
-                  addField("Address:", addrInput);
-                  addField("Phone Number:", telInput);
-                  addField("Experience (Years):", expInput);
-                  addField("Grade:", gradeInput);
-                  addField("Role:", roleInput);
-
-                  dLayout->addSpacing(15);
-                  
-                  QHBoxLayout *btnLayout = new QHBoxLayout();
-                  QPushButton *btnCancel = new QPushButton("Cancel");
-                  btnCancel->setStyleSheet("QPushButton { background-color: #ffffff; color: #333; border: 1px solid #ccc; border-radius: 8px; font-weight: bold; } QPushButton:hover { background-color: #f6f6f6; }");
-                  btnCancel->setCursor(Qt::PointingHandCursor);
-                  btnCancel->setFixedHeight(45);
-                  
-                  QPushButton *btnSave = new QPushButton("Update Record");
-                  btnSave->setStyleSheet(getButtonStyle());
-                  btnSave->setCursor(Qt::PointingHandCursor);
-                  btnSave->setFixedHeight(45);
-
-                  btnLayout->addWidget(btnCancel);
-                  btnLayout->addWidget(btnSave);
-                  dLayout->addLayout(btnLayout);
-
-                  QObject::connect(btnCancel, &QPushButton::clicked, dialog, &QDialog::reject);
-
+                  QPushButton *btnSave = new QPushButton("Save Changes");
+                  dLayout->addWidget(btnSave);
                   QObject::connect(btnSave, &QPushButton::clicked, [=]() {
                       Personnel p;
-                      p.setCin(cinInput->text().toInt());
-                      p.setNom(nameInput->text());
-                      p.setSalaire(salInput->text().toDouble());
-                      p.setAdresse(addrInput->text());
-                      p.setTel(telInput->text());
-                      p.setExperience(expInput->text().toInt());
-                      p.setGrade(gradeInput->currentText());
-                      p.setRole(roleInput->currentText());
+                      p.setCin(inputs[0]->text().toInt());
+                      p.setNom(inputs[1]->text());
+                      p.setSalaire(inputs[2]->text().toDouble());
+                      p.setAdresse(inputs[3]->text());
+                      p.setTel(inputs[4]->text());
+                      p.setExperience(inputs[5]->text().toInt());
+                      p.setGrade(inputs[6]->text());
+                      p.setRole(inputs[7]->text());
 
                       if (p.modifier()) {
-                          QMessageBox::information(dialog, "Success", "Record updated successfully.");
+                          QMessageBox::information(nullptr, "Success", "Record updated.");
                           dialog->accept();
-                          QPushButton *btnRef = personnelTable->window()->findChild<QPushButton*>("btnRefreshPersonnel");
-                          if (btnRef) btnRef->click();
                       } else {
-                          QMessageBox::critical(dialog, "Database Error", p.getLastError());
+                          QMessageBox::critical(nullptr, "Error", p.getLastError());
                       }
                   });
                   dialog->exec();
@@ -5123,42 +3312,12 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
       QString labelStyle = getLabelStyle();
       QString inputStyle = getInputStyle();
 
-      auto attachVisualValidation = [](QLineEdit *le) {
-          QObject::connect(le, &QLineEdit::textChanged, [le]() {
-              bool valid = true;
-              if (le->validator()) valid = le->hasAcceptableInput();
-              if (valid && !le->text().trimmed().isEmpty()) {
-                  le->setStyleSheet("QLineEdit { background-color: #fcfcfc; border: 1px solid #3DDC84; border-radius: 8px; padding: 10px 14px; font-size: 14px; min-height: 45px; }");
-              } else {
-                  le->setStyleSheet("QLineEdit { background-color: #fcfcfc; border: 1px solid #d32f2f; border-radius: 8px; padding: 10px 14px; font-size: 14px; min-height: 45px; }");
-              }
-          });
-      };
-
-      QLineEdit *cinInput = new QLineEdit(); cinInput->setPlaceholderText("CIN Number (8 Digits)");
-      cinInput->setValidator(new QRegularExpressionValidator(QRegularExpression("^[0-9]{8}$"), cinInput));
-      attachVisualValidation(cinInput);
-
+      QLineEdit *cinInput = new QLineEdit(); cinInput->setPlaceholderText("CIN Number");
       QLineEdit *nameInput = new QLineEdit(); nameInput->setPlaceholderText("Full Name");
-      nameInput->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z\\s]{2,50}$"), nameInput));
-      attachVisualValidation(nameInput);
-
-      QLineEdit *salInput = new QLineEdit(); salInput->setPlaceholderText("Salary (e.g. 1500.50)");
-      QDoubleValidator *salVal = new QDoubleValidator(1.0, 99999.0, 2, salInput);
-      salVal->setNotation(QDoubleValidator::StandardNotation);
-      salInput->setValidator(salVal);
-      attachVisualValidation(salInput);
-
-      QLineEdit *addrInput = new QLineEdit(); addrInput->setPlaceholderText("Home Address");
-      attachVisualValidation(addrInput);
-
-      QLineEdit *telInput = new QLineEdit(); telInput->setPlaceholderText("Phone Number (8 Digits)");
-      telInput->setValidator(new QRegularExpressionValidator(QRegularExpression("^[0-9]{8}$"), telInput));
-      attachVisualValidation(telInput);
-
-      QLineEdit *expInput = new QLineEdit(); expInput->setPlaceholderText("Years of Exp (0 - 50)");
-      expInput->setValidator(new QIntValidator(0, 50, expInput));
-      attachVisualValidation(expInput);
+      QLineEdit *salInput = new QLineEdit(); salInput->setPlaceholderText("Salary");
+      QLineEdit *addrInput = new QLineEdit(); addrInput->setPlaceholderText("Address");
+      QLineEdit *telInput = new QLineEdit(); telInput->setPlaceholderText("Phone Number");
+      QLineEdit *expInput = new QLineEdit(); expInput->setPlaceholderText("Years of Exp");
       QComboBox *gradeInput = new QComboBox();
       gradeInput->addItems({"Junior", "Senior", "Lead", "Principal", "Chief"});
       QComboBox *roleInput = new QComboBox();
@@ -5188,10 +3347,8 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
       formLayout->addStretch();
 
       QObject::connect(btnHire, &QPushButton::clicked, [=]() {
-          if (!cinInput->hasAcceptableInput() || !nameInput->hasAcceptableInput() || 
-              !salInput->hasAcceptableInput() || !telInput->hasAcceptableInput() || 
-              !expInput->hasAcceptableInput() || addrInput->text().trimmed().isEmpty()) {
-              QMessageBox::warning(nullptr, "Error Validation", "Please fill out all fields correctly. Check the red outlines for invalid elements.");
+          if (cinInput->text().isEmpty() || nameInput->text().isEmpty()) {
+              QMessageBox::warning(nullptr, "Error", "CIN and Name are required!");
               return;
           }
 
@@ -5210,9 +3367,6 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
               cinInput->clear(); nameInput->clear(); salInput->clear(); addrInput->clear();
               telInput->clear(); expInput->clear();
               outNestedStack->setCurrentIndex(0);
-              
-              QPushButton *btn = outNestedStack->window()->findChild<QPushButton*>("btnRefreshPersonnel");
-              if (btn) btn->click();
           } else {
               QMessageBox::critical(nullptr, "Error", p.getLastError());
           }
@@ -5221,154 +3375,42 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
       cLayout->addWidget(formContainer);
 
     } else if (name == "Payroll") {
-      QWidget *payrollWidget = new QWidget();
-      QVBoxLayout *payrollLayout = new QVBoxLayout(payrollWidget);
-      payrollLayout->setContentsMargins(0, 0, 0, 0);
-      payrollLayout->setSpacing(20);
-
-      QLabel *title = new QLabel("Monthly Payroll Overview");
-      title->setStyleSheet("font-size: 22px; font-weight: 700; color: #1a1a1a;");
-      payrollLayout->addWidget(title);
-
-      QWidget *summaryCard = new QWidget();
-      summaryCard->setStyleSheet(getCardStyle());
-      QVBoxLayout *cardLayout = new QVBoxLayout(summaryCard);
-      cardLayout->setSpacing(10);
-      
-      QLabel *lblTotal = new QLabel("Loading...");
-      lblTotal->setStyleSheet("font-size: 32px; font-weight: 900; color: #2ecc71;");
-      
-      QLabel *lblCount = new QLabel("Loading...");
-      lblCount->setStyleSheet("font-size: 16px; color: #7f8c8d; font-weight: 700;");
-      
-      cardLayout->addWidget(lblTotal);
-      cardLayout->addWidget(lblCount);
-      payrollLayout->addWidget(summaryCard);
-      
-      QTableWidget *breakdownTable = new QTableWidget();
-      breakdownTable->setColumnCount(4);
-      breakdownTable->setHorizontalHeaderLabels({"CIN", "Employee Name", "Role", "Monthly Salary"});
-      breakdownTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-      breakdownTable->verticalHeader()->setVisible(false);
-      breakdownTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-      breakdownTable->setStyleSheet(
-          "QTableWidget { border: 1px solid #eaeaea; background-color: #ffffff; gridline-color: transparent; border-radius: 8px; alternate-background-color: #f9fafb; }"
-          "QHeaderView::section { background-color: #ffffff; padding: 12px; border: none; border-bottom: 2px solid #f0f0f0; font-weight: 700; color: #666; text-transform: uppercase; font-size: 12px; }"
-          "QTableWidget::item { padding: 12px; border-bottom: 1px solid #f5f5f5; color: #333; }"
-      );
-      payrollLayout->addWidget(breakdownTable);
-      
-      QPushButton *btnRefreshPayroll = new QPushButton("Recalculate Current Payroll");
-      btnRefreshPayroll->setStyleSheet(getButtonStyle());
-      btnRefreshPayroll->setCursor(Qt::PointingHandCursor);
-      btnRefreshPayroll->setFixedWidth(250);
-      btnRefreshPayroll->setFixedHeight(45);
-      
-      QHBoxLayout *btnLayout = new QHBoxLayout();
-      btnLayout->addStretch();
-      btnLayout->addWidget(btnRefreshPayroll);
-      payrollLayout->addLayout(btnLayout);
-
-      auto refreshPayrollData = [lblTotal, lblCount, breakdownTable]() {
-          double nTotal = 0.0;
-          int nCount = 0;
-          QSqlQuery q("SELECT COUNT(ID_PERSONNEL), SUM(SALAIRE_BRUT) FROM PERSONNEL");
-          if (q.next()) {
-              nCount = q.value(0).toInt();
-              nTotal = q.value(1).toDouble();
-          }
-          lblTotal->setText(QString("%1 TND / Month").arg(nTotal, 0, 'f', 2));
-          lblCount->setText(QString("Active Staff Contributing to Payroll: %1").arg(nCount));
-          
-          breakdownTable->setRowCount(0);
-          QSqlQuery lq("SELECT ID_PERSONNEL, NOM_PERSONNEL, ROLE, SALAIRE_BRUT FROM PERSONNEL");
-          int row = 0;
-          while (lq.next()) {
-              breakdownTable->insertRow(row);
-              breakdownTable->setItem(row, 0, new QTableWidgetItem(lq.value(0).toString()));
-              breakdownTable->setItem(row, 1, new QTableWidgetItem(lq.value(1).toString()));
-              breakdownTable->setItem(row, 2, new QTableWidgetItem(lq.value(2).toString()));
-              
-              QTableWidgetItem *moneyItem = new QTableWidgetItem(QString("%1 TND").arg(lq.value(3).toDouble(), 0, 'f', 2));
-              moneyItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-              breakdownTable->setItem(row, 3, moneyItem);
-              
-              row++;
-          }
-      };
-
-      QObject::connect(btnRefreshPayroll, &QPushButton::clicked, refreshPayrollData);
-      refreshPayrollData(); 
-      
-      cLayout->addWidget(payrollWidget);
+      cLayout->addWidget(createStyledTable(
+          "Recent Payroll Runs",
+          {"Period", "Total Payout", "Status", "Date Processed"},
+          {{"October 2023", "$145,000", "Completed", "2023-10-31"},
+           {"September 2023", "$142,500", "Completed", "2023-09-30"}},
+          true));
     } else if (name == "Analytics") {
-      QScrollArea *scrollArea = new QScrollArea();
-      scrollArea->setWidgetResizable(true);
-      scrollArea->setFrameShape(QFrame::NoFrame);
-      scrollArea->setStyleSheet("QScrollArea { background-color: transparent; } QWidget#StatsContainer { background-color: transparent; }");
-      
       QWidget *statsContainer = new QWidget();
-      statsContainer->setObjectName("StatsContainer");
       QVBoxLayout *statsLayout = new QVBoxLayout(statsContainer);
       statsLayout->setSpacing(30);
 
-      QPushButton *btnRefreshAnalytics = new QPushButton("Refresh Analytics");
-      btnRefreshAnalytics->setStyleSheet(getButtonStyle());
-      btnRefreshAnalytics->setCursor(Qt::PointingHandCursor);
-      btnRefreshAnalytics->setFixedWidth(200);
-      btnRefreshAnalytics->setFixedHeight(45);
-      
-      QHBoxLayout *btnLayout = new QHBoxLayout();
-      btnLayout->addStretch();
-      btnLayout->addWidget(btnRefreshAnalytics);
-      statsLayout->addLayout(btnLayout);
+      GenericBarChart *chart1 = new GenericBarChart("Department Headcount");
+      chart1->addBar("Sales", 12, QColor(52, 152, 219));
+      chart1->addBar("Product", 8, QColor(46, 204, 113));
+      chart1->addBar("Maintenance", 5, QColor(241, 196, 15));
+      chart1->addBar("Finance", 4, QColor(155, 89, 182));
 
-      QVBoxLayout *chartsLayout = new QVBoxLayout();
-      statsLayout->addLayout(chartsLayout);
-      
-      auto refreshAnalytics = [chartsLayout]() {
-          // Clear old charts cleanly
-          QLayoutItem *child;
-          while ((child = chartsLayout->takeAt(0)) != nullptr) {
-              if (child->widget()) {
-                  child->widget()->deleteLater();
-              }
-              delete child;
-          }
-          
-          GenericBarChart *chart1 = new GenericBarChart("Employee Headcount by Role");
-          QSqlQuery q1("SELECT ROLE, COUNT(*) FROM PERSONNEL GROUP BY ROLE");
-          QList<QColor> colors = {QColor(52, 152, 219), QColor(46, 204, 113), QColor(241, 196, 15), QColor(155, 89, 182), QColor(231, 76, 60), QColor(26, 188, 156)};
-          int cIdx = 0;
-          while (q1.next()) {
-              chart1->addBar(q1.value(0).toString(), q1.value(1).toInt(), colors[cIdx % colors.size()]);
-              cIdx++;
-          }
-          QWidget *c1Wrapper = new QWidget();
-          c1Wrapper->setStyleSheet(getCardStyle());
-          QVBoxLayout *v1 = new QVBoxLayout(c1Wrapper);
-          v1->addWidget(chart1);
-          chartsLayout->addWidget(c1Wrapper);
+      QWidget *c1Wrapper = new QWidget();
+      c1Wrapper->setStyleSheet(getCardStyle());
+      QVBoxLayout *v1 = new QVBoxLayout(c1Wrapper);
+      v1->addWidget(chart1);
+      statsLayout->addWidget(c1Wrapper);
 
-          GenericBarChart *chart2 = new GenericBarChart("Average Salary by Role");
-          QSqlQuery q2("SELECT ROLE, AVG(SALAIRE_BRUT) FROM PERSONNEL GROUP BY ROLE");
-          cIdx = 0;
-          while (q2.next()) {
-              chart2->addBar(q2.value(0).toString(), q2.value(1).toInt(), colors[(cIdx+3) % colors.size()]);
-              cIdx++;
-          }
-          QWidget *c2Wrapper = new QWidget();
-          c2Wrapper->setStyleSheet(getCardStyle());
-          QVBoxLayout *v2 = new QVBoxLayout(c2Wrapper);
-          v2->addWidget(chart2);
-          chartsLayout->addWidget(c2Wrapper);
-      };
+      GenericBarChart *chart2 = new GenericBarChart("Absence Days (YTD)");
+      chart2->addBar("John Doe", 2, QColor(231, 76, 60));
+      chart2->addBar("Jane Smith", 5, QColor(231, 76, 60));
+      chart2->addBar("Robert Brown", 0, QColor(46, 204, 113));
+      chart2->addBar("Emily White", 3, QColor(243, 156, 18));
 
-      QObject::connect(btnRefreshAnalytics, &QPushButton::clicked, refreshAnalytics);
-      refreshAnalytics();
+      QWidget *c2Wrapper = new QWidget();
+      c2Wrapper->setStyleSheet(getCardStyle());
+      QVBoxLayout *v2 = new QVBoxLayout(c2Wrapper);
+      v2->addWidget(chart2);
+      statsLayout->addWidget(c2Wrapper);
 
-      scrollArea->setWidget(statsContainer);
-      cLayout->addWidget(scrollArea);
+      cLayout->addWidget(statsContainer);
 
     } else if (name == "PDF Printing") {
       QWidget *formContainer = new QWidget();
@@ -5732,5 +3774,4 @@ void MainWindow::applyRole(int roleIndex) {
           "font-weight: 700; }");
     }
   }
->>>>>>> main
 }

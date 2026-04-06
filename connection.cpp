@@ -18,11 +18,10 @@ QSqlDatabase db = QSqlDatabase::addDatabase("QODBC");
         );
 
 if (db.open()){
-test=true;
+    test=true;
+} else {
+    lastError = db.lastError().text();
 }
 
-
-
-
-    return  test;
+return test;
 }
