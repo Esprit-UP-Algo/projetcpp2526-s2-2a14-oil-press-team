@@ -3436,24 +3436,41 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
           mainV->setContentsMargins(30, 30, 30, 30);
           mainV->setSpacing(15);
 
-          auto addField = [&](const QString &lbl, const QString &val) {
+          auto addField = [&](const QString &lbl, const QString &val, QValidator *valdr = nullptr) {
               mainV->addWidget(new QLabel(lbl));
               QLineEdit *le = new QLineEdit(val);
               le->setStyleSheet("QLineEdit { background-color: #f9fafb; border: 1px solid #eaeaea; "
                                 "border-radius: 8px; padding: 10px; font-size: 14px; }");
+              if (valdr) le->setValidator(valdr);
+              
+              QObject::connect(le, &QLineEdit::textChanged, [le]() {
+                  bool valid = true;
+                  if (le->validator()) valid = le->hasAcceptableInput();
+                  if (valid && !le->text().trimmed().isEmpty()) {
+                      le->setStyleSheet("QLineEdit { background-color: #fcfcfc; border: 1px solid #3DDC84; border-radius: 8px; padding: 10px; font-size: 14px; }");
+                  } else {
+                      le->setStyleSheet("QLineEdit { background-color: #fcfcfc; border: 1px solid #d32f2f; border-radius: 8px; padding: 10px; font-size: 14px; }");
+                  }
+              });
+              
+              le->textChanged(le->text()); // Trigger initial validation highlighting
               mainV->addWidget(le);
               return le;
           };
 
-          // Removing eIdC and eRef as requested
+          // Removing eIdC and eRef as requested (from original comment)
           QLineEdit *eDate = addField("Date Pressage:", productTable->item(i, 1)->text());
-          QLineEdit *eQnt = addField("Quantité:", productTable->item(i, 2)->text());
-          QLineEdit *eRef = addField("Ref:", productTable->item(i, 3)->text());
-          QLineEdit *eVisc = addField("Viscosité:", productTable->item(i, 4)->text());
+          QLineEdit *eQnt = addField("Quantité:", productTable->item(i, 2)->text(), new QIntValidator(1, 999999));
+          QLineEdit *eRef = addField("Ref:", productTable->item(i, 3)->text(), new QRegularExpressionValidator(QRegularExpression("^[A-Za-z]{2}-\\d{2}$")));
+          
+          QDoubleValidator *viscVal = new QDoubleValidator(0.01, 10.0, 2);
+          viscVal->setNotation(QDoubleValidator::StandardNotation);
+          QLineEdit *eVisc = addField("Viscosité:", productTable->item(i, 4)->text(), viscVal);
+          
           QLineEdit *eCol = addField("Couleur:", productTable->item(i, 5)->text());
           QLineEdit *eTst = addField("Test:", productTable->item(i, 6)->text());
-          QLineEdit *eCap = addField("Capacité:", productTable->item(i, 7)->text());
-          QLineEdit *eIdM = addField("ID Machine:", productTable->item(i, 8)->text());
+          QLineEdit *eCap = addField("Capacité:", productTable->item(i, 7)->text(), new QIntValidator(1, 999999));
+          QLineEdit *eIdM = addField("ID Machine:", productTable->item(i, 8)->text(), new QIntValidator(1, 999999));
 
           QPushButton *btnSave = new QPushButton("Save Changes");
           btnSave->setStyleSheet("QPushButton { background-color: #3DDC84; color: white; border: none; "
@@ -3461,6 +3478,16 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
           mainV->addWidget(btnSave);
 
           QObject::connect(btnSave, &QPushButton::clicked, [&dlg, eDate, eQnt, eRef, eVisc, eCol, eTst, eCap, eIdM, pid, refreshProductTable]() {
+              if (eQnt->text().isEmpty() || !eQnt->hasAcceptableInput() ||
+                  eCap->text().isEmpty() || !eCap->hasAcceptableInput() ||
+                  eIdM->text().isEmpty() || !eIdM->hasAcceptableInput() ||
+                  eVisc->text().isEmpty() || !eVisc->hasAcceptableInput() ||
+                  eRef->text().trimmed().isEmpty() || !eRef->hasAcceptableInput() ||
+                  eTst->text().trimmed().isEmpty()) {
+                  QMessageBox::warning(&dlg, "Erreur de Saisie", "Veuillez vérifier les champs en rouge. Certaines valeurs sont invalides ou manquantes.");
+                  return;
+              }
+
               Produit p;
               p.setIdContenair(pid);
               p.setDatePress(QDate::fromString(eDate->text(), "yyyy-MM-dd"));
@@ -3730,7 +3757,7 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       formLayout->addWidget(iDate);
 
       QLineEdit *iQnt = createField("Quantité:", "e.g., 500", new QIntValidator(1, 999999));
-      QLineEdit *iRef = createField("Ref:", "PRD-001");
+      QLineEdit *iRef = createField("Ref:", "xx-nn (e.g., AB-12)", new QRegularExpressionValidator(QRegularExpression("^[A-Za-z]{2}-\\d{2}$")));
       
       QDoubleValidator *viscVal = new QDoubleValidator(0.01, 10.0, 2);
       viscVal->setNotation(QDoubleValidator::StandardNotation);
@@ -3759,7 +3786,8 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
               iCap->text().isEmpty() || !iCap->hasAcceptableInput() ||
               iIdM->text().isEmpty() || !iIdM->hasAcceptableInput() ||
               iVisc->text().isEmpty() || !iVisc->hasAcceptableInput() ||
-              iRef->text().trimmed().isEmpty() || iTst->text().trimmed().isEmpty()) {
+              iRef->text().trimmed().isEmpty() || !iRef->hasAcceptableInput() ||
+              iTst->text().trimmed().isEmpty()) {
               QMessageBox::warning(nullptr, "Erreur de Saisie", "Veuillez vérifier les champs en rouge. Certaines valeurs sont invalides ou manquantes.");
               return;
           }
@@ -3831,7 +3859,7 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       
       QTableWidget *predTable = new QTableWidget();
       predTable->setColumnCount(2);
-      predTable->setHorizontalHeaderLabels({"Forecast Date", "Predicted Price (€ / Liter)"});
+      predTable->setHorizontalHeaderLabels({"Forecast Date", "Predicted Price (DT / Liter)"});
       predTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
       predTable->verticalHeader()->setVisible(false);
       predTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -3857,7 +3885,7 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
                       statusLabel->setText("Status: Prediction Complete (API Success)");
                       statusLabel->setStyleSheet("color: #27ae60; font-weight: bold; font-size: 14px;");
                       
-                      double basePrice = 8.50; 
+                      double basePrice = 28.50; // Converted from 8.50 Euro to DT
                       predTable->setRowCount(6);
                       QDate d = QDate::currentDate();
                       for (int i = 0; i < 6; ++i) {
@@ -3865,21 +3893,21 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
                           double factor = 1.0 + ((rand() % 200) - 50) / 1000.0; 
                           basePrice *= factor;
                           predTable->setItem(i, 0, new QTableWidgetItem(d.toString("yyyy-MM (MMM)")));
-                          predTable->setItem(i, 1, new QTableWidgetItem(QString("€ %1").arg(basePrice, 0, 'f', 2)));
+                          predTable->setItem(i, 1, new QTableWidgetItem(QString("%1 DT").arg(basePrice, 0, 'f', 2)));
                       }
                   }
               } else {
                   statusLabel->setText("Status: API Error (" + reply->errorString() + ") - Using Fallback Simulation");
                   statusLabel->setStyleSheet("color: #e74c3c; font-weight: bold; font-size: 14px;");
                   
-                  double basePrice = 8.00;
+                  double basePrice = 26.80; // Converted from 8.00 Euro to DT
                   predTable->setRowCount(4);
                   QDate d = QDate::currentDate();
                   for (int i = 0; i < 4; ++i) {
                       d = d.addMonths(1);
-                      basePrice += 0.25; 
+                      basePrice += 0.85; // Roughly equivalent to 0.25 Euro increment
                       predTable->setItem(i, 0, new QTableWidgetItem(d.toString("yyyy-MM")));
-                      predTable->setItem(i, 1, new QTableWidgetItem(QString("€ %1 (Fallback)").arg(basePrice, 0, 'f', 2)));
+                      predTable->setItem(i, 1, new QTableWidgetItem(QString("%1 DT (Fallback)").arg(basePrice, 0, 'f', 2)));
                   }
               }
               reply->deleteLater();

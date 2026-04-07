@@ -1,0 +1,17 @@
+release/article.o
+release/connection.o
+release/main.o
+release/mainwindow.o
+release/transaction.o
+release/EyeSaverButton.o
+release/AuthWidgets.o
+release/produit.o
+release/commande.o
+release/personnel.o
+release/machine.o
+release/smtp.o
+release/qrc_resources.o
+release/moc_mainwindow.o
+release/moc_EyeSaverButton.o
+release/moc_AuthWidgets.o
+release/moc_smtp.o
