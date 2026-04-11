@@ -8,6 +8,7 @@
 #include "personnel.h"
 #include "machine.h"
 #include "smtp.h"
+#include "emailapi.h"
 #include <functional>
 #include <QComboBox>
 #include <QDate>
@@ -3224,12 +3225,25 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           }
           if (hasAlerts) {
               QMessageBox::warning(table->window(), "Alertes de Maintenance", alertMsg);
-              // Sending email
-              Smtp* smtp = new Smtp("nour.benrhoumakok@gmail.com", "toualqtctfvdcnlp", "smtp.gmail.com", 465);
-              QObject::connect(smtp, &Smtp::status, [table](const QString &status) {
-                  qDebug() << "Email Status:" << status;
+              // Sending Alert via API REST (Advanced Feature)
+              EmailAPI* email = new EmailAPI(table);
+              // NOTE: User must replace these with real Mailjet API keys
+              email->setCredentials("YOUR_API_KEY", "YOUR_API_SECRET"); 
+              
+              QObject::connect(email, &EmailAPI::finished, [table](bool success, const QString &msg) {
+                  if (success) {
+                      qDebug() << "Email Alert sent successfully via API.";
+                  } else {
+                      qDebug() << "API Email Failure:" << msg;
+                      QMessageBox::critical(table->window(), "API Error", 
+                          "L'envoi de l'alerte via l'API a échoué.\n"
+                          "Veuillez vérifier vos clés API et votre connexion.\n\nDétails: " + msg);
+                  }
               });
-              smtp->sendMail("nour.benrhoumakok@gmail.com", "nour.benrhoumakok@gmail.com", "Alerte de Maintenance Critique", "Les machines suivantes nécessitent une maintenance immédiate :\n\n" + alertMsg);
+
+              email->sendEmail("nour.benrhoumakok@gmail.com", 
+                               "Alerte de Maintenance Critique (API REST)", 
+                               "Les machines suivantes nécessitent une maintenance immédiate :\n\n" + alertMsg);
           } else {
               QMessageBox::information(table->window(), "Maintenance", "Toutes les machines sont en dessous de leur seuil de maintenance.");
           }
