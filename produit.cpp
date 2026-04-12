@@ -12,10 +12,11 @@ Produit::Produit() {
   test = "";
   capacite = 0;
   idMachine = 0;
+  prixUnitaire = 0.0;
 }
 
 Produit::Produit(int idContenair, QDate datePress, int quantite, QString ref,
-                 QString viscosite, QString couleur, QString test, int capacite, int idMachine) {
+                 QString viscosite, QString couleur, QString test, int capacite, int idMachine, double prixUnitaire) {
   this->idContenair = idContenair;
   this->datePress = datePress;
   this->quantite = quantite;
@@ -25,6 +26,7 @@ Produit::Produit(int idContenair, QDate datePress, int quantite, QString ref,
   this->test = test;
   this->capacite = capacite;
   this->idMachine = idMachine;
+  this->prixUnitaire = prixUnitaire;
 }
 
 // Getters
@@ -37,6 +39,7 @@ QString Produit::getCouleur() const { return couleur; }
 QString Produit::getTest() const { return test; }
 int Produit::getCapacite() const { return capacite; }
 int Produit::getIdMachine() const { return idMachine; }
+double Produit::getPrixUnitaire() const { return prixUnitaire; }
 
 // Setters
 void Produit::setIdContenair(int id) { this->idContenair = id; }
@@ -48,14 +51,15 @@ void Produit::setCouleur(QString val) { this->couleur = val; }
 void Produit::setTest(QString val) { this->test = val; }
 void Produit::setCapacite(int val) { this->capacite = val; }
 void Produit::setIdMachine(int id) { this->idMachine = id; }
+void Produit::setPrixUnitaire(double val) { this->prixUnitaire = val; }
 
 bool Produit::ajouter() {
   QSqlQuery query;
   // Using MAX+1 for the primary key if it's not and identity/sequence
   query.prepare(
       "INSERT INTO PRODUIT (ID_CONTENAIR, DATE_PRESS, QUANTITE, "
-      "REF, VISCOSITE, COULEUR, TEST, CAPACITE, ID_MACHINE) "
-      "VALUES ((SELECT NVL(MAX(ID_CONTENAIR),0)+1 FROM PRODUIT), :date, :qnt, :ref, :visc, :col, :tst, :cap, :idM)");
+      "REF, VISCOSITE, COULEUR, TEST, CAPACITE, ID_MACHINE, PRIX_UNITAIRE) "
+      "VALUES ((SELECT NVL(MAX(ID_CONTENAIR),0)+1 FROM PRODUIT), :date, :qnt, :ref, :visc, :col, :tst, :cap, :idM, :prix)");
   query.bindValue(":date", datePress);
   query.bindValue(":qnt", quantite);
   query.bindValue(":ref", ref);
@@ -64,6 +68,7 @@ bool Produit::ajouter() {
   query.bindValue(":tst", test);
   query.bindValue(":cap", capacite);
   query.bindValue(":idM", idMachine);
+  query.bindValue(":prix", prixUnitaire);
 
   if (!query.exec()) {
     lastError = query.lastError().text();
@@ -89,7 +94,7 @@ bool Produit::modifier() {
   query.prepare(
       "UPDATE PRODUIT SET DATE_PRESS = :date, "
       "QUANTITE = :qnt, REF = :ref, VISCOSITE = :visc, "
-      "COULEUR = :col, TEST = :tst, CAPACITE = :cap, ID_MACHINE = :idM "
+      "COULEUR = :col, TEST = :tst, CAPACITE = :cap, ID_MACHINE = :idM, PRIX_UNITAIRE = :prix "
       "WHERE ID_CONTENAIR = :id");
   query.bindValue(":id", idContenair);
   query.bindValue(":date", datePress);
@@ -100,6 +105,7 @@ bool Produit::modifier() {
   query.bindValue(":tst", test);
   query.bindValue(":cap", capacite);
   query.bindValue(":idM", idMachine);
+  query.bindValue(":prix", prixUnitaire);
 
   if (!query.exec()) {
     lastError = query.lastError().text();
@@ -112,7 +118,7 @@ QSqlQueryModel *Produit::afficher() {
   QSqlQueryModel *model = new QSqlQueryModel();
   model->setQuery(
       "SELECT ID_CONTENAIR, DATE_PRESS, QUANTITE, REF, "
-      "VISCOSITE, COULEUR, TEST, CAPACITE, ID_MACHINE FROM PRODUIT ORDER BY DATE_PRESS DESC");
+      "VISCOSITE, COULEUR, TEST, CAPACITE, ID_MACHINE, PRIX_UNITAIRE FROM PRODUIT ORDER BY DATE_PRESS DESC");
 
   model->setHeaderData(0, Qt::Horizontal, QObject::tr("ID Contenair"));
   model->setHeaderData(1, Qt::Horizontal, QObject::tr("Date Pressage"));
@@ -123,6 +129,7 @@ QSqlQueryModel *Produit::afficher() {
   model->setHeaderData(6, Qt::Horizontal, QObject::tr("Test"));
   model->setHeaderData(7, Qt::Horizontal, QObject::tr("Capacité"));
   model->setHeaderData(8, Qt::Horizontal, QObject::tr("ID Machine"));
+  model->setHeaderData(9, Qt::Horizontal, QObject::tr("Prix Unitaire"));
 
   return model;
 }

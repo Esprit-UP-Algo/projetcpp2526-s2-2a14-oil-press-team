@@ -17,11 +17,13 @@ private:
     QString nom_client;
     QString adresse_client;
     QDate date_livraison;
+    QString numeroTelephone;
+    QString deliveryStatus; // Physical delivery stage: Preparing/Dispatched/In Transit/Delivered
 
 public:
     // Constructors
     Commande();
-    Commande(int, QString, QDate, QString, QString, QString, QDate);
+    Commande(int, QString, QDate, QString, QString, QString, QDate, QString, QString);
 
     // Getters
     int getID() const { return id_commande; }
@@ -31,6 +33,8 @@ public:
     QString getNomClient() const { return nom_client; }
     QString getAdresseClient() const { return adresse_client; }
     QDate getDateLivraison() const { return date_livraison; }
+    QString getNumeroTelephone() const { return numeroTelephone; }
+    QString getDeliveryStatus() const { return deliveryStatus; }
 
     // Setters
     void setID(int id) { id_commande = id; }
@@ -40,6 +44,8 @@ public:
     void setNomClient(QString nom) { nom_client = nom; }
     void setAdresseClient(QString adr) { adresse_client = adr; }
     void setDateLivraison(QDate date) { date_livraison = date; }
+    void setNumeroTelephone(QString t) { numeroTelephone = t; }
+    void setDeliveryStatus(QString s) { deliveryStatus = s; }
 
     // CRUD Methods
     bool ajouter();
