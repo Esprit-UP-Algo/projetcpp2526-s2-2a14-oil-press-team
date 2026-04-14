@@ -1,6 +1,5 @@
 #include "connection.h"
 #include <QSqlError>
-#include <QSqlQuery>
 #include <QDebug>
 
 Connection::Connection()
@@ -9,9 +8,8 @@ Connection::Connection()
 }
 
 bool Connection::createconnect()
-{
-    bool test = false;
-    QSqlDatabase db = QSqlDatabase::addDatabase("QODBC");
+{bool test=false;
+QSqlDatabase db = QSqlDatabase::addDatabase("QODBC");
     db.setDatabaseName(
         "Driver={Oracle in XE};"
         "Dbq=localhost:1521/XE;"
@@ -19,37 +17,11 @@ bool Connection::createconnect()
         "Pwd=123456;"
         );
 
-    if (db.open()) {
-        test = true;
-        // --- Auto-migration: ensure NUMERO_TELEPHONE column exists ---
-        QSqlQuery checkTel;
-        checkTel.exec("SELECT COUNT(*) FROM USER_TAB_COLUMNS WHERE TABLE_NAME='COMMANDE' AND COLUMN_NAME='NUMERO_TELEPHONE'");
-        if (checkTel.next() && checkTel.value(0).toInt() == 0) {
-            QSqlQuery addTel;
-            addTel.exec("ALTER TABLE COMMANDE ADD (NUMERO_TELEPHONE VARCHAR2(20))");
-            qDebug() << "Migration: added NUMERO_TELEPHONE column";
-        }
-
-        // --- Auto-migration: rename TRACKING_NUMBER -> DELIVERY_STATUS if needed ---
-        QSqlQuery checkOld;
-        checkOld.exec("SELECT COUNT(*) FROM USER_TAB_COLUMNS WHERE TABLE_NAME='COMMANDE' AND COLUMN_NAME='TRACKING_NUMBER'");
-        if (checkOld.next() && checkOld.value(0).toInt() > 0) {
-            QSqlQuery renameCol;
-            renameCol.exec("ALTER TABLE COMMANDE RENAME COLUMN TRACKING_NUMBER TO DELIVERY_STATUS");
-            qDebug() << "Migration: renamed TRACKING_NUMBER to DELIVERY_STATUS";
-        }
-        // --- Add DELIVERY_STATUS if it still doesn't exist ---
-        QSqlQuery checkNew;
-        checkNew.exec("SELECT COUNT(*) FROM USER_TAB_COLUMNS WHERE TABLE_NAME='COMMANDE' AND COLUMN_NAME='DELIVERY_STATUS'");
-        if (checkNew.next() && checkNew.value(0).toInt() == 0) {
-            QSqlQuery addCol;
-            addCol.exec("ALTER TABLE COMMANDE ADD (DELIVERY_STATUS VARCHAR2(50) DEFAULT 'Preparing')");
-            qDebug() << "Migration: added DELIVERY_STATUS column";
-        }
-    } else {
-        lastError = db.lastError().text();
-    }
-
-    return test;
+if (db.open()){
+    test=true;
+} else {
+    lastError = db.lastError().text();
 }
 
+return test;
+}

@@ -19,9 +19,7 @@ SOURCES += \
     commande.cpp \
     personnel.cpp \
     machine.cpp \
-    emailapi.cpp \
-    smsapi.cpp \
-    trackingapi.cpp
+    smtp.cpp
 
 HEADERS += \
     article.h \
@@ -34,9 +32,7 @@ HEADERS += \
     commande.h \
     personnel.h \
     machine.h \
-    emailapi.h \
-    smsapi.h \
-    trackingapi.h
+    smtp.h
 
 FORMS += \
     mainwindow.ui

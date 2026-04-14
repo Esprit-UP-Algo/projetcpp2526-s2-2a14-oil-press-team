@@ -1,6 +1,4 @@
 #include "mainwindow.h"
-#include "smsapi.h"
-#include "trackingapi.h"
 #include "AuthWidgets.h"
 #include "EyeSaverButton.h"
 #include "article.h"
@@ -10,7 +8,6 @@
 #include "personnel.h"
 #include "machine.h"
 #include "smtp.h"
-#include "emailapi.h"
 #include <functional>
 #include <QComboBox>
 #include <QDate>
@@ -46,8 +43,6 @@
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPageSize>
-#include <QPageLayout>
-#include <QSqlQuery>
 #include <QPainter>
 #include <QPalette>
 #include <QPixmap>
@@ -65,7 +60,6 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QWindow>
-#include <QDesktopServices>
 #include <algorithm>
 
 Qt::Edges MainWindow::getEdge(const QPoint &pos) {
@@ -733,249 +727,6 @@ static void setupTabNavigation(const QList<QPushButton *> &buttons,
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// PDF Invoice Generator — called when user clicks "📄 Invoice" on a row
-// ──────────────────────────────────────────────────────────────────────────
-static void generateOrderInvoicePdf(QWidget *parent,
-                                     int     orderId,
-                                     const QString &ref,
-                                     const QString &dateCommande,
-                                     const QString &datelivraison,
-                                     const QString &etat,
-                                     const QString &client,
-                                     const QString &address)
-{
-    // 1. Ask user where to save
-    QString fileName = QFileDialog::getSaveFileName(
-        parent,
-        "Save Invoice as PDF",
-        QString("invoice_%1_%2.pdf").arg(ref).arg(QDate::currentDate().toString("yyyyMMdd")),
-        "PDF Files (*.pdf)");
-    if (fileName.isEmpty()) return;
-    if (QFileInfo(fileName).suffix().isEmpty())
-        fileName.append(".pdf");
-
-    // 2. Query products linked to this order via CONTENIR → PRODUIT
-    struct LineItem {
-        QString ref;
-        double  prixUnitaire;
-        int     quantite;   // QUANTITE_DEMANDEE from CONTENIR
-    };
-    QVector<LineItem> items;
-
-    QSqlQuery prodQuery;
-    prodQuery.prepare(
-        "SELECT P.REF, P.PRIX_UNITAIRE, C.QUANTITE_DEMANDEE "
-        "FROM CONTENIR C "
-        "JOIN PRODUIT P ON C.ID_CONTENAIR = P.ID_CONTENAIR "
-        "WHERE C.ID_COMMANDE = :id");
-    prodQuery.bindValue(":id", orderId);
-    if (prodQuery.exec()) {
-        while (prodQuery.next()) {
-            LineItem li;
-            li.ref          = prodQuery.value(0).toString();
-            li.prixUnitaire = prodQuery.value(1).toDouble();
-            li.quantite     = prodQuery.value(2).toInt();
-            items.append(li);
-        }
-    }
-
-    // 3. Query total amount & payment mode from FINANCE (latest transaction for this order)
-    double totalAmount = 0.0;
-    QString paymentMode = "—";
-    QString transType   = "—";
-    QSqlQuery finQuery;
-    finQuery.prepare(
-        "SELECT SUM(MONTANT), MAX(MODE_PAIEMENT), MAX(TYPE_TRANSACTION) "
-        "FROM FINANCE WHERE ID_COMMANDE = :id");
-    finQuery.bindValue(":id", orderId);
-    if (finQuery.exec() && finQuery.next()) {
-        totalAmount  = finQuery.value(0).toDouble();
-        paymentMode  = finQuery.value(1).toString().isEmpty() ? "—" : finQuery.value(1).toString();
-        transType    = finQuery.value(2).toString().isEmpty() ? "—" : finQuery.value(2).toString();
-    }
-
-    // 4. Build the invoice HTML
-    // Color palette: deep olive #2C3E1F, accent green #3DDC84, light bg #F9FBF7
-    QString etatColor = (etat == "Completed") ? "#27ae60" : "#e67e22";
-
-    // NOTE: QTextDocument only supports a subset of HTML/CSS.
-    // All layouts use <table> — no display:flex/grid allowed.
-    QString html;
-    html +=
-        "<!DOCTYPE html>"
-        "<html><head><meta charset='UTF-8'>"
-        "<style>"
-        "  body { font-family: Arial, sans-serif; margin:0; padding:0; color:#1a1a1a; font-size:13px; }"
-        "  .page { padding: 30px 40px; }"
-        "  h1 { margin:0 0 4px 0; font-size:22px; font-weight:800; color:#1a1a1a; }"
-        "  h2 { margin:0 0 6px 0; font-size:20px; font-weight:700; color:#3DDC84; }"
-        "  .small { font-size:11px; color:#888; margin:2px 0; }"
-        "  .divider { border:none; border-top:3px solid #3DDC84; margin:16px 0 20px 0; }"
-        "  .card { background:#f7faf5; border-left:4px solid #3DDC84; padding:12px 14px; margin-bottom:4px; }"
-        "  .card-title { font-size:10px; text-transform:uppercase; color:#888; font-weight:700; letter-spacing:1px; margin-bottom:6px; }"
-        "  .card p { margin:3px 0; font-size:12px; color:#333; }"
-        "  .hl { font-weight:700; font-size:13px; color:#1a1a1a; }"
-        "  .badge-p { display:inline; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; color:#ffffff; }"
-        "  .section-title { font-size:14px; font-weight:700; color:#1a1a1a; border-bottom:1px solid #eee; padding-bottom:6px; margin:20px 0 10px 0; }"
-        "  table.items { width:100%; border-collapse:collapse; margin-bottom:20px; }"
-        "  table.items th { background:#2C3E1F; color:#ffffff; padding:9px 10px; font-size:11px; text-align:left; font-weight:700; }"
-        "  table.items td { padding:9px 10px; font-size:12px; border-bottom:1px solid #f0f0f0; color:#333; }"
-        "  table.items tr.alt td { background:#f9fdf7; }"
-        "  table.items tr.noitem td { text-align:center; color:#aaa; font-style:italic; padding:20px; }"
-        "  table.totals { border-collapse:collapse; margin-left:auto; margin-bottom:20px; min-width:280px; }"
-        "  table.totals td { padding:7px 14px; font-size:12px; color:#555; }"
-        "  table.totals tr.grand td { font-size:15px; font-weight:800; color:#1a1a1a; border-top:1px solid #ddd; padding-top:10px; }"
-        "  .footer { text-align:center; margin-top:30px; border-top:1px solid #eee; padding-top:15px; font-size:10px; color:#aaa; }"
-        "</style>"
-        "</head><body><div class='page'>";
-
-    // ── Header (two-column table with company left, invoice meta right) ──
-    html += QString(
-        "<table width='100%' cellspacing='0' cellpadding='0'><tr>"
-        "  <td valign='top'>"
-        "    <h1>&#127810; Oil Press Manager</h1>"
-        "    <p class='small'>Professional Oil Production &amp; Distribution</p>"
-        "    <p class='small'>Tunis, Tunisia &nbsp;|&nbsp; contact@oilpress.tn</p>"
-        "  </td>"
-        "  <td valign='top' align='right'>"
-        "    <h2>INVOICE</h2>"
-        "    <p class='small'><b>Invoice #:</b> INV-%1</p>"
-        "    <p class='small'><b>Order Ref:</b> %2</p>"
-        "    <p class='small'><b>Issued:</b> %3</p>"
-        "  </td>"
-        "</tr></table>"
-        "<hr class='divider'>")
-        .arg(QString::number(orderId).rightJustified(5, '0'))
-        .arg(ref.toHtmlEscaped())
-        .arg(QDate::currentDate().toString("dd MMMM yyyy"));
-
-    // ── Info cards (3-column table) ──────────────────────────────────────
-    QString badgeTd = QString(
-        "<span class='badge-p' style='background-color:%1;'>%2</span>")
-        .arg(etatColor)
-        .arg(etat.toHtmlEscaped());
-
-    html += QString(
-        "<table width='100%' cellspacing='6' cellpadding='0'><tr>"
-        "  <td width='33%' valign='top'>"
-        "    <div class='card'>"
-        "      <div class='card-title'>Bill To</div>"
-        "      <p class='hl'>%1</p>"
-        "      <p>%2</p>"
-        "    </div>"
-        "  </td>"
-        "  <td width='33%' valign='top'>"
-        "    <div class='card'>"
-        "      <div class='card-title'>Order Details</div>"
-        "      <p><b>Order Date:</b> %3</p>"
-        "      <p><b>Delivery:</b> %4</p>"
-        "      <p><b>Status:</b> %5</p>"
-        "    </div>"
-        "  </td>"
-        "  <td width='33%' valign='top'>"
-        "    <div class='card'>"
-        "      <div class='card-title'>Payment Info</div>"
-        "      <p><b>Mode:</b> %6</p>"
-        "      <p><b>Type:</b> %7</p>"
-        "      <p><b>Order ID:</b> #%8</p>"
-        "    </div>"
-        "  </td>"
-        "</tr></table>")
-        .arg(client.toHtmlEscaped())
-        .arg(address.toHtmlEscaped())
-        .arg(dateCommande)
-        .arg(datelivraison)
-        .arg(badgeTd)
-        .arg(paymentMode.toHtmlEscaped())
-        .arg(transType.toHtmlEscaped())
-        .arg(orderId);
-
-    // Products table
-    html += "<p class='section-title'>&#128717; Ordered Products</p>";
-    html += "<table class='items'>";
-    html += "<thead><tr>"
-            "<th>#</th>"
-            "<th>Product Reference</th>"
-            "<th align='center'>Qty</th>"
-            "<th align='right'>Unit Price</th>"
-            "<th align='right'>Line Total</th>"
-            "</tr></thead>";
-    html += "<tbody>";
-
-    if (items.isEmpty()) {
-        html += "<tr class='no-items'><td colspan='5'>No product lines linked to this order (CONTENIR table is empty for this order).</td></tr>";
-    } else {
-        for (int i = 0; i < items.size(); ++i) {
-            const auto &li = items[i];
-            double lineTotal = li.quantite * li.prixUnitaire;
-            html += QString(
-                "<tr>"
-                "<td>%1</td>"
-                "<td><b>%2</b></td>"
-                "<td align='center'>%3</td>"
-                "<td align='right'>%4 TND</td>"
-                "<td align='right'><b>%5 TND</b></td>"
-                "</tr>")
-                .arg(i + 1)
-                .arg(li.ref.toHtmlEscaped())
-                .arg(li.quantite)
-                .arg(li.prixUnitaire, 0, 'f', 2)
-                .arg(lineTotal,       0, 'f', 2);
-        }
-    }
-    html += "</tbody></table>";
-
-    // ── Totals (right-aligned table, VAT 19%) ────────────────────────────
-    double vatRate   = 0.19;
-    double subtotal  = totalAmount > 0 ? totalAmount / (1.0 + vatRate) : 0.0;
-    double vatAmount = totalAmount - subtotal;
-
-    html += "<table class='totals'>";
-    if (totalAmount > 0) {
-        html += QString(
-            "<tr><td>Subtotal (excl. VAT 19%%)</td><td align='right'><b>%1 TND</b></td></tr>"
-            "<tr><td>VAT (19%%)</td><td align='right'><b>%2 TND</b></td></tr>"
-            "<tr class='grand'><td>TOTAL DUE</td><td align='right'>%3 TND</td></tr>")
-            .arg(subtotal,    0, 'f', 3)
-            .arg(vatAmount,   0, 'f', 3)
-            .arg(totalAmount, 0, 'f', 3);
-    } else {
-        html += "<tr><td>Amount</td><td align='right'>Not yet registered</td></tr>";
-        html += "<tr class='grand'><td>TOTAL DUE</td><td align='right'>&#8212; TND</td></tr>";
-    }
-    html += "</table>";
-
-    // Footer
-    html += QString(
-        "<div class='footer'>"
-        "<p>Thank you for your business, %1!</p>"
-        "<p>This invoice was generated automatically by Oil Press Manager on %2.</p>"
-        "<p>For any queries, please contact us at contact@oilpress.tn</p>"
-        "</div>").
-        arg(client.toHtmlEscaped())
-        .arg(QDateTime::currentDateTime().toString("dd/MM/yyyy hh:mm"));
-
-    html += "</div></body></html>";
-
-    // 5. Render to PDF
-    QPrinter printer(QPrinter::PrinterResolution);
-    printer.setOutputFormat(QPrinter::PdfFormat);
-    printer.setPageSize(QPageSize(QPageSize::A4));
-    printer.setPageMargins(QMarginsF(15, 15, 15, 15), QPageLayout::Millimeter);
-    printer.setOutputFileName(fileName);
-
-    QTextDocument doc;
-    doc.setHtml(html);
-    doc.setPageSize(printer.pageRect(QPrinter::Point).size());
-    doc.print(&printer);
-
-    QMessageBox::information(parent, "Invoice Generated",
-        QString("Invoice for order <b>%1</b> has been saved successfully!<br><br>"
-                "<small>%2</small>").arg(ref).arg(fileName),
-        QMessageBox::Ok);
-}
-
 static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
   QWidget *page = new QWidget();
   QVBoxLayout *layout = new QVBoxLayout(page);
@@ -1041,29 +792,16 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       QString labelStyle = getLabelStyle();
       QString inputStyle = getInputStyle();
 
-      QWidget *wRef, *wDate, *wClient, *wAddress, *wDelivery, *wPhone;
-      addField(formLayout, labelStyle, inputStyle, "Reference: (e.g. AB12)", "e.g. AB12", wRef, false);
-      // Reference: exactly 2 letters then one or more digits (e.g. AB12, OP999)
-      static_cast<QLineEdit*>(wRef)->setValidator(
-          new QRegularExpressionValidator(QRegularExpression("^[A-Za-z]{0,2}[0-9]*$"), page));
-      static_cast<QLineEdit*>(wRef)->setPlaceholderText("e.g. AB12");
+      QWidget *wId, *wDate, *wClient, *wAddress, *wDelivery;
+      addField(formLayout, labelStyle, inputStyle, "ID:", "Auto-generated", wId, false);
+      static_cast<QLineEdit*>(wId)->setReadOnly(true);
       addField(formLayout, labelStyle, inputStyle, "Order Date:", "", wDate, true);
       static_cast<QDateEdit*>(wDate)->setMinimumDate(QDate::currentDate());
       addField(formLayout, labelStyle, inputStyle, "Client's Name:", "Enter client's name", wClient, false);
       static_cast<QLineEdit*>(wClient)->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z \\.]*$"), page));
       addField(formLayout, labelStyle, inputStyle, "Client's Address:", "Enter address", wAddress, false);
-      addField(formLayout, labelStyle, inputStyle, "Phone Number:", "e.g. +216 12 345 678", wPhone, false);
       addField(formLayout, labelStyle, inputStyle, "Delivery Date:", "", wDelivery, true);
       static_cast<QDateEdit*>(wDelivery)->setMinimumDate(QDate::currentDate());
-
-      // Delivery Status dropdown
-      QLabel *delivStatusLbl = new QLabel("Delivery Status:");
-      delivStatusLbl->setStyleSheet(labelStyle);
-      formLayout->addWidget(delivStatusLbl);
-      QComboBox *wDeliveryStatus = new QComboBox();
-      wDeliveryStatus->addItems({"Preparing", "Dispatched", "In Transit", "Delivered"});
-      wDeliveryStatus->setStyleSheet(inputStyle);
-      formLayout->addWidget(wDeliveryStatus);
 
       QLabel *stateLbl = new QLabel("State:");
       stateLbl->setStyleSheet(labelStyle);
@@ -1102,52 +840,26 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       // Connect Button
       QObject::connect(btnSubmit, &QPushButton::clicked, [=]() {
           int id = 0; // ID will be auto-generated
-          QString ref = static_cast<QLineEdit*>(wRef)->text().trimmed();
           QDate date = static_cast<QDateEdit*>(wDate)->date();
           QString client = static_cast<QLineEdit*>(wClient)->text().trimmed();
           QString address = static_cast<QLineEdit*>(wAddress)->text().trimmed();
-          QString phone = static_cast<QLineEdit*>(wPhone)->text().trimmed();
-          QString delivStatus = wDeliveryStatus->currentText();
           QDate delivery = static_cast<QDateEdit*>(wDelivery)->date();
           QString state = pendingRadio->isChecked() ? "Pending" : "Completed";
 
-          // Validate Reference: must be exactly 2 letters then 1+ digits
-          QRegularExpression refRegex("^[A-Za-z]{2}[0-9]+$");
-          if (ref.isEmpty()) {
-              QMessageBox::warning(nullptr, "Validation Error", "Reference cannot be empty.");
-              return;
-          }
-          if (!refRegex.match(ref).hasMatch()) {
-              QMessageBox::warning(nullptr, "Validation Error",
-                  "Reference must start with exactly 2 letters followed by at least 1 digit.\n"
-                  "Example: AB12, OP999");
-              return;
-          }
           if (client.isEmpty()) {
-              QMessageBox::warning(nullptr, "Validation Error", "Client's Name cannot be empty.");
-              return;
-          }
-          if (address.isEmpty()) {
-              QMessageBox::warning(nullptr, "Validation Error", "Client's Address cannot be empty.");
+              QMessageBox::warning(nullptr, "Validation Error", "Client Name cannot be empty.");
               return;
           }
           if (delivery < date) {
               QMessageBox::warning(nullptr, "Validation Error", "Delivery date must be on or after the order date.");
               return;
           }
-          if (phone.isEmpty()) {
-              QMessageBox::warning(nullptr, "Validation Error", "Client's Phone Number cannot be empty.");
-              return;
-          }
 
-          Commande c(id, ref, date, state, client, address, delivery, phone, delivStatus);
+          Commande c(id, date, state, client, address, delivery);
           if (c.ajouter()) {
               QMessageBox::information(nullptr, "Success", "Order added successfully!");
-              static_cast<QLineEdit*>(wRef)->clear();
               static_cast<QLineEdit*>(wClient)->clear();
               static_cast<QLineEdit*>(wAddress)->clear();
-              static_cast<QLineEdit*>(wPhone)->clear();
-              wDeliveryStatus->setCurrentIndex(0);
               static_cast<QDateEdit*>(wDate)->setDate(QDate::currentDate());
               static_cast<QDateEdit*>(wDelivery)->setDate(QDate::currentDate());
 
@@ -1158,14 +870,6 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
               for(QPushButton *btn : tabButtons) {
                   btn->setChecked(btn->text() == "Order Hub");
               }
-
-              // Fire SMS Confirmation
-              SmsAPI *sms = new SmsAPI(outNestedStack);
-              QString txtMsg = QString("Hello %1! Your OilPress order (Ref: %2) has been received. "
-                                      "Delivery Date: %3. Current Status: %4.")
-                                   .arg(client, ref, delivery.toString("dd/MM/yyyy"), delivStatus);
-              sms->sendSMS(phone, txtMsg);
-              
           } else {
               QMessageBox::critical(nullptr, "Error", "Failed to add order.\n\nDB Error: " + c.getLastError());
           }
@@ -1187,20 +891,23 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
       // Search
       QLineEdit *searchEdit = new QLineEdit();
-      searchEdit->setPlaceholderText("Search by Client Name or Reference...");
+      searchEdit->setPlaceholderText("Search Orders...");
       searchEdit->setStyleSheet(getInputStyle());
-      searchEdit->setMinimumWidth(260);
+      searchEdit->setMinimumWidth(200);
 
       // Sort
       QLabel *lblSort = new QLabel("Sort by:");
       lblSort->setStyleSheet(getLabelStyle());
-      lblSort->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+      lblSort->setSizePolicy(QSizePolicy::Fixed,
+                             QSizePolicy::Fixed); // scanning fix
 
       QComboBox *sortCombo = new QComboBox();
-      sortCombo->addItems({"Date (Newest First)", "Date (Oldest First)",
-                           "Client Name (A → Z)", "Client Name (Z → A)"});
+      sortCombo->addItems({"Date (Newest)", "Date (Oldest)",
+                           "Amount (High-Low)", "Amount (Low-High)"});
       sortCombo->setStyleSheet(getInputStyle());
-      sortCombo->setFixedWidth(200);
+      sortCombo->setFixedWidth(180);
+
+      sortCombo->setFixedWidth(180);
 
       // Print PDF Button
       QPushButton *btnPrint = new QPushButton("Print PDF");
@@ -1227,8 +934,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       histLayout->addWidget(controlBar);
 
       // 2. Table
-      QStringList headers = {"Reference", "Date", "State", "Client", "Address", "Delivery", "Actions"};
-      // Note: we store the hidden orderId in column 7 (index 7) and show actions in col 6
+      QStringList headers = {"ID", "Date", "State", "Client", "Address", "Delivery", "Actions"};
       QTableWidget *table = new QTableWidget();
       table->setColumnCount(headers.size());
       table->setHorizontalHeaderLabels(headers);
@@ -1250,8 +956,8 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
       histLayout->addWidget(table);
 
-      // Connect Print — exports exactly what is currently visible in the table
-      QObject::connect(btnPrint, &QPushButton::clicked, [table, searchEdit]() {
+      // Connect Print (Moved here to capture 'table' correctly)
+      QObject::connect(btnPrint, &QPushButton::clicked, [table]() {
         QString fileName = QFileDialog::getSaveFileName(
             table->window(), "Export Order History", QString(),
             "PDF Files (*.pdf)");
@@ -1262,42 +968,36 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
         QPrinter printer(QPrinter::PrinterResolution);
         printer.setOutputFormat(QPrinter::PdfFormat);
-        printer.setPageSize(QPageSize(QPageSize::A4));
+        printer.setPageSize(
+            QPageSize(QPageSize::A4)); // Updated for Qt6 compatibility
         printer.setOutputFileName(fileName);
 
         QTextDocument doc;
-        QString html = "<h1 style='text-align:center; color:#333;'>Order History Report</h1>";
+        QString html = "<h1 style='text-align:center; color:#333;'>Order "
+                       "History Report</h1>";
         html += "<h3 style='text-align:center; color:#666;'>" +
-                QDate::currentDate().toString("dd MMMM yyyy") + "</h3>";
+                QDate::currentDate().toString("dd MMMM yyyy") + "</h3><br>";
+        html +=
+            "<table border='1' cellspacing='0' cellpadding='6' width='100%' "
+            "style='border-collapse:collapse; border-color:#ccc;'>";
 
-        // Show active filter in report if search is active
-        QString activeSearch = searchEdit->text().trimmed();
-        if (!activeSearch.isEmpty()) {
-            html += "<p style='text-align:center; color:#888; font-size:12px;'>"
-                    "Filtered by: <b>" + activeSearch.toHtmlEscaped() + "</b></p>";
-        }
-        html += "<br>";
-        html += "<table border='1' cellspacing='0' cellpadding='6' width='100%' "
-                "style='border-collapse:collapse; border-color:#ccc;'>";
-
-        // Headers — skip hidden ID column (col 0 is Reference, all cols visible)
+        // Headers
         html += "<thead style='background-color:#f2f2f2;'><tr>";
-        for (int c = 0; c < table->columnCount() - 1; ++c) { // Skip 'Actions'
-          if (!table->isColumnHidden(c))
-            html += "<th style='padding:8px; text-align:left;'>" +
-                    table->horizontalHeaderItem(c)->text() + "</th>";
+        for (int c = 0; c < table->columnCount() - 1;
+             ++c) { // Skip 'Actions' column
+          html += "<th style='padding:8px;'>" +
+                  table->horizontalHeaderItem(c)->text() + "</th>";
         }
         html += "</tr></thead>";
 
-        // Body — only currently visible rows
+        // Body
         html += "<tbody>";
         for (int r = 0; r < table->rowCount(); ++r) {
-          if (table->isRowHidden(r)) continue;
           html += "<tr>";
           for (int c = 0; c < table->columnCount() - 1; ++c) {
-            if (table->isColumnHidden(c)) continue;
             QTableWidgetItem *item = table->item(r, c);
-            html += "<td style='padding:8px;'>" + (item ? item->text().toHtmlEscaped() : "") + "</td>";
+            html += "<td style='padding:8px;'>" + (item ? item->text() : "") +
+                    "</td>";
           }
           html += "</tr>";
         }
@@ -1317,69 +1017,25 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
         QSqlQueryModel *model = c.afficher();
         if (!model) return;
 
-        QString query = searchEdit->text().toLower().trimmed();
-        QString sortOpt = sortCombo->currentText();
-
-        // Collect all rows first
-        struct Row {
-            QString id, ref, date, etat, client, address, livraison, delivStatus, telephone;
-        };
-        QVector<Row> rows;
-        for (int i = 0; i < model->rowCount(); ++i) {
-          Row row;
-          row.id       = model->record(i).value("ID_COMMANDE").toString();
-          row.ref      = model->record(i).value("REFERENCE").toString();
-          row.date     = model->record(i).value("DATE_COMMANDE").toDate().toString("yyyy-MM-dd");
-          row.etat     = model->record(i).value("ETAT_COMMANDE").toString();
-          row.client   = model->record(i).value("NOM_CLIENT").toString();
-          row.address  = model->record(i).value("ADRESSE_CLIENT").toString();
-          row.livraison= model->record(i).value("DATE_LIVRAISON").toDate().toString("yyyy-MM-dd");
-          row.delivStatus = model->record(i).value("DELIVERY_STATUS").toString();
-          row.telephone= model->record(i).value("NUMERO_TELEPHONE").toString();
-
-          // Filter: only by client name OR reference
-          if (!query.isEmpty()) {
-            bool matchClient = row.client.toLower().contains(query);
-            bool matchRef    = row.ref.toLower().contains(query);
-            if (!matchClient && !matchRef) continue;
-          }
-          rows.append(row);
-        }
-
-        // Sort
-        if (sortOpt == "Date (Newest First)") {
-          std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
-            return a.date > b.date; // descending
-          });
-        } else if (sortOpt == "Date (Oldest First)") {
-          std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
-            return a.date < b.date; // ascending
-          });
-        } else if (sortOpt == "Client Name (A \u2192 Z)") {
-          std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
-            return a.client.toLower() < b.client.toLower();
-          });
-        } else if (sortOpt == "Client Name (Z \u2192 A)") {
-          std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
-            return a.client.toLower() > b.client.toLower();
-          });
-        }
+        QString query = searchEdit->text().toLower();
+        // Sorting might be complex to implement purely in C++ with QSqlQueryModel if we don't use QSortFilterProxyModel,
+        // For now, we will just filter visually or fetch sorted from DB. This is a simple visual filter.
 
         table->setRowCount(0);
         int rowIdx = 0;
-        for (const Row &row : rows) {
-          QString id       = row.id;
-          QString ref      = row.ref;
-          QString date     = row.date;
-          QString etat     = row.etat;
-          QString client   = row.client;
-          QString address  = row.address;
-          QString livraison= row.livraison;
-          QString delivStatus = row.delivStatus;
-          QString phone    = row.telephone;
+        for (int i = 0; i < model->rowCount(); ++i) {
+          QString id = model->record(i).value("ID_COMMANDE").toString();
+          QString date = model->record(i).value("DATE_COMMANDE").toDate().toString("yyyy-MM-dd");
+          QString etat = model->record(i).value("ETAT_COMMANDE").toString();
+          QString client = model->record(i).value("NOM_CLIENT").toString();
+          QString address = model->record(i).value("ADRESSE_CLIENT").toString();
+          QString livraison = model->record(i).value("DATE_LIVRAISON").toDate().toString("yyyy-MM-dd");
+
+          bool match = client.toLower().contains(query) || id.contains(query) || etat.toLower().contains(query) || address.toLower().contains(query);
+          if (!match && !query.isEmpty()) continue;
 
           table->insertRow(rowIdx);
-          table->setItem(rowIdx, 0, new QTableWidgetItem(ref));
+          table->setItem(rowIdx, 0, new QTableWidgetItem(id));
           table->setItem(rowIdx, 1, new QTableWidgetItem(date));
           table->setItem(rowIdx, 2, new QTableWidgetItem(etat));
           table->setItem(rowIdx, 3, new QTableWidgetItem(client));
@@ -1394,7 +1050,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
           QPushButton *btnModify = new QPushButton("Edit");
           btnModify->setCursor(Qt::PointingHandCursor);
-          btnModify->setMinimumWidth(60);
+          btnModify->setMinimumWidth(80);
           btnModify->setFixedHeight(28);
           btnModify->setStyleSheet(
               "QPushButton { background-color: #ffffff; border: 1px solid "
@@ -1405,7 +1061,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
           QPushButton *btnDelete = new QPushButton("Remove");
           btnDelete->setCursor(Qt::PointingHandCursor);
-          btnDelete->setMinimumWidth(60);
+          btnDelete->setMinimumWidth(80);
           btnDelete->setFixedHeight(28);
           btnDelete->setStyleSheet(
               "QPushButton { background-color: #ffffff; border: 1px solid "
@@ -1414,153 +1070,14 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
               "background-color: #ffebee; border-color: #b71c1c; color: "
               "#b71c1c; }");
 
-          // ── PDF Invoice button ──────────────────────────────────────────
-          QPushButton *btnInvoice = new QPushButton(QString::fromUtf8("\xF0\x9F\x93\x84 Invoice"));
-          btnInvoice->setCursor(Qt::PointingHandCursor);
-          btnInvoice->setMinimumWidth(80);
-          btnInvoice->setFixedHeight(28);
-          btnInvoice->setToolTip("Generate PDF invoice for this order");
-          btnInvoice->setStyleSheet(
-              "QPushButton { background-color: #2C3E1F; color: #ffffff; "
-              "border: none; border-radius: 6px; padding: 0px 10px; "
-              "font-weight: 700; font-size: 12px; } "
-              "QPushButton:hover { background-color: #3a5228; } "
-              "QPushButton:pressed { background-color: #1e2b15; }");
-
-          QPushButton *btnTrack = new QPushButton("Track");
-          btnTrack->setCursor(Qt::PointingHandCursor);
-          btnTrack->setMinimumWidth(60);
-          btnTrack->setFixedHeight(28);
-          btnTrack->setStyleSheet(
-              "QPushButton { background-color: #ffffff; border: 1px solid "
-              "#007acc; border-radius: 6px; padding: 0px 8px; font-weight: "
-              "bold; font-size: 13px; color: #007acc; } QPushButton:hover { "
-              "border-color: #005999; color: #ffffff; background-color: "
-              "#007acc; }");
-
-          actionLayout->addWidget(btnTrack);
           actionLayout->addWidget(btnModify);
           actionLayout->addWidget(btnDelete);
-          actionLayout->addWidget(btnInvoice);
           table->setCellWidget(rowIdx, 6, actionWidget);
 
           int orderId = id.toInt();
 
-          // Connect Track action — delivery stage progress + real map route
-          QObject::connect(btnTrack, &QPushButton::clicked, [table, delivStatus, ref, client, livraison, address]() {
-              QDialog *trackDlg = new QDialog(table->window());
-              trackDlg->setWindowTitle("Delivery Tracking — " + ref);
-              trackDlg->setFixedSize(500, 420);
-              trackDlg->setStyleSheet("QDialog { background-color: #f7f9fb; }");
-              QVBoxLayout *vbox = new QVBoxLayout(trackDlg);
-              vbox->setContentsMargins(30, 25, 30, 20);
-              vbox->setSpacing(14);
-
-              QLabel *title = new QLabel("Delivery Tracking — " + ref);
-              title->setStyleSheet("font-size: 18px; font-weight: 800; color: #1a1a1a;");
-              vbox->addWidget(title);
-
-              QLabel *sub = new QLabel("Client: " + client + "  |  Expected: " + livraison);
-              sub->setStyleSheet("font-size: 13px; color: #666;");
-              vbox->addWidget(sub);
-
-              QLabel *addrLbl = new QLabel("Delivery to: " + address);
-              addrLbl->setStyleSheet("font-size: 12px; color: #888; font-style: italic;");
-              addrLbl->setWordWrap(true);
-              vbox->addWidget(addrLbl);
-
-              // 4-stage visual progress bar
-              const QStringList stages = {"Preparing", "Dispatched", "In Transit", "Delivered"};
-              int currentStage = stages.indexOf(delivStatus);
-              if (currentStage < 0) currentStage = 0;
-
-              QWidget *stepsWidget = new QWidget();
-              stepsWidget->setStyleSheet("background: transparent;");
-              QHBoxLayout *stepsLayout = new QHBoxLayout(stepsWidget);
-              stepsLayout->setSpacing(0);
-              stepsLayout->setContentsMargins(0, 10, 0, 10);
-
-              const QStringList icons = {"\xF0\x9F\x93\xA6", "\xF0\x9F\x9A\x9A", "\xF0\x9F\x9B\xA3", "\xE2\x9C\x85"};
-
-              for (int s = 0; s < stages.size(); ++s) {
-                  QLabel *circle = new QLabel(QString::fromUtf8(icons[s].toUtf8()));
-                  circle->setAlignment(Qt::AlignCenter);
-                  circle->setFixedSize(54, 54);
-                  bool isDone = (s <= currentStage);
-                  circle->setStyleSheet(QString(
-                      "QLabel { background-color: %1; border-radius: 27px; "
-                      "font-size: 20px; border: 3px solid %2; }")
-                      .arg(isDone ? "#3DDC84" : "#e0e0e0")
-                      .arg(isDone ? "#2DB66F" : "#cccccc"));
-
-                  QLabel *stageLbl = new QLabel(stages[s]);
-                  stageLbl->setAlignment(Qt::AlignCenter);
-                  stageLbl->setStyleSheet(
-                      QString("font-size: 11px; font-weight: %1; color: %2; margin-top: 3px;")
-                      .arg(s == currentStage ? "800" : "500")
-                      .arg(s == currentStage ? "#2DB66F" : "#888"));
-
-                  QVBoxLayout *stepCol = new QVBoxLayout();
-                  stepCol->addWidget(circle, 0, Qt::AlignHCenter);
-                  stepCol->addWidget(stageLbl, 0, Qt::AlignHCenter);
-                  stepsLayout->addLayout(stepCol);
-
-                  if (s < stages.size() - 1) {
-                      QLabel *line = new QLabel();
-                      line->setFixedHeight(4);
-                      line->setStyleSheet(QString("background-color: %1; border-radius: 2px; margin-bottom: 28px;")
-                          .arg(s < currentStage ? "#3DDC84" : "#e0e0e0"));
-                      stepsLayout->addWidget(line, 1);
-                  }
-              }
-              vbox->addWidget(stepsWidget);
-
-              QLabel *currentLbl = new QLabel("Current Stage:  " + delivStatus);
-              currentLbl->setStyleSheet("font-size: 14px; font-weight: 700; color: #2DB66F; padding: 4px 0;");
-              vbox->addWidget(currentLbl);
-
-              vbox->addStretch();
-
-              // Map button — opens Google Maps with the real delivery route
-              QPushButton *mapBtn = new QPushButton("  View Delivery Route on Map");
-              mapBtn->setFixedHeight(42);
-              mapBtn->setCursor(Qt::PointingHandCursor);
-              mapBtn->setStyleSheet(
-                  "QPushButton { background-color: #4285F4; color: white; border: none; "
-                  "border-radius: 8px; font-size: 14px; font-weight: 700; } "
-                  "QPushButton:hover { background-color: #3367d6; } "
-                  "QPushButton:pressed { background-color: #2a56c6; }");
-              // The origin is your company/warehouse in Tunisia
-              const QString origin = "El Ghazela, Ariana, Tunisie"; // Change to your actual address
-              QObject::connect(mapBtn, &QPushButton::clicked, [origin, address]() {
-                  TrackingAPI::openDeliveryRouteInBrowser(origin, address);
-              });
-              vbox->addWidget(mapBtn);
-
-              QPushButton *closeBtn = new QPushButton("Close");
-              closeBtn->setFixedHeight(38);
-              closeBtn->setCursor(Qt::PointingHandCursor);
-              closeBtn->setStyleSheet(
-                  "QPushButton { background-color: #ffffff; color: #555; border: 1px solid #ddd; "
-                  "border-radius: 8px; font-size: 13px; font-weight: 600; } "
-                  "QPushButton:hover { border-color: #bbb; color: #333; }");
-              vbox->addWidget(closeBtn);
-              QObject::connect(closeBtn, &QPushButton::clicked, trackDlg, &QDialog::accept);
-              trackDlg->exec();
-              trackDlg->deleteLater();
-          });
-
-
-          // Connect Invoice PDF
-          QObject::connect(btnInvoice, &QPushButton::clicked,
-              [table, orderId, ref, date, livraison, etat, client, address]() {
-                  generateOrderInvoicePdf(
-                      table->window(),
-                      orderId, ref, date, livraison, etat, client, address);
-              });
-
           // Connect Modify
-          QObject::connect(btnModify, &QPushButton::clicked, [table, orderId, ref, date, etat, client, address, livraison, delivStatus, phone]() {
+          QObject::connect(btnModify, &QPushButton::clicked, [table, orderId, id, date, etat, client, address, livraison]() {
                 QDialog dlg(table->window());
                 dlg.setWindowTitle("Edit Order Details");
                 dlg.setModal(true);
@@ -1581,14 +1098,10 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                 form->setLabelAlignment(Qt::AlignLeft);
                 
                 // Fields
-                QLineEdit *refEdit = new QLineEdit(ref);
-                refEdit->setReadOnly(true);  // Reference cannot be changed after creation
                 QDateEdit *dateEdit = new QDateEdit(QDate::fromString(date, "yyyy-MM-dd"));
                 dateEdit->setDisplayFormat("yyyy-MM-dd");
                 dateEdit->setCalendarPopup(true);
-                dateEdit->setMinimumDate(QDate::currentDate().addYears(-10)); // allow past dates when editing
                 QLineEdit *clientEdit = new QLineEdit(client);
-                clientEdit->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z \\.]*$"), &dlg));
                 QLineEdit *addressEdit = new QLineEdit(address);
                 QDateEdit *livraisonEdit = new QDateEdit(QDate::fromString(livraison, "yyyy-MM-dd"));
                 livraisonEdit->setDisplayFormat("yyyy-MM-dd");
@@ -1602,15 +1115,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                       "border-color: #3DDC84; background-color: #ffffff; }");
                   w->setFixedHeight(35);
                 };
-                auto styleReadOnly = [&](QLineEdit *w) {
-                  w->setStyleSheet(
-                      "QLineEdit { background-color: #f0f0f0; border: 1px solid #d0d0d0; "
-                      "border-radius: 6px; padding: 6px 10px; font-size: 13px; color: #888; "
-                      "font-style: italic; }");
-                  w->setFixedHeight(35);
-                };
 
-                styleReadOnly(refEdit);
                 styleField(dateEdit);
                 styleField(clientEdit);
                 styleField(addressEdit);
@@ -1639,20 +1144,11 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                   form->addRow(l, w);
                 };
 
-                addRow("Reference:", refEdit);
                 addRow("Order Date:", dateEdit);
                 addRow("Client Name:", clientEdit);
                 addRow("Address:", addressEdit);
                 addRow("Delivery Date:", livraisonEdit);
                 addRow("State:", radioWidget);
-
-                // Delivery Status dropdown
-                QComboBox *delivStatusEdit = new QComboBox();
-                delivStatusEdit->addItems({"Preparing", "Dispatched", "In Transit", "Delivered"});
-                int dsIdx = delivStatusEdit->findText(delivStatus);
-                if (dsIdx >= 0) delivStatusEdit->setCurrentIndex(dsIdx);
-                styleField(delivStatusEdit);
-                addRow("Delivery Status:", delivStatusEdit);
 
                 mainV->addLayout(form);
                 mainV->addSpacing(10);
@@ -1672,27 +1168,12 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                     "#f9fafb; }");
                 mainV->addWidget(bbox);
 
+                QObject::connect(bbox, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
                 QObject::connect(bbox, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
-                // Validate before accepting
-                QObject::connect(bbox, &QDialogButtonBox::accepted, [&]() {
-                    if (clientEdit->text().trimmed().isEmpty()) {
-                        QMessageBox::warning(&dlg, "Validation Error", "Client's Name cannot be empty.");
-                        return;
-                    }
-                    if (addressEdit->text().trimmed().isEmpty()) {
-                        QMessageBox::warning(&dlg, "Validation Error", "Client's Address cannot be empty.");
-                        return;
-                    }
-                    if (livraisonEdit->date() < dateEdit->date()) {
-                        QMessageBox::warning(&dlg, "Validation Error", "Delivery date must be on or after the order date.");
-                        return;
-                    }
-                    dlg.accept();
-                });
 
                 if (dlg.exec() == QDialog::Accepted) {
                     QString newState = pendingRadio->isChecked() ? "Pending" : "Completed";
-                    Commande c(orderId, refEdit->text().trimmed(), dateEdit->date(), newState, clientEdit->text().trimmed(), addressEdit->text().trimmed(), livraisonEdit->date(), phone, delivStatusEdit->currentText());
+                    Commande c(orderId, dateEdit->date(), newState, clientEdit->text().trimmed(), addressEdit->text().trimmed(), livraisonEdit->date());
                     if (c.modifier()) {
                         QMessageBox::information(table->window(), "Success", "Order updated successfully!");
                         // Ideally we'd refresh the table here. In the full application, we should trigger the outer updateTable() to re-query the DB.
@@ -1738,35 +1219,11 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
       cLayout->addWidget(historyContainer);
     } else {
-      // Order Statistics Chart (Orders Per Month)
-      GenericBarChart *chart = new GenericBarChart("Orders per Month");
-      
-      QSqlQuery chartQuery;
-      // Fetch count of orders per month, sorted chronologically
-      chartQuery.prepare("SELECT TO_CHAR(DATE_COMMANDE, 'Mon YYYY'), COUNT(*) "
-                         "FROM COMMANDE "
-                         "GROUP BY TO_CHAR(DATE_COMMANDE, 'Mon YYYY'), TRUNC(DATE_COMMANDE, 'MM') "
-                         "ORDER BY TRUNC(DATE_COMMANDE, 'MM') ASC");
-      
-      QColor colors[] = { QColor(52, 152, 219), QColor(61, 220, 132), QColor(155, 89, 182), QColor(241, 196, 15), QColor(230, 126, 34), QColor(26, 188, 156) };
-      int colorIdx = 0;
-      
-      if (chartQuery.exec()) {
-          bool hasData = false;
-          while (chartQuery.next()) {
-              hasData = true;
-              QString monthStr = chartQuery.value(0).toString();
-              int count = chartQuery.value(1).toInt();
-              chart->addBar(monthStr, count, colors[colorIdx % 6]);
-              colorIdx++;
-          }
-          if (!hasData) {
-              chart->addBar("No Data Available", 0, QColor(189, 195, 199));
-          }
-      } else {
-          chart->addBar("Database Error", 0, QColor(231, 76, 60));
-          qDebug() << "Analytics Query Error:" << chartQuery.lastError().text();
-      }
+      // Client Statistics Chart
+      GenericBarChart *chart =
+          new GenericBarChart("New Order Acquisition (Q2 vs Q3)");
+      chart->addBar("Q2 2023", 45, QColor(52, 152, 219)); // Blue
+      chart->addBar("Q3 2023", 52, QColor(61, 220, 132)); // Green
 
       QWidget *chartContainer = new QWidget();
       chartContainer->setStyleSheet(getCardStyle());
@@ -3369,23 +2826,8 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           };
 
           QLineEdit *edName = addField("Name:", currentName);
-          edName->setMaxLength(50);
-          edName->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z0-9\\s\\-_]+$"), edName));
-          
-          mainV->addWidget(new QLabel("Type:"));
-          QComboBox *edType = new QComboBox();
-          edType->addItems({"press", "filter"});
-          edType->setCurrentText(currentType);
-          edType->setStyleSheet("QComboBox { background-color: #f9fafb; border: 1px solid #eaeaea; border-radius: 8px; padding: 10px; font-size: 14px; }");
-          mainV->addWidget(edType);
-          
-          mainV->addWidget(new QLabel("Status:"));
-          QComboBox *edStatus = new QComboBox();
-          edStatus->addItems({"Normal", "En panne", "En maintenance"});
-          edStatus->setCurrentText(currentStatus);
-          edStatus->setStyleSheet("QComboBox { background-color: #f9fafb; border: 1px solid #eaeaea; border-radius: 8px; padding: 10px; font-size: 14px; }");
-          mainV->addWidget(edStatus);
-
+          QLineEdit *edType = addField("Type:", currentType);
+          QLineEdit *edStatus = addField("Status:", currentStatus);
           QLineEdit *edHours = addField("Hours:", QString::number(currentHours));
           edHours->setValidator(new QIntValidator(0, 9999999, edHours));
           QLineEdit *edSeuil = addField("Threshold:", QString::number(currentSeuil));
@@ -3396,35 +2838,11 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           mainV->addWidget(btnSave);
 
           QObject::connect(btnSave, &QPushButton::clicked, [=, &dlg]() {
-              QString nom = edName->text().trimmed();
-              QString heuresStr = edHours->text().trimmed();
-              QString seuilStr = edSeuil->text().trimmed();
-
-              if (nom.isEmpty() || heuresStr.isEmpty() || seuilStr.isEmpty()) {
-                  QMessageBox::warning(&dlg, "Erreur de Saisie", "Veuillez remplir tous les champs obligatoires (Nom, Heures, Seuil).");
+              if (edName->text().trimmed().isEmpty() || edType->text().trimmed().isEmpty() || edHours->text().isEmpty() || edSeuil->text().isEmpty()) {
+                  QMessageBox::warning(&dlg, "Erreur de Saisie", "Veuillez remplir tous les champs obligatoires (Nom, Type, Heures, Seuil).");
                   return;
               }
-
-              QRegularExpression nomRegex("^[a-zA-Z0-9\\s\\-_]+$");
-              if (!nomRegex.match(nom).hasMatch()) {
-                  QMessageBox::warning(&dlg, "Erreur de Saisie", "Le nom de la machine contient des caractères non autorisés.");
-                  return;
-              }
-
-              int heures = heuresStr.toInt();
-              int seuil = seuilStr.toInt();
-
-              if (heures < 0) {
-                  QMessageBox::warning(&dlg, "Erreur de Saisie", "Les heures de fonctionnement doivent être positives ou nulles.");
-                  return;
-              }
-
-              if (seuil <= 0) {
-                  QMessageBox::warning(&dlg, "Erreur de Saisie", "Le seuil de maintenance doit être strictement supérieur à 0.");
-                  return;
-              }
-
-              Machine updateObj(mid, nom, edType->currentText(), edStatus->currentText(), heures, seuil);
+              Machine updateObj(mid, edName->text(), edType->text(), edStatus->text(), edHours->text().toInt(), edSeuil->text().toInt());
               if (updateObj.modifier()) {
                   dlg.accept();
                   (*refreshMachineTable)();
@@ -3440,7 +2858,6 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           if (QMessageBox::warning(table->window(), "Confirm Delete", "Are you sure you want to remove this machine?", QMessageBox::Yes | QMessageBox::No) == QMessageBox::Yes) {
               Machine deleteObj;
               if (deleteObj.supprimer(mid)) {
-                  QMessageBox::information(table->window(), "Succès", "La machine a été supprimée avec succès.");
                   (*refreshMachineTable)();
               } else {
                   QMessageBox::critical(table->window(), "Error", "Delete failed: " + deleteObj.getLastError());
@@ -3473,18 +2890,14 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       formLayout->addWidget(titleLabel);
 
       QLineEdit *nameInput = new QLineEdit();
-      nameInput->setMaxLength(50);
-      nameInput->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z0-9\\s\\-_]+$"), nameInput));
-      QComboBox *typeInput = new QComboBox();
-      typeInput->addItems({"press", "filter"});
-      QComboBox *statusInput = new QComboBox();
-      statusInput->addItems({"Normal", "En panne", "En maintenance"});
+      QLineEdit *typeInput = new QLineEdit();
+      QLineEdit *statusInput = new QLineEdit();
       QLineEdit *hoursInput = new QLineEdit("0");
       hoursInput->setValidator(new QIntValidator(0, 9999999, hoursInput));
       QLineEdit *seuilInput = new QLineEdit("100");
       seuilInput->setValidator(new QIntValidator(0, 9999999, seuilInput));
 
-      auto addInput = [&](const QString &txt, QWidget *le) {
+      auto addInput = [&](const QString &txt, QLineEdit *le) {
           QLabel *l = new QLabel(txt);
           l->setStyleSheet(getLabelStyle());
           l->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
@@ -3512,43 +2925,19 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       cLayout->addWidget(formContainer);
 
       QObject::connect(btnAdd, &QPushButton::clicked, [=]() {
-          QString nom = nameInput->text().trimmed();
-          QString heuresStr = hoursInput->text().trimmed();
-          QString seuilStr = seuilInput->text().trimmed();
-
-          if (nom.isEmpty()) {
-              QMessageBox::warning(nullptr, "Erreur de Saisie", "Le champ 'Nom' est obligatoire.");
+          if (nameInput->text().trimmed().isEmpty() || typeInput->text().trimmed().isEmpty()) {
+              QMessageBox::warning(nullptr, "Erreur de Saisie", "Les champs 'Nom' et 'Type' sont obligatoires.");
               return;
           }
-
-          QRegularExpression nomRegex("^[a-zA-Z0-9\\s\\-_]+$");
-          if (!nomRegex.match(nom).hasMatch()) {
-              QMessageBox::warning(nullptr, "Erreur de Saisie", "Le nom de la machine contient des caractères non autorisés.");
-              return;
-          }
-
-          if (heuresStr.isEmpty() || seuilStr.isEmpty()) {
+          if (hoursInput->text().isEmpty() || seuilInput->text().isEmpty()) {
               QMessageBox::warning(nullptr, "Erreur de Saisie", "Les heures et le seuil ne peuvent pas être vides.");
               return;
           }
 
-          int heures = heuresStr.toInt();
-          int seuil = seuilStr.toInt();
-
-          if (heures < 0) {
-              QMessageBox::warning(nullptr, "Erreur de Saisie", "Les heures de fonctionnement doivent être positives ou nulles.");
-              return;
-          }
-
-          if (seuil <= 0) {
-              QMessageBox::warning(nullptr, "Erreur de Saisie", "Le seuil de maintenance doit être strictement supérieur à 0.");
-              return;
-          }
-
-          Machine newM(0, nom, typeInput->currentText(), statusInput->currentText(), heures, seuil);
+          Machine newM(0, nameInput->text(), typeInput->text(), statusInput->text().isEmpty() ? "Normal" : statusInput->text(), hoursInput->text().toInt(), seuilInput->text().toInt());
           if (newM.ajouter()) {
               QMessageBox::information(nullptr, "Success", "Machine added with persistence!");
-              nameInput->clear(); typeInput->setCurrentIndex(0); statusInput->setCurrentIndex(0); hoursInput->setText("0"); seuilInput->setText("100");
+              nameInput->clear(); typeInput->clear(); statusInput->clear(); hoursInput->setText("0"); seuilInput->setText("100");
               
               if (refreshMachineTable) {
                   (*refreshMachineTable)();
@@ -3675,25 +3064,12 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           }
           if (hasAlerts) {
               QMessageBox::warning(table->window(), "Alertes de Maintenance", alertMsg);
-              // Sending Alert via API REST (Advanced Feature)
-              EmailAPI* email = new EmailAPI(table);
-              // NOTE: User must replace these with real Mailjet API keys
-              email->setCredentials("YOUR_API_KEY", "YOUR_API_SECRET"); 
-              
-              QObject::connect(email, &EmailAPI::finished, [table](bool success, const QString &msg) {
-                  if (success) {
-                      qDebug() << "Email Alert sent successfully via API.";
-                  } else {
-                      qDebug() << "API Email Failure:" << msg;
-                      QMessageBox::critical(table->window(), "API Error", 
-                          "L'envoi de l'alerte via l'API a échoué.\n"
-                          "Veuillez vérifier vos clés API et votre connexion.\n\nDétails: " + msg);
-                  }
+              // Sending email
+              Smtp* smtp = new Smtp("nour.benrhoumakok@gmail.com", "toualqtctfvdcnlp", "smtp.gmail.com", 465);
+              QObject::connect(smtp, &Smtp::status, [table](const QString &status) {
+                  qDebug() << "Email Status:" << status;
               });
-
-              email->sendEmail("nour.benrhoumakok@gmail.com", 
-                               "Alerte de Maintenance Critique (API REST)", 
-                               "Les machines suivantes nécessitent une maintenance immédiate :\n\n" + alertMsg);
+              smtp->sendMail("nour.benrhoumakok@gmail.com", "nour.benrhoumakok@gmail.com", "Alerte de Maintenance Critique", "Les machines suivantes nécessitent une maintenance immédiate :\n\n" + alertMsg);
           } else {
               QMessageBox::information(table->window(), "Maintenance", "Toutes les machines sont en dessous de leur seuil de maintenance.");
           }
@@ -3701,69 +3077,64 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
 
       QObject::connect(btnPrint, &QPushButton::clicked, [table]() {
           if (!table) return;
+          
+          QString strStream;
+          QTextStream out(&strStream);
 
-          QString defaultName = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + "_Rapport_Machines.pdf";
-          QString fileName = QFileDialog::getSaveFileName(table->window(), "Exporter en PDF", defaultName, "PDF Files (*.pdf)");
-          if (fileName.isEmpty()) return;
-
-          // Build HTML
           const int rowCount = table->rowCount();
           const int columnCount = table->columnCount() - 1; // Exclude Actions col
 
-          QString strStream;
-          QTextStream out(&strStream);
-          out << "<html><head><meta charset='utf-8'></head>"
-              << "<body style='font-family:Arial,sans-serif;'>"
-              << "<h1 style='text-align:center;color:#2c3e50;'>Rapport Maintenance - Machines</h1>"
-              << "<p style='text-align:center;color:#7f8c8d;'>Genere le: "
-              << QDateTime::currentDateTime().toString("dd/MM/yyyy hh:mm")
-              << "</p>"
-              << "<table border='1' cellspacing='0' cellpadding='8' width='100%' "
-              << "style='border-collapse:collapse;'><thead><tr style='background:#f0f0f0;'>";
+          out <<  "<html>\n"
+              "<head>\n"
+              "<meta Content=\"Text/html; charset=utf-8\">\n"
+              <<  QString("<title>%1</title>\n").arg("Liste des Machines")
+              <<  "</head>\n"
+              "<body bgcolor=#ffffff link=#5000A0>\n"
+              "<h1 style=\"text-align: center; color: #2c3e50; font-family: Arial, sans-serif;\">Rapport de Maintenance - Machines</h1>\n"
+              "<p style=\"text-align: center; color: #7f8c8d;\">Généré le: " + QDateTime::currentDateTime().toString("dd/MM/yyyy hh:mm") + "</p>\n"
+              <<  "<table border=1 cellspacing=0 cellpadding=8 width=\"100%\" style=\"border-collapse: collapse; font-family: Arial, sans-serif;\">\n";
 
-          for (int c = 0; c < columnCount; ++c)
-              if (!table->isColumnHidden(c) && table->horizontalHeaderItem(c))
-                  out << "<th style='border:1px solid #ccc;'>" << table->horizontalHeaderItem(c)->text() << "</th>";
-          out << "</tr></thead><tbody>";
+          // headers
+          out << "<thead><tr bgcolor=#f0f0f0 style=\"color: #333;\">";
+          for (int column = 0; column < columnCount; column++)
+              if (!table->isColumnHidden(column))
+                  out << QString("<th style=\"border: 1px solid #ddd;\">%1</th>").arg(table->horizontalHeaderItem(column)->text());
+          out << "</tr></thead>\n<tbody>\n";
 
-          for (int r = 0; r < rowCount; ++r) {
-              if (table->isRowHidden(r)) continue;
+          // data
+          for (int row = 0; row < rowCount; row++) {
               out << "<tr>";
-              for (int c = 0; c < columnCount; ++c) {
-                  if (table->isColumnHidden(c)) continue;
-                  QString cellData;
-                  if (table->item(r, c)) {
-                      cellData = table->item(r, c)->text();
-                      if (cellData.isEmpty())
-                          cellData = table->item(r, c)->data(Qt::DisplayRole).toString();
+              for (int column = 0; column < columnCount; column++) {
+                  if (!table->isColumnHidden(column)) {
+                      QString data;
+                      if(table->item(row, column)) {
+                          data = table->item(row, column)->text();
+                          if(data.isEmpty()) data = table->item(row, column)->data(Qt::DisplayRole).toString();
+                      }
+                      out << QString("<td style=\"border: 1px solid #ddd; text-align: center;\">%1</td>").arg((!data.isEmpty()) ? data : QString("&nbsp;"));
                   }
-                  out << "<td style='border:1px solid #ccc;text-align:center;'>" << (cellData.isEmpty() ? "&nbsp;" : cellData.toHtmlEscaped()) << "</td>";
               }
-              out << "</tr>";
+              out << "</tr>\n";
           }
-          out << "</tbody></table></body></html>";
-
-          // Render to PDF
-          QPrinter printer(QPrinter::HighResolution);
-          printer.setOutputFormat(QPrinter::PdfFormat);
-          printer.setOutputFileName(fileName);
-          printer.setPageSize(QPageSize(QPageSize::A4));
-          printer.setPageOrientation(QPageLayout::Landscape);
-          printer.setPageMargins(QMarginsF(15, 15, 15, 15), QPageLayout::Millimeter);
+          out <<  "</tbody></table>\n"
+              "</body>\n"
+              "</html>\n";
 
           QTextDocument document;
-          document.setPageSize(printer.pageRect(QPrinter::Point).size());
           document.setHtml(strStream);
-          document.print(&printer);
 
-          // Verify file was created
-          if (QFileInfo::exists(fileName)) {
-              QMessageBox::information(table->window(), "Succes",
-                  "Le PDF a ete genere avec succes !\nEmplacement: " + fileName);
-          } else {
-              QMessageBox::critical(table->window(), "Erreur",
-                  "La generation du PDF a echoue.\nVerifiez les permissions du dossier.");
-          }
+          QString defaultName = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + "_Rapport_Machines.pdf";
+          QString fileName = QFileDialog::getSaveFileName(table->window(), "Exporter en PDF", defaultName, "PDF Files (*.pdf)");
+          
+          if (fileName.isEmpty()) return;
+
+          QPrinter printer(QPrinter::PrinterResolution);
+          printer.setOutputFormat(QPrinter::PdfFormat);
+          printer.setOutputFileName(fileName);
+          printer.setPageMargins(QMarginsF(10, 10, 10, 10), QPageLayout::Millimeter);
+          
+          document.print(&printer);
+          QMessageBox::information(table->window(), "Succès", "Le PDF a été généré avec succès !\nEmplacement: " + fileName);
       });
 
       (*refreshMachineTable)();
@@ -3846,7 +3217,10 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       productTable->setItem(i, 7, capItem);
       
       productTable->setItem(i, 8, new QTableWidgetItem(model->data(model->index(i, 8)).toString()));
-      productTable->setItem(i, 9, new QTableWidgetItem(QString::number(model->data(model->index(i, 9)).toDouble(), 'f', 2)));
+
+      QTableWidgetItem *puItem = new QTableWidgetItem();
+      puItem->setData(Qt::EditRole, model->data(model->index(i, 9)).toFloat());
+      productTable->setItem(i, 9, puItem);
 
       // Action Buttons
       QWidget *actionWidget = new QWidget();
@@ -3901,63 +3275,32 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
           mainV->setContentsMargins(30, 30, 30, 30);
           mainV->setSpacing(15);
 
-          auto addField = [&](const QString &lbl, const QString &val, QValidator *valdr = nullptr) {
+          auto addField = [&](const QString &lbl, const QString &val) {
               mainV->addWidget(new QLabel(lbl));
               QLineEdit *le = new QLineEdit(val);
               le->setStyleSheet("QLineEdit { background-color: #f9fafb; border: 1px solid #eaeaea; "
                                 "border-radius: 8px; padding: 10px; font-size: 14px; }");
-              if (valdr) le->setValidator(valdr);
-              
-              QObject::connect(le, &QLineEdit::textChanged, [le]() {
-                  bool valid = true;
-                  if (le->validator()) valid = le->hasAcceptableInput();
-                  if (valid && !le->text().trimmed().isEmpty()) {
-                      le->setStyleSheet("QLineEdit { background-color: #fcfcfc; border: 1px solid #3DDC84; border-radius: 8px; padding: 10px; font-size: 14px; }");
-                  } else {
-                      le->setStyleSheet("QLineEdit { background-color: #fcfcfc; border: 1px solid #d32f2f; border-radius: 8px; padding: 10px; font-size: 14px; }");
-                  }
-              });
-              
-              le->textChanged(le->text()); // Trigger initial validation highlighting
               mainV->addWidget(le);
               return le;
           };
 
-          // Removing eIdC and eRef as requested (from original comment)
+          // Removing eIdC and eRef as requested
           QLineEdit *eDate = addField("Date Pressage:", productTable->item(i, 1)->text());
-          QLineEdit *eQnt = addField("Quantité:", productTable->item(i, 2)->text(), new QIntValidator(1, 999999));
-          QLineEdit *eRef = addField("Ref:", productTable->item(i, 3)->text(), new QRegularExpressionValidator(QRegularExpression("^[A-Za-z]{2}-\\d{2}$")));
-          
-          QDoubleValidator *viscVal = new QDoubleValidator(0.01, 10.0, 2);
-          viscVal->setNotation(QDoubleValidator::StandardNotation);
-          QLineEdit *eVisc = addField("Viscosité:", productTable->item(i, 4)->text(), viscVal);
-          
+          QLineEdit *eQnt = addField("Quantité:", productTable->item(i, 2)->text());
+          QLineEdit *eRef = addField("Ref:", productTable->item(i, 3)->text());
+          QLineEdit *eVisc = addField("Viscosité:", productTable->item(i, 4)->text());
           QLineEdit *eCol = addField("Couleur:", productTable->item(i, 5)->text());
           QLineEdit *eTst = addField("Test:", productTable->item(i, 6)->text());
-          QLineEdit *eCap = addField("Capacité:", productTable->item(i, 7)->text(), new QIntValidator(1, 999999));
-          QLineEdit *eIdM = addField("ID Machine:", productTable->item(i, 8)->text(), new QIntValidator(1, 999999));
-          
-          QDoubleValidator *prixValEdit = new QDoubleValidator(0.00, 999999.00, 2);
-          prixValEdit->setNotation(QDoubleValidator::StandardNotation);
-          QLineEdit *ePrix = addField("Prix Unitaire:", productTable->item(i, 9)->text(), prixValEdit);
+          QLineEdit *eCap = addField("Capacité:", productTable->item(i, 7)->text());
+          QLineEdit *eIdM = addField("ID Machine:", productTable->item(i, 8)->text());
+          QLineEdit *ePu = addField("PU:", productTable->item(i, 9)->text());
 
           QPushButton *btnSave = new QPushButton("Save Changes");
           btnSave->setStyleSheet("QPushButton { background-color: #3DDC84; color: white; border: none; "
                                  "border-radius: 8px; padding: 12px; font-weight: 700; }");
           mainV->addWidget(btnSave);
 
-          QObject::connect(btnSave, &QPushButton::clicked, [&dlg, eDate, eQnt, eRef, eVisc, eCol, eTst, eCap, eIdM, ePrix, pid, refreshProductTable]() {
-              if (eQnt->text().isEmpty() || !eQnt->hasAcceptableInput() ||
-                  eCap->text().isEmpty() || !eCap->hasAcceptableInput() ||
-                  eIdM->text().isEmpty() || !eIdM->hasAcceptableInput() ||
-                  eVisc->text().isEmpty() || !eVisc->hasAcceptableInput() ||
-                  ePrix->text().isEmpty() || !ePrix->hasAcceptableInput() ||
-                  eRef->text().trimmed().isEmpty() || !eRef->hasAcceptableInput() ||
-                  eTst->text().trimmed().isEmpty()) {
-                  QMessageBox::warning(&dlg, "Erreur de Saisie", "Veuillez vérifier les champs en rouge. Certaines valeurs sont invalides ou manquantes.");
-                  return;
-              }
-
+          QObject::connect(btnSave, &QPushButton::clicked, [&dlg, eDate, eQnt, eRef, eVisc, eCol, eTst, eCap, eIdM, ePu, pid, refreshProductTable]() {
               Produit p;
               p.setIdContenair(pid);
               p.setDatePress(QDate::fromString(eDate->text(), "yyyy-MM-dd"));
@@ -3968,7 +3311,7 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
               p.setTest(eTst->text());
               p.setCapacite(eCap->text().toInt());
               p.setIdMachine(eIdM->text().toInt());
-              p.setPrixUnitaire(ePrix->text().toDouble());
+              p.setPu(ePu->text().toFloat());
 
               if (p.modifier()) {
                   dlg.accept();
@@ -4051,7 +3394,7 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       *productTablePtr = new QTableWidget();
       QTableWidget *productTable = *productTablePtr;
       QStringList headers = {"ID Contenair", "Date Press", "Quantité",
-                             "Ref", "Viscosité", "Couleur", "Test", "Capacité", "ID Machine", "Prix Unitaire", "Actions"};
+                             "Ref", "Viscosité", "Couleur", "Test", "Capacité", "ID Machine", "PU", "Actions"};
       productTable->setColumnCount(headers.size());
       productTable->setHorizontalHeaderLabels(headers);
       productTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -4228,7 +3571,7 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       formLayout->addWidget(iDate);
 
       QLineEdit *iQnt = createField("Quantité:", "e.g., 500", new QIntValidator(1, 999999));
-      QLineEdit *iRef = createField("Ref:", "xx-nn (e.g., AB-12)", new QRegularExpressionValidator(QRegularExpression("^[A-Za-z]{2}-\\d{2}$")));
+      QLineEdit *iRef = createField("Ref:", "PRD-001");
       
       QDoubleValidator *viscVal = new QDoubleValidator(0.01, 10.0, 2);
       viscVal->setNotation(QDoubleValidator::StandardNotation);
@@ -4243,10 +3586,10 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       QLineEdit *iTst = createField("Test:", "Compliant");
       QLineEdit *iCap = createField("Capacité:", "e.g., 1000", new QIntValidator(1, 999999));
       QLineEdit *iIdM = createField("ID Machine:", "e.g., 101", new QIntValidator(1, 999999));
-      
-      QDoubleValidator *prixValAdd = new QDoubleValidator(0.00, 999999.00, 2);
-      prixValAdd->setNotation(QDoubleValidator::StandardNotation);
-      QLineEdit *iPrix = createField("Prix Unitaire:", "e.g., 15.50", prixValAdd);
+
+      QDoubleValidator *puVal = new QDoubleValidator(0.01, 999999.99, 2);
+      puVal->setNotation(QDoubleValidator::StandardNotation);
+      QLineEdit *iPu = createField("PU:", "e.g., 15.50", puVal);
 
       formLayout->addSpacing(20);
       QPushButton *btnAdd = new QPushButton("Add Product");
@@ -4261,9 +3604,8 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
               iCap->text().isEmpty() || !iCap->hasAcceptableInput() ||
               iIdM->text().isEmpty() || !iIdM->hasAcceptableInput() ||
               iVisc->text().isEmpty() || !iVisc->hasAcceptableInput() ||
-              iPrix->text().isEmpty() || !iPrix->hasAcceptableInput() ||
-              iRef->text().trimmed().isEmpty() || !iRef->hasAcceptableInput() ||
-              iTst->text().trimmed().isEmpty()) {
+              iPu->text().isEmpty() || !iPu->hasAcceptableInput() ||
+              iRef->text().trimmed().isEmpty() || iTst->text().trimmed().isEmpty()) {
               QMessageBox::warning(nullptr, "Erreur de Saisie", "Veuillez vérifier les champs en rouge. Certaines valeurs sont invalides ou manquantes.");
               return;
           }
@@ -4277,11 +3619,11 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
           p.setTest(iTst->text());
           p.setCapacite(iCap->text().toInt());
           p.setIdMachine(iIdM->text().toInt());
-          p.setPrixUnitaire(iPrix->text().toDouble());
+          p.setPu(iPu->text().toFloat());
 
           if (p.ajouter()) {
               QMessageBox::information(nullptr, "Success", "Product added successfully!");
-              iQnt->clear(); iVisc->clear(); iTst->clear(); iIdM->clear(); iRef->clear(); iCap->clear(); iPrix->clear();
+              iQnt->clear(); iVisc->clear(); iTst->clear(); iIdM->clear(); iRef->clear(); iCap->clear(); iPu->clear();
               iCol->setCurrentIndex(0);
               iDate->setDate(QDate::currentDate());
               
@@ -4336,7 +3678,7 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       
       QTableWidget *predTable = new QTableWidget();
       predTable->setColumnCount(2);
-      predTable->setHorizontalHeaderLabels({"Forecast Date", "Predicted Price (DT / Liter)"});
+      predTable->setHorizontalHeaderLabels({"Forecast Date", "Predicted Price (€ / Liter)"});
       predTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
       predTable->verticalHeader()->setVisible(false);
       predTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -4362,7 +3704,7 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
                       statusLabel->setText("Status: Prediction Complete (API Success)");
                       statusLabel->setStyleSheet("color: #27ae60; font-weight: bold; font-size: 14px;");
                       
-                      double basePrice = 28.50; // Converted from 8.50 Euro to DT
+                      double basePrice = 8.50; 
                       predTable->setRowCount(6);
                       QDate d = QDate::currentDate();
                       for (int i = 0; i < 6; ++i) {
@@ -4370,21 +3712,21 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
                           double factor = 1.0 + ((rand() % 200) - 50) / 1000.0; 
                           basePrice *= factor;
                           predTable->setItem(i, 0, new QTableWidgetItem(d.toString("yyyy-MM (MMM)")));
-                          predTable->setItem(i, 1, new QTableWidgetItem(QString("%1 DT").arg(basePrice, 0, 'f', 2)));
+                          predTable->setItem(i, 1, new QTableWidgetItem(QString("€ %1").arg(basePrice, 0, 'f', 2)));
                       }
                   }
               } else {
                   statusLabel->setText("Status: API Error (" + reply->errorString() + ") - Using Fallback Simulation");
                   statusLabel->setStyleSheet("color: #e74c3c; font-weight: bold; font-size: 14px;");
                   
-                  double basePrice = 26.80; // Converted from 8.00 Euro to DT
+                  double basePrice = 8.00;
                   predTable->setRowCount(4);
                   QDate d = QDate::currentDate();
                   for (int i = 0; i < 4; ++i) {
                       d = d.addMonths(1);
-                      basePrice += 0.85; // Roughly equivalent to 0.25 Euro increment
+                      basePrice += 0.25; 
                       predTable->setItem(i, 0, new QTableWidgetItem(d.toString("yyyy-MM")));
-                      predTable->setItem(i, 1, new QTableWidgetItem(QString("%1 DT (Fallback)").arg(basePrice, 0, 'f', 2)));
+                      predTable->setItem(i, 1, new QTableWidgetItem(QString("€ %1 (Fallback)").arg(basePrice, 0, 'f', 2)));
                   }
               }
               reply->deleteLater();
