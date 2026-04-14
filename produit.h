@@ -11,7 +11,7 @@ public:
   // Constructors
   Produit();
   Produit(int idContenair, QDate datePress, int quantite, QString ref, 
-          QString viscosite, QString couleur, QString test, int capacite, int idMachine, float pu);
+          QString viscosite, QString couleur, QString test, int capacite, int idMachine, double prixUnitaire = 0.0);
 
   // Getters
   int getIdContenair() const;
@@ -23,7 +23,7 @@ public:
   QString getTest() const;
   int getCapacite() const;
   int getIdMachine() const;
-  float getPu() const;
+  double getPrixUnitaire() const;
 
   // Setters
   void setIdContenair(int id);
@@ -35,7 +35,7 @@ public:
   void setTest(QString val);
   void setCapacite(int val);
   void setIdMachine(int id);
-  void setPu(float val);
+  void setPrixUnitaire(double val);
 
   // CRUD
   bool ajouter();
@@ -54,7 +54,7 @@ private:
   QString test;
   int capacite;
   int idMachine;
-  float pu;
+  double prixUnitaire;
   QString lastError;
 };
 
