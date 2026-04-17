@@ -214,6 +214,11 @@ public:
     update();
   }
 
+  void clearBars() {
+    m_bars.clear();
+    update();
+  }
+
 protected:
   void paintEvent(QPaintEvent *event) override {
     Q_UNUSED(event);
@@ -245,28 +250,30 @@ protected:
     double niceMax = maxVal * 1.1;
 
     // --- Draw Y-Axis (Scales & Grid) ---
-    int gridLines = 5;
+    int gridLines = qMax(1, (int)niceMax); // one gridline per unit for small values
+    if (gridLines > 8) gridLines = 5;      // cap at 5 lines for large values
     painter.setFont(QFont("Segoe UI", 9));
-    QPen gridPen(QColor("#e0e0e0")); // Light grey for grid
+    QPen gridPen(QColor("#e0e0e0"));
     gridPen.setStyle(Qt::DashLine);
 
     for (int i = 0; i <= gridLines; ++i) {
-      double value = (niceMax / gridLines) * i;
-      int y = topMargin + chartHeight - (int)((value / niceMax) * chartHeight);
+      // Always use integers on the Y axis
+      int intValue = (int)qRound((niceMax / gridLines) * i);
+      int y = topMargin + chartHeight - (int)((intValue / niceMax) * chartHeight);
 
       // Grid Line
       painter.setPen(gridPen);
       painter.drawLine(leftMargin, y, width() - rightMargin, y);
 
-      // Scale Label
+      // Scale Label — always integer
       painter.setPen(QColor("#666666"));
-      // Format number (k for thousands, M for millions if needed, or just
-      // standard)
-      QString label = QString::number(value, 'f', 0);
-      if (value >= 1000000)
-        label = QString::number(value / 1000000.0, 'f', 1) + "M";
-      else if (value >= 1000)
-        label = QString::number(value / 1000.0, 'f', 0) + "k";
+      QString label;
+      if (intValue >= 1000000)
+        label = QString::number(intValue / 1000000.0, 'f', 1) + "M";
+      else if (intValue >= 1000)
+        label = QString::number(intValue / 1000.0, 'f', 0) + "k";
+      else
+        label = QString::number(intValue);
 
       painter.drawText(QRect(0, y - 10, leftMargin - 10, 20),
                        Qt::AlignRight | Qt::AlignVCenter, label);
@@ -3274,7 +3281,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
   actionLayout->setSpacing(12);
 
   outNestedStack = new QStackedWidget();
-  QStringList tabNames = {"Add Asset", "Asset Hub", "Service History", "Analytics"};
+  QStringList tabNames = {"Add Asset", "Asset Hub", "Analytics"};
   QList<QPushButton *> tabButtons;
 
   // Shared pointers for cross-lambda access
@@ -3677,8 +3684,8 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
               QMessageBox::warning(table->window(), "Alertes de Maintenance", alertMsg);
               // Sending Alert via API REST (Advanced Feature)
               EmailAPI* email = new EmailAPI(table);
-              // NOTE: User must replace these with real Mailjet API keys
-              email->setCredentials("YOUR_API_KEY", "YOUR_API_SECRET"); 
+              // NOTE: User must replace this with the real Brevo API key
+              email->setCredentials("");  
               
               QObject::connect(email, &EmailAPI::finished, [table](bool success, const QString &msg) {
                   if (success) {
@@ -3768,13 +3775,52 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
 
       (*refreshMachineTable)();
 
-    } else if (name == "Service History") {
-      cLayout->addWidget(createStyledTable("Intervention History", {"Date", "Machine", "Action", "Result"}, {{"2024-02-27", "MAC-001", "Routine Check", "Success"}}, true));
     } else if (name == "Analytics") {
+      // --- Title ---
+      QLabel *analyticsTitle = new QLabel("Machine Status Overview");
+      analyticsTitle->setStyleSheet("font-size: 18px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px;");
+      cLayout->addWidget(analyticsTitle);
+
+      // --- Refresh button ---
+      QWidget *analyticsBar = new QWidget();
+      QHBoxLayout *analyticsBarLayout = new QHBoxLayout(analyticsBar);
+      analyticsBarLayout->setContentsMargins(0, 0, 0, 0);
+      QPushButton *btnAnalyticsRefresh = new QPushButton("Refresh");
+      btnAnalyticsRefresh->setStyleSheet(getButtonStyle());
+      btnAnalyticsRefresh->setCursor(Qt::PointingHandCursor);
+      btnAnalyticsRefresh->setFixedWidth(120);
+      analyticsBarLayout->addStretch();
+      analyticsBarLayout->addWidget(btnAnalyticsRefresh);
+      cLayout->addWidget(analyticsBar);
+
+      // --- Chart ---
       GenericBarChart *chart = new GenericBarChart("Machine Status Overview");
-      chart->addBar("Operational", 15, QColor(46, 204, 113));
-      chart->addBar("Broken", 2, QColor(231, 76, 60));
-      chart->addBar("Maintenance", 3, QColor(241, 196, 15));
+      chart->setMinimumHeight(350);
+
+      // Helper lambda to load data into chart
+      auto loadAnalytics = [chart]() {
+          chart->clearBars();
+          Machine m;
+          QSqlQueryModel *model = m.afficher();
+          int normal = 0, panne = 0, maintenance = 0;
+          for (int i = 0; i < model->rowCount(); ++i) {
+              QString status = model->data(model->index(i, 3)).toString();
+              if (status == "Normal") normal++;
+              else if (status == "En panne") panne++;
+              else if (status == "En maintenance") maintenance++;
+          }
+          delete model;
+          chart->addBar("Operational", normal,   QColor(46, 204, 113));
+          chart->addBar("Broken",      panne,     QColor(231, 76, 60));
+          chart->addBar("Maintenance", maintenance, QColor(241, 196, 15));
+      };
+
+      loadAnalytics(); // Initial load
+
+      QObject::connect(btnAnalyticsRefresh, &QPushButton::clicked, [loadAnalytics]() {
+          loadAnalytics();
+      });
+
       cLayout->addWidget(chart);
     }
     cLayout->addStretch();

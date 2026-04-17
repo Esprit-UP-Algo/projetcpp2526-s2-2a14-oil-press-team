@@ -17,7 +17,7 @@ public:
     explicit EmailAPI(QObject *parent = nullptr);
     
     // Replace with your real keys
-    void setCredentials(const QString &apiKey, const QString &apiSecret);
+    void setCredentials(const QString &apiKey);
     void sendEmail(const QString &to, const QString &subject, const QString &body);
 
 signals:
@@ -29,7 +29,6 @@ private slots:
 private:
     QNetworkAccessManager *manager;
     QString m_apiKey;
-    QString m_apiSecret;
     QString m_senderEmail = "nour.benrhoumakok@gmail.com"; // Default sender
 };
 

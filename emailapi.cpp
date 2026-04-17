@@ -7,47 +7,40 @@ EmailAPI::EmailAPI(QObject *parent) : QObject(parent)
     connect(manager, &QNetworkAccessManager::finished, this, &EmailAPI::onReplyFinished);
 }
 
-void EmailAPI::setCredentials(const QString &apiKey, const QString &apiSecret)
+void EmailAPI::setCredentials(const QString &apiKey)
 {
     m_apiKey = apiKey;
-    m_apiSecret = apiSecret;
 }
 
 void EmailAPI::sendEmail(const QString &to, const QString &subject, const QString &body)
 {
-    QUrl url("https://api.mailjet.com/v3.1/send");
+    QUrl url("https://api.brevo.com/v3/smtp/email");
     QNetworkRequest request(url);
     
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    
-    // Basic Auth
-    QString auth = QString("%1:%2").arg(m_apiKey).arg(m_apiSecret);
-    QByteArray authData = auth.toLocal8Bit().toBase64();
-    request.setRawHeader("Authorization", "Basic " + authData);
+    request.setRawHeader("api-key", m_apiKey.toUtf8());
 
-    // Payload
-    QJsonObject fromObj;
-    fromObj["Email"] = m_senderEmail;
-    fromObj["Name"] = "Oil Press Manager";
+    // Payload for Brevo API v3
+    QJsonObject senderObj;
+    senderObj["name"] = "Oil Press Manager";
+    senderObj["email"] = m_senderEmail;
 
     QJsonObject toObj;
-    toObj["Email"] = to;
-    toObj["Name"] = "Admin";
+    toObj["email"] = to;
+    toObj["name"] = "Admin";
 
     QJsonArray toArray;
     toArray.append(toObj);
 
-    QJsonObject messageObj;
-    messageObj["From"] = fromObj;
-    messageObj["To"] = toArray;
-    messageObj["Subject"] = subject;
-    messageObj["TextPart"] = body;
-
-    QJsonArray messagesArray;
-    messagesArray.append(messageObj);
+    // Convert newlines to HTML br tags for better formatting in Brevo
+    QString htmlBody = QString("<html><body><h3>%1</h3><p>%2</p></body></html>").arg(subject).arg(body);
+    htmlBody.replace("\n", "<br>");
 
     QJsonObject mainObj;
-    mainObj["Messages"] = messagesArray;
+    mainObj["sender"] = senderObj;
+    mainObj["to"] = toArray;
+    mainObj["subject"] = subject;
+    mainObj["htmlContent"] = htmlBody;
 
     QJsonDocument doc(mainObj);
     manager->post(request, doc.toJson());
