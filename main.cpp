@@ -2,6 +2,7 @@
 #include <QMessageBox>
 #include "mainwindow.h"
 #include "AuthWidgets.h"
+#include "LoginSystem.h"
 #include "connection.h"
 
 
@@ -28,14 +29,12 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    QMessageBox::information(nullptr, QObject::tr("database is open"),
-                             QObject::tr("connection successful.\nClick Cancel to continue."),
-                             QMessageBox::Cancel);
+    // Connection popup removed; status shown in UI
 
-    AuthWindow authWin;
+    LoginSystem authWin;
     MainWindow mainWin;
 
-    QObject::connect(&authWin, &AuthWindow::loginSuccessful, [&](int roleIndex){
+    QObject::connect(&authWin, &LoginSystem::loginSuccessful, [&](int roleIndex){
         authWin.hide();
         mainWin.applyRole(roleIndex);
         mainWin.show();

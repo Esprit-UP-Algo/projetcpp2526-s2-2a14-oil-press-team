@@ -21,7 +21,9 @@ SOURCES += \
     machine.cpp \
     emailapi.cpp \
     smsapi.cpp \
-    trackingapi.cpp
+    trackingapi.cpp \
+    LoginSystem.cpp \
+    smtp.cpp
 
 HEADERS += \
     article.h \
@@ -36,7 +38,9 @@ HEADERS += \
     machine.h \
     emailapi.h \
     smsapi.h \
-    trackingapi.h
+    trackingapi.h \
+    LoginSystem.h \
+    smtp.h
 
 FORMS += \
     mainwindow.ui
