@@ -93,10 +93,16 @@ bool Article::modifier() {
   return true;
 }
 
-QSqlQueryModel *Article::afficher() {
+QSqlQueryModel *Article::afficher(QString sortBy, QString order) {
   QSqlQueryModel *model = new QSqlQueryModel();
-  model->setQuery(
-      "SELECT ID_ARTICLE, NOM_ARTICLE, QUANTITE, UNITE, PRIX_UNITAIRE, DATE_ACHAT FROM ARTICLE");
+  
+  QString queryStr = "SELECT ID_ARTICLE, NOM_ARTICLE, QUANTITE, UNITE, PRIX_UNITAIRE, DATE_ACHAT FROM ARTICLE";
+  
+  if (!sortBy.isEmpty()) {
+      queryStr += " ORDER BY " + sortBy + " " + order;
+  }
+  
+  model->setQuery(queryStr);
 
   if (model->lastError().isValid()) {
     qDebug() << "Afficher Error:" << model->lastError().text();
@@ -110,6 +116,22 @@ QSqlQueryModel *Article::afficher() {
   model->setHeaderData(5, Qt::Horizontal, QObject::tr("Date of Purchase"));
 
   return model;
+}
+
+bool Article::exists(QString name, int excludeId) {
+  QSqlQuery query;
+  if (excludeId == -1) {
+    query.prepare("SELECT COUNT(*) FROM ARTICLE WHERE NOM_ARTICLE = :nom");
+  } else {
+    query.prepare("SELECT COUNT(*) FROM ARTICLE WHERE NOM_ARTICLE = :nom AND ID_ARTICLE != :id");
+    query.bindValue(":id", excludeId);
+  }
+  query.bindValue(":nom", name);
+
+  if (query.exec() && query.next()) {
+    return query.value(0).toInt() > 0;
+  }
+  return false;
 }
 
 // --- Get Last Error ---

@@ -8,12 +8,13 @@ Machine::Machine()
     nom = "";
     type = "";
     etat = "";
+    localisation = "";
     heures = 0;
     seuilMaintenance = 0;
     dateDerniereMaintenance = QDate::currentDate();
 }
 
-Machine::Machine(int id, QString nom, QString type, QString etat, int heures, int seuil, QDate dateM)
+Machine::Machine(int id, QString nom, QString type, QString etat, int heures, int seuil, QString loc, QDate dateM)
 {
     this->id = id;
     this->nom = nom;
@@ -21,6 +22,7 @@ Machine::Machine(int id, QString nom, QString type, QString etat, int heures, in
     this->etat = etat;
     this->heures = heures;
     this->seuilMaintenance = seuil;
+    this->localisation = loc;
     this->dateDerniereMaintenance = dateM;
 }
 
@@ -31,6 +33,7 @@ QString Machine::getType() const { return type; }
 QString Machine::getEtat() const { return etat; }
 int Machine::getHeures() const { return heures; }
 int Machine::getSeuil() const { return seuilMaintenance; }
+QString Machine::getLocalisation() const { return localisation; }
 QDate Machine::getDateM() const { return dateDerniereMaintenance; }
 
 // Setters
@@ -40,19 +43,21 @@ void Machine::setType(const QString &type) { this->type = type; }
 void Machine::setEtat(const QString &etat) { this->etat = etat; }
 void Machine::setHeures(int heures) { this->heures = heures; }
 void Machine::setSeuil(int seuil) { this->seuilMaintenance = seuil; }
+void Machine::setLocalisation(const QString &loc) { this->localisation = loc; }
 void Machine::setDateM(QDate dateM) { this->dateDerniereMaintenance = dateM; }
 
 bool Machine::ajouter()
 {
     QSqlQuery query;
-    query.prepare("INSERT INTO MACHINE (ID_MACHINE, NOM_MACHINE, TYPE_MACHINE, ETAT_MACHINE, DATEDERNIEREMAINTENANCE, HEURESFONCTIONNEMENT, SEUILMAINTENANCE) "
-                  "VALUES ((SELECT NVL(MAX(ID_MACHINE), 0) + 1 FROM MACHINE), :nom, :type, :etat, :dateM, :heures, :seuil)");
+    query.prepare("INSERT INTO MACHINE (ID_MACHINE, NOM_MACHINE, TYPE_MACHINE, ETAT_MACHINE, DATEDERNIEREMAINTENANCE, HEURESFONCTIONNEMENT, SEUILMAINTENANCE, LOCALISATION) "
+                  "VALUES ((SELECT NVL(MAX(ID_MACHINE), 0) + 1 FROM MACHINE), :nom, :type, :etat, :dateM, :heures, :seuil, :loc)");
     query.bindValue(":nom", nom);
     query.bindValue(":type", type);
     query.bindValue(":etat", etat);
     query.bindValue(":dateM", dateDerniereMaintenance);
     query.bindValue(":heures", heures);
     query.bindValue(":seuil", seuilMaintenance);
+    query.bindValue(":loc", localisation);
 
     if (!query.exec()) {
         lastError = query.lastError().text();
@@ -65,6 +70,24 @@ bool Machine::ajouter()
 bool Machine::supprimer(int id)
 {
     QSqlQuery query;
+    
+    // 1. Delete linked records to avoid ORA-02292 (Foreign Key constraints)
+    // Clear production records
+    query.prepare("DELETE FROM PRODUIRE WHERE ID_MACHINE = :id");
+    query.bindValue(":id", id);
+    query.exec();
+
+    // Clear interventions
+    query.prepare("DELETE FROM INTERVENIR WHERE ID_MACHINE = :id");
+    query.bindValue(":id", id);
+    query.exec();
+
+    // Clear linked products (orphaned batches)
+    query.prepare("DELETE FROM PRODUIT WHERE ID_MACHINE = :id");
+    query.bindValue(":id", id);
+    query.exec();
+
+    // 2. Finally delete the machine
     query.prepare("DELETE FROM MACHINE WHERE ID_MACHINE = :id");
     query.bindValue(":id", id);
 
@@ -80,7 +103,7 @@ bool Machine::modifier()
 {
     QSqlQuery query;
     query.prepare("UPDATE MACHINE SET NOM_MACHINE = :nom, TYPE_MACHINE = :type, "
-                  "ETAT_MACHINE = :etat, DATEDERNIEREMAINTENANCE = :dateM, HEURESFONCTIONNEMENT = :heures, SEUILMAINTENANCE = :seuil WHERE ID_MACHINE = :id");
+                  "ETAT_MACHINE = :etat, DATEDERNIEREMAINTENANCE = :dateM, HEURESFONCTIONNEMENT = :heures, SEUILMAINTENANCE = :seuil, LOCALISATION = :loc WHERE ID_MACHINE = :id");
     query.bindValue(":id", id);
     query.bindValue(":nom", nom);
     query.bindValue(":type", type);
@@ -88,6 +111,7 @@ bool Machine::modifier()
     query.bindValue(":dateM", dateDerniereMaintenance);
     query.bindValue(":heures", heures);
     query.bindValue(":seuil", seuilMaintenance);
+    query.bindValue(":loc", localisation);
 
     if (!query.exec()) {
         lastError = query.lastError().text();
@@ -100,7 +124,7 @@ bool Machine::modifier()
 QSqlQueryModel* Machine::afficher()
 {
     QSqlQueryModel *model = new QSqlQueryModel();
-    model->setQuery("SELECT ID_MACHINE, NOM_MACHINE, TYPE_MACHINE, ETAT_MACHINE, HEURESFONCTIONNEMENT, SEUILMAINTENANCE FROM MACHINE");
+    model->setQuery("SELECT ID_MACHINE, NOM_MACHINE, TYPE_MACHINE, ETAT_MACHINE, HEURESFONCTIONNEMENT, SEUILMAINTENANCE, LOCALISATION FROM MACHINE");
 
     if (model->lastError().isValid()) {
         qDebug() << "Machine Afficher Error:" << model->lastError().text();
@@ -112,6 +136,7 @@ QSqlQueryModel* Machine::afficher()
     model->setHeaderData(3, Qt::Horizontal, QObject::tr("Status"));
     model->setHeaderData(4, Qt::Horizontal, QObject::tr("Hours"));
     model->setHeaderData(5, Qt::Horizontal, QObject::tr("Threshold"));
+    model->setHeaderData(6, Qt::Horizontal, QObject::tr("Location"));
 
     return model;
 }

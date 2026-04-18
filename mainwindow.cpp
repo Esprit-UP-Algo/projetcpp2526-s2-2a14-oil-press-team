@@ -11,8 +11,14 @@
 #include "machine.h"
 #include "smtp.h"
 #include "emailapi.h"
+#include "marketapi.h"
+#include "consultantagent.h"
+#include "dealgenerator.h"
 #include <functional>
 #include <QComboBox>
+#include <QScrollBar>
+#include <QDesktopServices>
+#include <QUrl>
 #include <QDate>
 #include <QDateEdit>
 #include <QDateTime>
@@ -57,7 +63,9 @@
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QSqlError>
+#include <QSqlQueryModel>
 #include <QSqlRecord>
+#include <QTimer>
 #include <QSqlQueryModel>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -2750,7 +2758,7 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
 
   outNestedStack = new QStackedWidget();
   QStringList tabNames = {"Add Stock", "Supplier Hub", "Stock Reports",
-                          "Analytics"};
+                          "Analytics", "Market IA"};
   QList<QPushButton *> tabButtons;
 
   // We need a shared pointer to the table so "Add Stock" can refresh "Stock
@@ -2863,10 +2871,11 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
       btnSubmit->setCursor(Qt::PointingHandCursor);
       btnSubmit->setFixedHeight(45);
       formLayout->addWidget(btnSubmit);
-
+      
       // Connect Add Button -> Article::ajouter()
       QObject::connect(
-          btnSubmit, &QPushButton::clicked, [inputNom, inputQty, inputUnt, inputPrix, inputDate, errNom, errQty, errUnt, errPrix, errDate]() {
+          btnSubmit, &QPushButton::clicked, [page, inputNom, inputQty, inputUnt, inputPrix, inputDate, errNom, errQty, errUnt, errPrix, errDate]() {
+            MainWindow* mw = qobject_cast<MainWindow*>(page->window());
             // Reset errors
             errNom->hide();
             errQty->hide();
@@ -2881,6 +2890,13 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
               errNom->setText("Item Name is required.");
               errNom->show();
               isValid = false;
+            } else {
+              Article testA;
+              if (testA.exists(inputNom->text().trimmed())) {
+                errNom->setText("Item name already exists. Please use a unique name.");
+                errNom->show();
+                isValid = false;
+              }
             }
 
             bool qtyOk;
@@ -2930,6 +2946,7 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
               inputUnt->clear();
               inputPrix->clear();
               inputDate->setDate(QDate::currentDate());
+              if (mw) mw->checkStockAlerts(true);
             } else {
               QMessageBox::critical(
                   nullptr, "Error",
@@ -2981,12 +2998,26 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
       btnRefresh->setCursor(Qt::PointingHandCursor);
       btnRefresh->setFixedWidth(100);
 
+      QPushButton *btnPrintPdf = new QPushButton("Print Shortage Report");
+      btnPrintPdf->setStyleSheet(getButtonStyle());
+      btnPrintPdf->setCursor(Qt::PointingHandCursor);
+      btnPrintPdf->setFixedWidth(220);
+
+      QPushButton *btnAlerts = new QPushButton("Check Alerts");
+      btnAlerts->setStyleSheet("QPushButton { background-color: #e74c3c; color: white; border: none; border-radius: 8px; padding: 10px 15px; font-weight: 700; } QPushButton:hover { background-color: #c0392b; }");
+      btnAlerts->setCursor(Qt::PointingHandCursor);
+      btnAlerts->setFixedWidth(140);
+
       controlLayout->addWidget(searchEdit);
       controlLayout->addSpacing(10);
       controlLayout->addWidget(lblSort);
       controlLayout->addWidget(sortCombo);
       controlLayout->addSpacing(10);
       controlLayout->addWidget(btnRefresh);
+      controlLayout->addSpacing(10);
+      controlLayout->addWidget(btnPrintPdf);
+      controlLayout->addSpacing(10);
+      controlLayout->addWidget(btnAlerts);
       controlLayout->addStretch();
       reportLayout->addWidget(controlBar);
 
@@ -3027,9 +3058,21 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
       reportLayout->addWidget(stockTable);
 
       // 3. Lambda to load/refresh data from the database
-      auto refreshTable = [stockTable]() {
+      auto refreshTable = [stockTable, sortCombo]() {
         Article a;
-        QSqlQueryModel *model = a.afficher();
+        QString sortBy = "";
+        QString order = "ASC";
+
+        QString currentSort = sortCombo->currentText();
+        if (currentSort == "Quantity (High-Low)") {
+          sortBy = "QUANTITE";
+          order = "DESC";
+        } else if (currentSort == "Quantity (Low-High)") {
+          sortBy = "QUANTITE";
+          order = "ASC";
+        }
+
+        QSqlQueryModel *model = a.afficher(sortBy, order);
 
         stockTable->setRowCount(0); // Clear existing rows
 
@@ -3249,6 +3292,13 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
                         errNom->setText("Item Name is required.");
                         errNom->show();
                         isValid = false;
+                      } else {
+                        Article testA;
+                        if (testA.exists(editNom->text().trimmed(), itemId)) {
+                          errNom->setText("Item name already exists. Please use a unique name.");
+                          errNom->show();
+                          isValid = false;
+                        }
                       }
 
                       bool qtyOk;
@@ -3290,10 +3340,12 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
                       a.setPrixUnitaire(editPrix->text().toInt());
                       a.setDateAchat(editDate->date());
 
-                      if (a.modifier()) {
-                        QMessageBox::information(nullptr, "Success",
-                                                 "Item updated successfully!");
-                        dialog->accept();
+                        if (a.modifier()) {
+                          QMessageBox::information(nullptr, "Success",
+                                                   "Item updated successfully!");
+                          dialog->accept();
+                          MainWindow* mw = qobject_cast<MainWindow*>(stockTable->window());
+                          if (mw) mw->checkStockAlerts(true);
                         for (int r = 0; r < stockTable->rowCount(); ++r) {
                           if (stockTable->item(r, 0) &&
                               stockTable->item(r, 0)->text().toInt() ==
@@ -3327,12 +3379,103 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
       // Initial load
       refreshTable();
 
-      // (Template Only) Trigger refresh on sort change - Removed
-      // QObject::connect(sortCombo, &QComboBox::currentTextChanged,
-      //                  [refreshTable]() { refreshTable(); });
+      // Trigger refresh on sort change
+      QObject::connect(sortCombo, &QComboBox::activated, refreshTable);
 
       // Refresh button
       QObject::connect(btnRefresh, &QPushButton::clicked, refreshTable);
+
+      // Alert check button connection
+      QObject::connect(btnAlerts, &QPushButton::clicked, [stockTable]() {
+          MainWindow* mw = qobject_cast<MainWindow*>(stockTable->window());
+          if (mw) mw->checkStockAlerts(false); // Manually check and show details
+          
+          // Row highlighting logic
+          for (int i = 0; i < stockTable->rowCount(); ++i) {
+              int qty = stockTable->item(i, 2)->text().toInt();
+              if (qty <= 10) {
+                  for (int j = 0; j < stockTable->columnCount(); ++j) {
+                      if (stockTable->item(i, j))
+                          stockTable->item(i, j)->setBackground(QColor(255, 235, 238)); // Light red tint
+                  }
+              } else {
+                  for (int j = 0; j < stockTable->columnCount(); ++j) {
+                      if (stockTable->item(i, j))
+                          stockTable->item(i, j)->setBackground(QBrush()); // Reset
+                  }
+              }
+          }
+      });
+
+      // Low Stock PDF Export
+      QObject::connect(btnPrintPdf, &QPushButton::clicked, [stockTable]() {
+          QSqlQuery query;
+          query.prepare("SELECT NOM_ARTICLE, QUANTITE, UNITE, PRIX_UNITAIRE FROM ARTICLE WHERE QUANTITE <= 10 ORDER BY QUANTITE ASC");
+          
+          if (!query.exec()) {
+              QMessageBox::critical(stockTable->window(), "Database Error", "Failed to fetch low stock data.");
+              return;
+          }
+
+          QString strStream;
+          QTextStream out(&strStream);
+
+          out << "<html>\n"
+                 "<head>\n"
+                 "<meta Content=\"Text/html; charset=utf-8\">\n"
+                 "<title>Low Stock Report</title>\n"
+                 "</head>\n"
+                 "<body bgcolor=#ffffff>\n"
+                 "<div style=\"text-align: center;\">"
+                 "<img src=\":/logo.png\" width=\"120\">"
+                 "</div>"
+                 "<h1 style=\"text-align: center; color: #e74c3c; font-family: Arial, sans-serif;\">⚠️ Low Stock Alert Report</h1>\n"
+                 "<p style=\"text-align: center; color: #7f8c8d; font-family: Arial, sans-serif;\">Threshold: 10 units or less | Generated on: " + QDateTime::currentDateTime().toString("dd/MM/yyyy hh:mm") + "</p>\n"
+                 "<table border=1 cellspacing=0 cellpadding=10 width=\"100%\" style=\"border-collapse: collapse; font-family: Arial, sans-serif; margin-top: 20px;\">\n"
+                 "<thead><tr bgcolor=#f8f9fa style=\"color: #333;\">"
+                 "<th style=\"border: 1px solid #ddd;\">Item Name</th>"
+                 "<th style=\"border: 1px solid #ddd;\">Current Stock</th>"
+                 "<th style=\"border: 1px solid #ddd;\">Unit</th>"
+                 "<th style=\"border: 1px solid #ddd;\">Unit Price</th>"
+                 "</tr></thead>\n<tbody>\n";
+
+          int count = 0;
+          while (query.next()) {
+              count++;
+              out << "<tr>"
+                  << "<td style=\"border: 1px solid #ddd;\">" << query.value(0).toString() << "</td>"
+                  << "<td style=\"border: 1px solid #ddd; font-weight: bold; color: #d32f2f; text-align: center;\">" << query.value(1).toString() << "</td>"
+                  << "<td style=\"border: 1px solid #ddd; text-align: center;\">" << query.value(2).toString() << "</td>"
+                  << "<td style=\"border: 1px solid #ddd; text-align: right;\">" << query.value(3).toString() << " DT</td>"
+                  << "</tr>\n";
+          }
+
+          if (count == 0) {
+              QMessageBox::information(stockTable->window(), "Info", "No items are currently below the threshold of 10.");
+              return;
+          }
+
+          out << "</tbody></table>\n"
+                 "<p style=\"margin-top: 30px; font-size: 12px; color: #95a5a6; border-top: 1px solid #eee; padding-top: 10px;\">Total items requiring attention: " << count << "</p>\n"
+                 "</body>\n"
+                 "</html>\n";
+
+          QTextDocument document;
+          document.setHtml(strStream);
+
+          QString defaultName = "Alerte_Stock_Bas_" + QDateTime::currentDateTime().toString("dd_MM_yyyy") + ".pdf";
+          QString fileName = QFileDialog::getSaveFileName(stockTable->window(), "Save Shortage Report", QDir::currentPath() + "/" + defaultName, "PDF Files (*.pdf)");
+
+          if (fileName.isEmpty()) return;
+
+          QPrinter printer(QPrinter::PrinterResolution);
+          printer.setOutputFormat(QPrinter::PdfFormat);
+          printer.setOutputFileName(fileName);
+          printer.setPageMargins(QMarginsF(15, 15, 15, 15), QPageLayout::Millimeter);
+
+          document.print(&printer);
+          QMessageBox::information(stockTable->window(), "Success", "Shortage report has been saved to:\n" + fileName);
+      });
 
       // 4. Search Logic
       auto updateFilter = [stockTable, searchEdit]() {
@@ -3355,23 +3498,247 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
 
       cLayout->addWidget(reportContainer);
 
-    } else {
-      // Stock Statistics Chart
-      GenericBarChart *chart = new GenericBarChart("Stock Inventory Levels");
-      chart->addBar("Empty Bottles 500ml", 50, QColor(231, 76, 60));
-      chart->addBar("Labels - 'Gold'", 120, QColor(243, 156, 18));
-      chart->addBar("Extra Virgin 1L", 450, QColor(61, 220, 132));
-      chart->addBar("Caps - Black", 2000, QColor(61, 220, 132));
+    } else if (name == "Analytics") {
+      // --- Analytics Tab Header with Refresh Button ---
+      QWidget *headerWidget = new QWidget();
+      QHBoxLayout *headerLayout = new QHBoxLayout(headerWidget);
+      headerLayout->setContentsMargins(0, 0, 0, 10);
+      
+      QLabel *statTitle = new QLabel("Real-Time Stock Analytics");
+      statTitle->setStyleSheet("font-size: 18px; font-weight: 700; color: #1a1a1a;");
+      
+      QPushButton *btnRefreshStats = new QPushButton("Refresh Data");
+      btnRefreshStats->setStyleSheet(getButtonStyle());
+      btnRefreshStats->setFixedWidth(140);
+      btnRefreshStats->setCursor(Qt::PointingHandCursor);
+      
+      headerLayout->addWidget(statTitle);
+      headerLayout->addStretch();
+      headerLayout->addWidget(btnRefreshStats);
+      cLayout->addWidget(headerWidget);
 
-      QWidget *chartContainer = new QWidget();
-      chartContainer->setStyleSheet(getCardStyle());
-      QVBoxLayout *containerLayout = new QVBoxLayout(chartContainer);
-      containerLayout->setContentsMargins(20, 20, 20, 20);
-      containerLayout->addWidget(chart);
+      QWidget *chartsContainer = new QWidget();
+      QVBoxLayout *chartsLayout = new QVBoxLayout(chartsContainer);
+      chartsLayout->setContentsMargins(0, 0, 0, 0);
+      chartsLayout->setSpacing(20);
+      cLayout->addWidget(chartsContainer);
 
-      cLayout->addWidget(chartContainer);
+      auto refreshAnalytics = [chartsLayout]() {
+          // Clear previous charts
+          QLayoutItem *child;
+          while ((child = chartsLayout->takeAt(0)) != nullptr) {
+              if (child->widget()) child->widget()->deleteLater();
+              delete child;
+          }
+
+          QList<QColor> colors = {QColor(52, 152, 219), QColor(46, 204, 113), QColor(241, 196, 15), QColor(155, 89, 182), QColor(231, 76, 60)};
+
+          // 1. Stock Statistics Chart
+          GenericBarChart *chart = new GenericBarChart("Most Stocked Items (Top 5)");
+          QSqlQuery q("SELECT NOM_ARTICLE, QUANTITE FROM ARTICLE ORDER BY QUANTITE DESC");
+          int count = 0;
+          while (q.next() && count < 5) {
+              chart->addBar(q.value(0).toString(), q.value(1).toInt(), colors[count % colors.size()]);
+              count++;
+          }
+          if (count == 0) chart->addBar("No Data Available", 0, QColor(149, 165, 166));
+
+          QWidget *chartCard = new QWidget();
+          chartCard->setStyleSheet(getCardStyle());
+          QVBoxLayout *v1 = new QVBoxLayout(chartCard);
+          v1->setContentsMargins(20, 20, 20, 20);
+          v1->addWidget(chart);
+          chartsLayout->addWidget(chartCard);
+      };
+
+      QObject::connect(btnRefreshStats, &QPushButton::clicked, refreshAnalytics);
+      refreshAnalytics(); // Initial load
+
+    } else if (name == "Market IA") {
+      // ========== MARKET IA (TABS: Consultant & Deals) ==========
+      QWidget *marketContainer = new QWidget();
+      QVBoxLayout *marketLayout = new QVBoxLayout(marketContainer);
+      marketLayout->setContentsMargins(0, 0, 0, 0);
+
+      QTabWidget *marketTabs = new QTabWidget();
+      marketTabs->setMaximumHeight(600); // Shorter dashboard
+      marketTabs->setStyleSheet(
+          "QTabWidget::pane { border: 1px solid #eee; border-radius: 12px; background: white; } "
+          "QTabBar::tab { background: #f8f9fa; color: #666; padding: 10px 20px; border-top-left-radius: 8px; border-top-right-radius: 8px; margin-right: 2px; } "
+          "QTabBar::tab:selected { background: white; color: #1a1a1a; font-weight: bold; border-bottom: 3px solid #3DDC84; }");
+
+      // --- TAB 1: AI CONSULTANT (CHAT) ---
+      QWidget *chatTab = new QWidget();
+      QVBoxLayout *chatTabLayout = new QVBoxLayout(chatTab);
+      chatTabLayout->setContentsMargins(10, 10, 10, 10); // Compact margins
+
+      QScrollArea *chatScroll = new QScrollArea();
+      chatScroll->setWidgetResizable(true);
+      chatScroll->setFrameShape(QFrame::NoFrame);
+      QWidget *chatContent = new QWidget();
+      QVBoxLayout *chatList = new QVBoxLayout(chatContent);
+      chatList->setSpacing(10);
+      chatList->addStretch();
+      chatScroll->setWidget(chatContent);
+      chatTabLayout->addWidget(chatScroll);
+
+      auto addMessage = [chatList, chatScroll](const QString &sender, const QString &text, bool isUser) {
+          QWidget *msg = new QWidget();
+          msg->setStyleSheet(isUser ? "background: #e6f9ef; border-radius: 15px; border-bottom-right-radius: 2px;" : "background: #f1f3f5; border-radius: 15px; border-bottom-left-radius: 2px;");
+          QVBoxLayout *ml = new QVBoxLayout(msg);
+          QLabel *s = new QLabel(sender);
+          s->setStyleSheet(QString("font-weight: 800; font-size: 10px; color: %1;").arg(isUser ? "#2e7d32" : "#495057"));
+          QLabel *t = new QLabel(text);
+          t->setWordWrap(true);
+          t->setStyleSheet("font-size: 13px; color: #212529;");
+          ml->addWidget(s);
+          ml->addWidget(t);
+          
+          QHBoxLayout *row = new QHBoxLayout();
+          if (isUser) row->addStretch();
+          row->addWidget(msg);
+          if (!isUser) row->addStretch();
+          
+          chatList->insertLayout(chatList->count() - 1, row);
+          QTimer::singleShot(50, [chatScroll]() { chatScroll->verticalScrollBar()->setValue(chatScroll->verticalScrollBar()->maximum()); });
+      };
+
+      QWidget *inputArea = new QWidget();
+      QHBoxLayout *il = new QHBoxLayout(inputArea);
+      il->setContentsMargins(0, 10, 0, 0);
+      QLineEdit *chatInput = new QLineEdit();
+      chatInput->setPlaceholderText("Ask about machinery, bottles, prices...");
+      chatInput->setStyleSheet("padding: 12px; border: 1px solid #ddd; border-radius: 20px; background: white;");
+      QPushButton *btnSend = new QPushButton("Send");
+      btnSend->setStyleSheet("background: #1a1a1a; color: white; padding: 12px 20px; border-radius: 20px; font-weight: 700;");
+      btnSend->setCursor(Qt::PointingHandCursor);
+      il->addWidget(chatInput);
+      il->addWidget(btnSend);
+      chatTabLayout->addWidget(inputArea);
+
+      ConsultantAgent *agent = new ConsultantAgent(chatTab);
+      auto handleSend = [chatInput, agent, addMessage]() {
+          QString text = chatInput->text().trimmed();
+          if (text.isEmpty()) return;
+          addMessage("YOU", text, true);
+          chatInput->clear();
+          QString response = agent->getResponse(text);
+          QTimer::singleShot(500, [addMessage, response]() { addMessage("MARKET IA", response, false); });
+      };
+      
+      QObject::connect(btnSend, &QPushButton::clicked, handleSend);
+      QObject::connect(chatInput, &QLineEdit::returnPressed, handleSend);
+
+      addMessage("MARKET IA", "Welcome! I am your 2026 Market Intelligence Agent. Ask me about the best **Machinery**, **Packaging/Bottles**, **Fertilizers**, or **Prices**.", false);
+
+      // --- TAB 2: EXCLUSIVE DEALS 2026 (DYNAMIC AI GENERATED) ---
+      QWidget *dealsTab = new QWidget();
+      dealsTab->setStyleSheet("background: #f8f9fa;");
+      QVBoxLayout *dealsLayout = new QVBoxLayout(dealsTab);
+      dealsLayout->setContentsMargins(10, 10, 10, 10);
+      dealsLayout->setSpacing(10);
+
+      QWidget *dealsHeader = new QWidget();
+      QHBoxLayout *hlHeader = new QHBoxLayout(dealsHeader);
+      QLabel *dealsTitle = new QLabel("Top Procurement Deals - Q2 2026");
+      dealsTitle->setStyleSheet("font-size: 20px; font-weight: 900; color: #1a1a1a; text-transform: uppercase;");
+      
+      QPushButton *btnRefreshDeals = new QPushButton("Scan Market with AI");
+      btnRefreshDeals->setStyleSheet("background: #3DDC84; color: white; padding: 10px 20px; border-radius: 8px; font-weight: 800;");
+      btnRefreshDeals->setCursor(Qt::PointingHandCursor);
+      
+      hlHeader->addWidget(dealsTitle);
+      hlHeader->addStretch();
+      hlHeader->addWidget(btnRefreshDeals);
+      dealsLayout->addWidget(dealsHeader);
+
+      QLabel *statusLabel = new QLabel("Market intelligence active. Click scan for live 2026 deals.");
+      statusLabel->setStyleSheet("color: #666; font-size: 11px; font-weight: 600; margin-left: 10px;");
+      dealsLayout->addWidget(statusLabel);
+
+      QScrollArea *dealsScroll = new QScrollArea();
+      dealsScroll->setWidgetResizable(true);
+      dealsScroll->setFrameShape(QFrame::NoFrame);
+      dealsScroll->setStyleSheet("background: transparent;");
+      QWidget *dealsContent = new QWidget();
+      dealsContent->setStyleSheet("background: transparent;");
+      QVBoxLayout *dealsList = new QVBoxLayout(dealsContent);
+      dealsList->setSpacing(15);
+      dealsList->addStretch();
+      dealsScroll->setWidget(dealsContent);
+      dealsLayout->addWidget(dealsScroll);
+
+      DealGenerator *gen = new DealGenerator();
+
+      auto refreshDeals = [dealsList, gen, statusLabel, btnRefreshDeals]() {
+          btnRefreshDeals->setEnabled(false);
+          btnRefreshDeals->setText("Scanning...");
+          statusLabel->setText("AI AGENT: Analyzing global 2026 logistics, machinery costs, and raw material trends...");
+          
+          // Clear current
+          while (dealsList->count() > 1) {
+              QLayoutItem *item = dealsList->takeAt(0);
+              if (item->widget()) item->widget()->deleteLater();
+              delete item;
+          }
+
+          QTimer::singleShot(1500, [dealsList, gen, statusLabel, btnRefreshDeals]() {
+              QList<GeneratedDeal> deals = gen->generateDeals(8);
+              for (const auto &d : deals) {
+                  QWidget *card = new QWidget();
+                  card->setStyleSheet("background: white; border-radius: 12px; border: 1px solid #eee;");
+                  QVBoxLayout *cl = new QVBoxLayout(card);
+                  cl->setContentsMargins(20, 20, 20, 20);
+
+                  QHBoxLayout *hl = new QHBoxLayout();
+                  QLabel *t = new QLabel(d.title);
+                  t->setStyleSheet("font-size: 17px; font-weight: 800; color: #1a1a1a;");
+                  QLabel *sTag = new QLabel(d.savings);
+                  sTag->setStyleSheet("background: #3DDC84; color: white; padding: 4px 12px; border-radius: 15px; font-weight: 900; font-size: 10px;");
+                  hl->addWidget(t);
+                  hl->addStretch();
+                  hl->addWidget(sTag);
+
+                  QLabel *sup = new QLabel("Detected Supplier: " + d.supplier);
+                  sup->setStyleSheet("color: #2e7d32; font-size: 11px; font-weight: 700;");
+                  
+                  QLabel *descLbl = new QLabel(d.description);
+                  descLbl->setWordWrap(true);
+                  descLbl->setStyleSheet("font-size: 12px; color: #555; margin-top: 5px;");
+
+                  QPushButton *btnLink = new QPushButton("View Intelligence Details");
+                  btnLink->setStyleSheet("background: white; border: 2px solid #3DDC84; color: #3DDC84; padding: 10px; border-radius: 6px; font-weight: 900; margin-top: 10px;");
+                  btnLink->setCursor(Qt::PointingHandCursor);
+                  
+                  QString url = d.url;
+                  QObject::connect(btnLink, &QPushButton::clicked, [url]() {
+                      QDesktopServices::openUrl(QUrl(url));
+                  });
+
+                  cl->addLayout(hl);
+                  cl->addWidget(sup);
+                  cl->addWidget(descLbl);
+                  cl->addWidget(btnLink);
+                  dealsList->insertWidget(dealsList->count() - 1, card);
+              }
+              btnRefreshDeals->setEnabled(true);
+              btnRefreshDeals->setText("Scan Market with AI");
+              statusLabel->setText("AI AGENT: 8 High-value procurement opportunities detected for Q2 2026.");
+          });
+      };
+
+      QObject::connect(btnRefreshDeals, &QPushButton::clicked, refreshDeals);
+      
+      // Initial scan
+      refreshDeals();
+
+      marketTabs->addTab(chatTab, "AI Industry Consultant");
+      marketTabs->addTab(dealsTab, "Exclusive Deals 2026");
+      marketLayout->addWidget(marketTabs);
+      marketLayout->addStretch(); // Push tabs to top of container
+      cLayout->addWidget(marketContainer);
+      cLayout->addStretch(); // Push container to top of page
     }
-    cLayout->addStretch();
     outNestedStack->addWidget(content);
   }
 
@@ -3428,6 +3795,8 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       QTableWidgetItem *sItem = new QTableWidgetItem();
       sItem->setData(Qt::DisplayRole, model->data(model->index(i, 5)).toInt());
       table->setItem(i, 5, sItem);
+      
+      table->setItem(i, 6, new QTableWidgetItem(model->data(model->index(i, 6)).toString()));
 
       // --- Actions ---
       QWidget *actionWidget = new QWidget();
@@ -3453,7 +3822,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
 
       al->addWidget(btnMod);
       al->addWidget(btnDel);
-      table->setCellWidget(i, 6, actionWidget);
+      table->setCellWidget(i, 7, actionWidget);
 
       // Connect Edit
       QObject::connect(btnMod, &QPushButton::clicked, [table, mid, refreshMachineTable]() {
@@ -3472,6 +3841,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           QString currentStatus = table->item(row, 3)->text();
           int currentHours = table->item(row, 4)->data(Qt::DisplayRole).toInt();
           int currentSeuil = table->item(row, 5)->data(Qt::DisplayRole).toInt();
+          QString currentLoc = table->item(row, 6)->text();
 
           QDialog dlg(table->window());
           dlg.setWindowTitle("Modify Machine");
@@ -3512,6 +3882,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           edHours->setValidator(new QIntValidator(0, 9999999, edHours));
           QLineEdit *edSeuil = addField("Threshold:", QString::number(currentSeuil));
           edSeuil->setValidator(new QIntValidator(0, 9999999, edSeuil));
+          QLineEdit *edLoc = addField("Location:", currentLoc);
 
           QPushButton *btnSave = new QPushButton("Save Changes");
           btnSave->setStyleSheet("QPushButton { background-color: #3DDC84; color: white; border: none; border-radius: 8px; padding: 12px; font-weight: 700; }");
@@ -3546,7 +3917,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
                   return;
               }
 
-              Machine updateObj(mid, nom, edType->currentText(), edStatus->currentText(), heures, seuil);
+              Machine updateObj(mid, nom, edType->currentText(), edStatus->currentText(), heures, seuil, edLoc->text().trimmed());
               if (updateObj.modifier()) {
                   dlg.accept();
                   (*refreshMachineTable)();
@@ -3605,6 +3976,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       hoursInput->setValidator(new QIntValidator(0, 9999999, hoursInput));
       QLineEdit *seuilInput = new QLineEdit("100");
       seuilInput->setValidator(new QIntValidator(0, 9999999, seuilInput));
+      QLineEdit *locInput = new QLineEdit();
 
       auto addInput = [&](const QString &txt, QWidget *le) {
           QLabel *l = new QLabel(txt);
@@ -3623,6 +3995,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       addInput("Machine Status:", statusInput);
       addInput("Operating Hours:", hoursInput);
       addInput("Maintenance Threshold:", seuilInput);
+      addInput("Machine Location:", locInput);
 
       formLayout->addSpacing(20);
       QPushButton *btnAdd = new QPushButton("Add Machine");
@@ -3656,6 +4029,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
 
           int heures = heuresStr.toInt();
           int seuil = seuilStr.toInt();
+          QString loc = locInput->text().trimmed();
 
           if (heures < 0) {
               QMessageBox::warning(nullptr, "Erreur de Saisie", "Les heures de fonctionnement doivent être positives ou nulles.");
@@ -3667,10 +4041,10 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
               return;
           }
 
-          Machine newM(0, nom, typeInput->currentText(), statusInput->currentText(), heures, seuil);
+          Machine newM(0, nom, typeInput->currentText(), statusInput->currentText(), heures, seuil, loc);
           if (newM.ajouter()) {
-              QMessageBox::information(nullptr, "Success", "Machine added with persistence!");
-              nameInput->clear(); typeInput->setCurrentIndex(0); statusInput->setCurrentIndex(0); hoursInput->setText("0"); seuilInput->setText("100");
+              QMessageBox::information(nullptr, "Success", "Machine added with location!");
+              nameInput->clear(); typeInput->setCurrentIndex(0); statusInput->setCurrentIndex(0); hoursInput->setText("0"); seuilInput->setText("100"); locInput->clear();
               
               if (refreshMachineTable) {
                   (*refreshMachineTable)();
@@ -3730,7 +4104,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       controlLayout->addSpacing(10);
       controlLayout->addWidget(btnPrint);
 
-      QStringList headers = {"ID", "Name", "Type", "Status", "Hours", "Threshold", "Actions"};
+      QStringList headers = {"ID", "Name", "Type", "Status", "Hours", "Threshold", "Location", "Actions"};
       QTableWidget *table = new QTableWidget();
       *machineTablePtr = table;
       table->setColumnCount(headers.size());
@@ -5155,6 +5529,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   resize(1200, 820);
   setWindowFlags(Qt::FramelessWindowHint | Qt::Window);
 
+  // Initialize System Tray
+  trayIcon = new QSystemTrayIcon(this);
+  trayIcon->setIcon(QIcon(":/logo.png"));
+  trayIcon->setToolTip("Oil Press Manager Alerts");
+  trayIcon->show();
+
   // --- Main Application UI ---
   QWidget *mainAppWidget = new QWidget(this);
   setCentralWidget(mainAppWidget);
@@ -5417,6 +5797,30 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
   // Auto-select Home in the sidebar
   btnHome->setChecked(true);
+
+  // Initial Stock Alert Check
+  QTimer::singleShot(2000, this, [this]() { checkStockAlerts(true); });
+}
+
+void MainWindow::checkStockAlerts(bool silent) {
+    QSqlQuery query("SELECT NOM_ARTICLE, QUANTITE FROM ARTICLE WHERE QUANTITE <= 10");
+    QStringList lowStockItems;
+    while (query.next()) {
+        lowStockItems << QString("%1 (%2 left)").arg(query.value(0).toString(), query.value(1).toString());
+    }
+
+    if (!lowStockItems.isEmpty()) {
+        QString msg = "The following items have reached the low stock threshold (10):\n\n" + lowStockItems.join("\n");
+        trayIcon->showMessage("Low Stock Alert", 
+                              QString("%1 items require restocking.").arg(lowStockItems.size()),
+                              QSystemTrayIcon::Warning, 3000);
+        
+        if (!silent) {
+            QMessageBox::warning(this, "Inventory Alert", msg);
+        }
+    } else if (!silent) {
+        QMessageBox::information(this, "Inventory Check", "All items are above the minimum threshold.");
+    }
 }
 
 void MainWindow::applyRole(int roleIndex) {
