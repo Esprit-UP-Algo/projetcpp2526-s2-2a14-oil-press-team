@@ -37,6 +37,7 @@
 #include <QRegularExpressionValidator>
 #include <QRegularExpression>
 #include <QTextDocument>
+#include <QTextEdit>
 #include <QTextStream>
 #include <QHeaderView>
 #include <QLabel>
@@ -741,7 +742,7 @@ static void setupTabNavigation(const QList<QPushButton *> &buttons,
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// PDF Invoice Generator — called when user clicks "📄 Invoice" on a row
+// PDF Invoice Generator — High Fidelity (Matches USER Picture) — Balanced Size
 // ──────────────────────────────────────────────────────────────────────────
 static void generateOrderInvoicePdf(QWidget *parent,
                                      int     orderId,
@@ -752,236 +753,117 @@ static void generateOrderInvoicePdf(QWidget *parent,
                                      const QString &client,
                                      const QString &address)
 {
-    // 1. Ask user where to save
+    // Ask user where to save
+    QString defaultName = (orderId > 0) ? QString("invoice_%1.pdf").arg(ref) : QString("receipt_%1.pdf").arg(QDate::currentDate().toString("yyyyMMdd"));
     QString fileName = QFileDialog::getSaveFileName(
-        parent,
-        "Save Invoice as PDF",
-        QString("invoice_%1_%2.pdf").arg(ref).arg(QDate::currentDate().toString("yyyyMMdd")),
-        "PDF Files (*.pdf)");
+        parent, "Save PDF Document", defaultName, "PDF Files (*.pdf)");
     if (fileName.isEmpty()) return;
-    if (QFileInfo(fileName).suffix().isEmpty())
-        fileName.append(".pdf");
 
-    // 2. Query products linked to this order via CONTENIR → PRODUIT
-    struct LineItem {
-        QString ref;
-        double  prixUnitaire;
-        int     quantite;   // QUANTITE_DEMANDEE from CONTENIR
-    };
+    // Fetch Line Items
+    struct LineItem { QString ref; double price; int qty; };
     QVector<LineItem> items;
+    double totalAmt = 0.0;
+    QString payMode = "N/A";
 
-    QSqlQuery prodQuery;
-    prodQuery.prepare(
-        "SELECT P.REF, P.PRIX_UNITAIRE, C.QUANTITE_DEMANDEE "
-        "FROM CONTENIR C "
-        "JOIN PRODUIT P ON C.ID_CONTENAIR = P.ID_CONTENAIR "
-        "WHERE C.ID_COMMANDE = :id");
-    prodQuery.bindValue(":id", orderId);
-    if (prodQuery.exec()) {
-        while (prodQuery.next()) {
-            LineItem li;
-            li.ref          = prodQuery.value(0).toString();
-            li.prixUnitaire = prodQuery.value(1).toDouble();
-            li.quantite     = prodQuery.value(2).toInt();
-            items.append(li);
-        }
+    if (orderId > 0) {
+        QSqlQuery q;
+        q.prepare("SELECT P.REF, P.PRIX_UNITAIRE, C.QUANTITE_DEMANDEE FROM CONTENIR C JOIN PRODUIT P ON C.ID_CONTENAIR = P.ID_CONTENAIR WHERE C.ID_COMMANDE = :id");
+        q.bindValue(":id", orderId);
+        if (q.exec()) while(q.next()) items.append({q.value(0).toString(), q.value(1).toDouble(), q.value(2).toInt()});
+
+        QSqlQuery f;
+        f.prepare("SELECT SUM(MONTANT), MAX(MODE_PAIEMENT) FROM FINANCE WHERE ID_COMMANDE = :id");
+        f.bindValue(":id", orderId);
+        if (f.exec() && f.next()) { totalAmt = f.value(0).toDouble(); payMode = f.value(1).toString(); }
     }
 
-    // 3. Query total amount & payment mode from FINANCE (latest transaction for this order)
-    double totalAmount = 0.0;
-    QString paymentMode = "—";
-    QString transType   = "—";
-    QSqlQuery finQuery;
-    finQuery.prepare(
-        "SELECT SUM(MONTANT), MAX(MODE_PAIEMENT), MAX(TYPE_TRANSACTION) "
-        "FROM FINANCE WHERE ID_COMMANDE = :id");
-    finQuery.bindValue(":id", orderId);
-    if (finQuery.exec() && finQuery.next()) {
-        totalAmount  = finQuery.value(0).toDouble();
-        paymentMode  = finQuery.value(1).toString().isEmpty() ? "—" : finQuery.value(1).toString();
-        transType    = finQuery.value(2).toString().isEmpty() ? "—" : finQuery.value(2).toString();
-    }
+    // Build the Balanced HTML (Reduced PT sizes)
+    QString html = 
+        "<html><body style='font-family: Arial, sans-serif; color: #1a1a1a; margin: 0; padding: 0;'>"
+        "<div style='padding: 30pt;'>"
+        "<table width='100%' cellpadding='0' cellspacing='0' style='margin-bottom: 20pt;'>"
+        "  <tr>"
+        "    <td style='font-size: 32pt; font-weight: 900; color: #000; letter-spacing: -1pt;'>INVOICE</td>"
+        "    <td align='right' style='font-size: 11pt; color: #666;'>"
+        "      <span style='font-weight: bold; color: #2C3E1F; font-size: 14pt;'>Oil Press Manager Pro</span><br>"
+        "      Tunis, Tunisia &nbsp;|&nbsp; contact@oilpress.tn"
+        "    </td>"
+        "  </tr>"
+        "</table>"
 
-    // 4. Build the invoice HTML
-    // Color palette: deep olive #2C3E1F, accent green #3DDC84, light bg #F9FBF7
-    QString etatColor = (etat == "Completed") ? "#27ae60" : "#e67e22";
+        // THE GREEN BAR
+        "<div style='background-color: #3DDC84; height: 10pt; width: 100%; margin-bottom: 30pt;'></div>"
 
-    // NOTE: QTextDocument only supports a subset of HTML/CSS.
-    // All layouts use <table> — no display:flex/grid allowed.
-    QString html;
-    html +=
-        "<!DOCTYPE html>"
-        "<html><head><meta charset='UTF-8'>"
-        "<style>"
-        "  body { font-family: Arial, sans-serif; margin:0; padding:0; color:#1a1a1a; font-size:13px; }"
-        "  .page { padding: 30px 40px; }"
-        "  h1 { margin:0 0 4px 0; font-size:22px; font-weight:800; color:#1a1a1a; }"
-        "  h2 { margin:0 0 6px 0; font-size:20px; font-weight:700; color:#3DDC84; }"
-        "  .small { font-size:11px; color:#888; margin:2px 0; }"
-        "  .divider { border:none; border-top:3px solid #3DDC84; margin:16px 0 20px 0; }"
-        "  .card { background:#f7faf5; border-left:4px solid #3DDC84; padding:12px 14px; margin-bottom:4px; }"
-        "  .card-title { font-size:10px; text-transform:uppercase; color:#888; font-weight:700; letter-spacing:1px; margin-bottom:6px; }"
-        "  .card p { margin:3px 0; font-size:12px; color:#333; }"
-        "  .hl { font-weight:700; font-size:13px; color:#1a1a1a; }"
-        "  .badge-p { display:inline; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; color:#ffffff; }"
-        "  .section-title { font-size:14px; font-weight:700; color:#1a1a1a; border-bottom:1px solid #eee; padding-bottom:6px; margin:20px 0 10px 0; }"
-        "  table.items { width:100%; border-collapse:collapse; margin-bottom:20px; }"
-        "  table.items th { background:#2C3E1F; color:#ffffff; padding:9px 10px; font-size:11px; text-align:left; font-weight:700; }"
-        "  table.items td { padding:9px 10px; font-size:12px; border-bottom:1px solid #f0f0f0; color:#333; }"
-        "  table.items tr.alt td { background:#f9fdf7; }"
-        "  table.items tr.noitem td { text-align:center; color:#aaa; font-style:italic; padding:20px; }"
-        "  table.totals { border-collapse:collapse; margin-left:auto; margin-bottom:20px; min-width:280px; }"
-        "  table.totals td { padding:7px 14px; font-size:12px; color:#555; }"
-        "  table.totals tr.grand td { font-size:15px; font-weight:800; color:#1a1a1a; border-top:1px solid #ddd; padding-top:10px; }"
-        "  .footer { text-align:center; margin-top:30px; border-top:1px solid #eee; padding-top:15px; font-size:10px; color:#aaa; }"
-        "</style>"
-        "</head><body><div class='page'>";
+        "<table width='100%' cellpadding='0' cellspacing='0' style='margin-bottom: 40pt;'>"
+        "  <tr>"
+        "    <td width='55%' valign='top'>"
+        "      <div style='font-size: 9pt; color: #888; text-transform: uppercase; font-weight: 800; margin-bottom: 5pt;'>Bill To</div>"
+        "      <div style='font-size: 14pt; font-weight: 800;'>" + (client.isEmpty() ? "Walk-in Customer" : client.toHtmlEscaped()) + "</div>"
+        "      <div style='font-size: 11pt; color: #555;'>" + (address.isEmpty() ? "Address N/A" : address.toHtmlEscaped()) + "</div>"
+        "    </td>"
+        "    <td width='45%' valign='top' align='right' style='font-size: 11pt; line-height: 1.6;'>"
+        "      <b>Reference:</b> " + (ref.isEmpty() ? "N/A" : ref.toHtmlEscaped()) + "<br>"
+        "      <b>Date:</b> " + dateCommande + "<br>"
+        "      <b>Payment:</b> " + (payMode.isEmpty() ? "Cash" : payMode) + "<br>"
+        "      <b>Status:</b> <span style='color: #27ae60;'>" + etat.toUpper() + "</span>"
+        "    </td>"
+        "  </tr>"
+        "</table>"
 
-    // ── Header (two-column table with company left, invoice meta right) ──
-    html += QString(
-        "<table width='100%' cellspacing='0' cellpadding='0'><tr>"
-        "  <td valign='top'>"
-        "    <h1>&#127810; Oil Press Manager</h1>"
-        "    <p class='small'>Professional Oil Production &amp; Distribution</p>"
-        "    <p class='small'>Tunis, Tunisia &nbsp;|&nbsp; contact@oilpress.tn</p>"
-        "  </td>"
-        "  <td valign='top' align='right'>"
-        "    <h2>INVOICE</h2>"
-        "    <p class='small'><b>Invoice #:</b> INV-%1</p>"
-        "    <p class='small'><b>Order Ref:</b> %2</p>"
-        "    <p class='small'><b>Issued:</b> %3</p>"
-        "  </td>"
-        "</tr></table>"
-        "<hr class='divider'>")
-        .arg(QString::number(orderId).rightJustified(5, '0'))
-        .arg(ref.toHtmlEscaped())
-        .arg(QDate::currentDate().toString("dd MMMM yyyy"));
-
-    // ── Info cards (3-column table) ──────────────────────────────────────
-    QString badgeTd = QString(
-        "<span class='badge-p' style='background-color:%1;'>%2</span>")
-        .arg(etatColor)
-        .arg(etat.toHtmlEscaped());
-
-    html += QString(
-        "<table width='100%' cellspacing='6' cellpadding='0'><tr>"
-        "  <td width='33%' valign='top'>"
-        "    <div class='card'>"
-        "      <div class='card-title'>Bill To</div>"
-        "      <p class='hl'>%1</p>"
-        "      <p>%2</p>"
-        "    </div>"
-        "  </td>"
-        "  <td width='33%' valign='top'>"
-        "    <div class='card'>"
-        "      <div class='card-title'>Order Details</div>"
-        "      <p><b>Order Date:</b> %3</p>"
-        "      <p><b>Delivery:</b> %4</p>"
-        "      <p><b>Status:</b> %5</p>"
-        "    </div>"
-        "  </td>"
-        "  <td width='33%' valign='top'>"
-        "    <div class='card'>"
-        "      <div class='card-title'>Payment Info</div>"
-        "      <p><b>Mode:</b> %6</p>"
-        "      <p><b>Type:</b> %7</p>"
-        "      <p><b>Order ID:</b> #%8</p>"
-        "    </div>"
-        "  </td>"
-        "</tr></table>")
-        .arg(client.toHtmlEscaped())
-        .arg(address.toHtmlEscaped())
-        .arg(dateCommande)
-        .arg(datelivraison)
-        .arg(badgeTd)
-        .arg(paymentMode.toHtmlEscaped())
-        .arg(transType.toHtmlEscaped())
-        .arg(orderId);
-
-    // Products table
-    html += "<p class='section-title'>&#128717; Ordered Products</p>";
-    html += "<table class='items'>";
-    html += "<thead><tr>"
-            "<th>#</th>"
-            "<th>Product Reference</th>"
-            "<th align='center'>Qty</th>"
-            "<th align='right'>Unit Price</th>"
-            "<th align='right'>Line Total</th>"
-            "</tr></thead>";
-    html += "<tbody>";
+        "<table width='100%' cellpadding='12' cellspacing='0' style='border: 1pt solid #eee; margin-bottom: 30pt;'>"
+        "  <tr style='background-color: #2C3E1F; color: white;'>"
+        "    <td style='font-weight: 800; font-size: 10pt;'>Description</td>"
+        "    <td align='center' style='font-weight: 800; font-size: 10pt;'>Qty</td>"
+        "    <td align='right' style='font-weight: 800; font-size: 10pt;'>Unit Price</td>"
+        "    <td align='right' style='font-weight: 800; font-size: 10pt;'>Total</td>"
+        "  </tr>";
 
     if (items.isEmpty()) {
-        html += "<tr class='no-items'><td colspan='5'>No product lines linked to this order (CONTENIR table is empty for this order).</td></tr>";
+        html += "<tr><td colspan='4' align='center' style='padding: 30pt; color: #aaa; border-bottom: 1pt solid #eee; font-size: 12pt;'>No items found.</td></tr>";
     } else {
-        for (int i = 0; i < items.size(); ++i) {
-            const auto &li = items[i];
-            double lineTotal = li.quantite * li.prixUnitaire;
-            html += QString(
+        for (const auto &li : items) {
+            html += 
                 "<tr>"
-                "<td>%1</td>"
-                "<td><b>%2</b></td>"
-                "<td align='center'>%3</td>"
-                "<td align='right'>%4 TND</td>"
-                "<td align='right'><b>%5 TND</b></td>"
-                "</tr>")
-                .arg(i + 1)
-                .arg(li.ref.toHtmlEscaped())
-                .arg(li.quantite)
-                .arg(li.prixUnitaire, 0, 'f', 2)
-                .arg(lineTotal,       0, 'f', 2);
+                "  <td style='border-bottom: 1pt solid #eee; font-size: 11pt;'><b>" + li.ref + "</b></td>"
+                "  <td align='center' style='border-bottom: 1pt solid #eee; font-size: 11pt;'>" + QString::number(li.qty) + "</td>"
+                "  <td align='right' style='border-bottom: 1pt solid #eee; font-size: 11pt;'>" + QString::number(li.price, 'f', 2) + "</td>"
+                "  <td align='right' style='border-bottom: 1pt solid #eee; font-size: 11pt;'><b>" + QString::number(li.qty * li.price, 'f', 2) + " TND</b></td>"
+                "</tr>";
         }
     }
-    html += "</tbody></table>";
 
-    // ── Totals (right-aligned table, VAT 19%) ────────────────────────────
-    double vatRate   = 0.19;
-    double subtotal  = totalAmount > 0 ? totalAmount / (1.0 + vatRate) : 0.0;
-    double vatAmount = totalAmount - subtotal;
+    html += "</table>"
 
-    html += "<table class='totals'>";
-    if (totalAmount > 0) {
-        html += QString(
-            "<tr><td>Subtotal (excl. VAT 19%%)</td><td align='right'><b>%1 TND</b></td></tr>"
-            "<tr><td>VAT (19%%)</td><td align='right'><b>%2 TND</b></td></tr>"
-            "<tr class='grand'><td>TOTAL DUE</td><td align='right'>%3 TND</td></tr>")
-            .arg(subtotal,    0, 'f', 3)
-            .arg(vatAmount,   0, 'f', 3)
-            .arg(totalAmount, 0, 'f', 3);
-    } else {
-        html += "<tr><td>Amount</td><td align='right'>Not yet registered</td></tr>";
-        html += "<tr class='grand'><td>TOTAL DUE</td><td align='right'>&#8212; TND</td></tr>";
-    }
-    html += "</table>";
+        "<table width='100%'><tr>"
+        "  <td width='60%'></td>"
+        "  <td width='40%' align='right' style='background: #f9fafb; padding: 20pt; border: 1pt solid #3DDC84;'>"
+        "    <div style='font-size: 10pt; color: #888; text-transform: uppercase; font-weight: bold;'>Total Amount Due</div>"
+        "    <div style='font-size: 20pt; font-weight: 900; color: #000;'>" + QString::number(totalAmt, 'f', 3) + " TND</div>"
+        "  </td>"
+        "</tr></table>"
 
-    // Footer
-    html += QString(
-        "<div class='footer'>"
-        "<p>Thank you for your business, %1!</p>"
-        "<p>This invoice was generated automatically by Oil Press Manager on %2.</p>"
-        "<p>For any queries, please contact us at contact@oilpress.tn</p>"
-        "</div>").
-        arg(client.toHtmlEscaped())
-        .arg(QDateTime::currentDateTime().toString("dd/MM/yyyy hh:mm"));
+        "<div style='margin-top: 80pt;'>"
+        "  <table width='100%'><tr>"
+        "    <td width='70%' style='font-size: 10pt; color: #999;'>Thank you for your business. Generated by Oil Press Manager.</td>"
+        "    <td align='center' style='width: 150pt; border-top: 1.5pt solid #000; padding-top: 5pt; font-size: 11pt; font-weight: 800;'>Authorized Signature</td>"
+        "  </tr></table>"
+        "</div>"
+        "</div></body></html>";
 
-    html += "</div></body></html>";
-
-    // 5. Render to PDF
-    QPrinter printer(QPrinter::PrinterResolution);
+    QPrinter printer(QPrinter::HighResolution);
     printer.setOutputFormat(QPrinter::PdfFormat);
-    printer.setPageSize(QPageSize(QPageSize::A4));
-    printer.setPageMargins(QMarginsF(15, 15, 15, 15), QPageLayout::Millimeter);
     printer.setOutputFileName(fileName);
+    printer.setPageSize(QPageSize(QPageSize::A4));
 
     QTextDocument doc;
     doc.setHtml(html);
     doc.setPageSize(printer.pageRect(QPrinter::Point).size());
     doc.print(&printer);
 
-    QMessageBox::information(parent, "Invoice Generated",
-        QString("Invoice for order <b>%1</b> has been saved successfully!<br><br>"
-                "<small>%2</small>").arg(ref).arg(fileName),
-        QMessageBox::Ok);
+    QMessageBox::information(parent, "Success", "Invoice Generated!");
+    QDesktopServices::openUrl(QUrl::fromLocalFile(fileName));
 }
+
 
 static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
   QWidget *page = new QWidget();
@@ -1445,10 +1327,10 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
               "border-color: #005999; color: #ffffff; background-color: "
               "#007acc; }");
 
+          actionLayout->addWidget(btnInvoice);
           actionLayout->addWidget(btnTrack);
           actionLayout->addWidget(btnModify);
           actionLayout->addWidget(btnDelete);
-          actionLayout->addWidget(btnInvoice);
           table->setCellWidget(rowIdx, 6, actionWidget);
 
           int orderId = id.toInt();
@@ -2057,12 +1939,19 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
       btnPrint->setCursor(Qt::PointingHandCursor);
       btnPrint->setFixedWidth(120);
 
+      QPushButton *btnScan = new QPushButton("ANOMALY SCAN");
+      btnScan->setStyleSheet(getButtonStyle());
+      btnScan->setCursor(Qt::PointingHandCursor);
+      btnScan->setFixedWidth(160);
+
       controlLayout->addWidget(searchEdit);
       controlLayout->addSpacing(15);
       controlLayout->addWidget(lblSort);
       controlLayout->addWidget(sortType);
       controlLayout->addSpacing(10);
       controlLayout->addWidget(btnRefresh);
+      controlLayout->addSpacing(10);
+      controlLayout->addWidget(btnScan);
       controlLayout->addStretch();
       controlLayout->addWidget(btnPrint);
 
@@ -2077,7 +1966,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
       transTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
       transTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
       transTable->horizontalHeader()->setSectionResizeMode(headers.size() - 1, QHeaderView::Fixed);
-      transTable->setColumnWidth(headers.size() - 1, 220);
+      transTable->setColumnWidth(headers.size() - 1, 350);
       transTable->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
       transTable->verticalHeader()->setVisible(false);
       transTable->setColumnHidden(0, true); // Hide ID column
@@ -2190,9 +2079,94 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
               "background-color: #ffebee; border-color: #b71c1c; color: "
               "#b71c1c; }");
 
+          QPushButton *btnInvoice = new QPushButton(QString::fromUtf8("\xF0\x9F\x93\x84 Invoice"));
+          btnInvoice->setCursor(Qt::PointingHandCursor);
+          btnInvoice->setMinimumWidth(80);
+          btnInvoice->setFixedHeight(28);
+          btnInvoice->setStyleSheet(
+              "QPushButton { background-color: #2C3E1F; color: #ffffff; "
+              "border: none; border-radius: 6px; padding: 0px 10px; "
+              "font-weight: 700; font-size: 11px; } "
+              "QPushButton:hover { background-color: #3DDC84; }");
+
+          actionBtnLayout->addWidget(btnInvoice);
           actionBtnLayout->addWidget(btnModify);
           actionBtnLayout->addWidget(btnDelete);
           transTable->setCellWidget(i, 7, actionWidget);
+
+          // --- ANOMALY DETECTION (METIER AVANCE) ---
+          QString riskTip = "";
+          int riskLevel = 0; // 0=OK, 1=Potential, 2=High Risk
+
+          // 1. Check Date Anomaly (Future Date)
+          if (QDate::fromString(r.date, "yyyy-MM-dd") > QDate::currentDate()) {
+              riskTip += "• Transaction date is in the future.\n";
+              riskLevel = 2;
+          }
+
+          // 2. Check Order Amount Mismatch
+          if (r.commande > 0) {
+              QSqlQuery q;
+              q.prepare("SELECT SUM(P.PRIX_UNITAIRE * C.QUANTITE_DEMANDEE) "
+                        "FROM CONTENIR C JOIN PRODUIT P ON C.ID_CONTENAIR = P.ID_CONTENAIR "
+                        "WHERE C.ID_COMMANDE = :id");
+              q.bindValue(":id", r.commande);
+              if (q.exec() && q.next()) {
+                  double expected = q.value(0).toDouble();
+                  if (expected > 0 && qAbs(expected - r.montant) > 0.01) {
+                      riskTip += QString("• Amount mismatch: Order total is %1 TND, but record shows %2 TND.\n")
+                                 .arg(expected, 0, 'f', 2).arg(r.montant, 0, 'f', 2);
+                      riskLevel = 2;
+                  }
+              }
+          }
+
+          // 3. Check for Duplicates
+          QSqlQuery d;
+          d.prepare("SELECT COUNT(*) FROM FINANCE WHERE MONTANT = :m AND DATE_TRANSACTION = TO_DATE(:dt, 'YYYY-MM-DD') AND ID_TRANSACTION != :id");
+          d.bindValue(":m", r.montant);
+          d.bindValue(":dt", r.date);
+          d.bindValue(":id", r.id);
+          if (d.exec() && d.next() && d.value(0).toInt() > 0) {
+              riskTip += "• Potential Duplicate: Another identical payment exists.\n";
+              if (riskLevel < 1) riskLevel = 1;
+          }
+
+          if (riskLevel > 0) {
+              QLabel *riskIcon = new QLabel(riskLevel == 2 ? "⚠️" : "💡");
+              riskIcon->setToolTip("Anomaly Detected:\n" + riskTip.trimmed());
+              riskIcon->setCursor(Qt::WhatsThisCursor);
+              riskIcon->setStyleSheet(riskLevel == 2 ? "color: #e74c3c; font-size: 16px; font-weight:bold; padding-right:5px;" : "color: #f39c12; font-size: 16px; padding-right:5px;");
+              actionBtnLayout->insertWidget(0, riskIcon);
+          }
+
+          // --- Connect Invoice ---
+          int orderIdForPdf = r.commande;
+          QString descForPdf = r.desc;
+          QString dateForPdf = r.date;
+          QString typeForPdf = r.type;
+          
+          QObject::connect(btnInvoice, &QPushButton::clicked, [transTable, orderIdForPdf, descForPdf, dateForPdf, typeForPdf]() {
+              // If there's an Order ID, we try to fetch associated order details
+              QString client = "N/A", address = "N/A", ref = descForPdf, dateCmd = dateForPdf, dateLiv = "N/A", etat = typeForPdf;
+              
+              if (orderIdForPdf > 0) {
+                  QSqlQuery q;
+                  q.prepare("SELECT NOM_CLIENT, ADRESSE_CLIENT, REFERENCE, DATE_COMMANDE, DATE_LIVRAISON, ETAT_COMMANDE "
+                            "FROM COMMANDE WHERE ID_COMMANDE = :id");
+                  q.bindValue(":id", orderIdForPdf);
+                  if (q.exec() && q.next()) {
+                      client = q.value(0).toString();
+                      address = q.value(1).toString();
+                      ref = q.value(2).toString();
+                      dateCmd = q.value(3).toDate().toString("yyyy-MM-dd");
+                      dateLiv = q.value(4).toDate().toString("yyyy-MM-dd");
+                      etat = q.value(5).toString();
+                  }
+              }
+
+              generateOrderInvoicePdf(transTable->window(), orderIdForPdf, ref, dateCmd, dateLiv, etat, client, address);
+          });
 
           // --- Connect Edit ---
           int rowId = r.id;
@@ -2424,46 +2398,121 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
       QObject::connect(sortType, &QComboBox::currentTextChanged, refreshTable);
       QObject::connect(btnRefresh, &QPushButton::clicked, refreshTable);
 
-      // Print PDF
+      // Print PDF (Global Report)
       QObject::connect(btnPrint, &QPushButton::clicked, [transTable]() {
         QString fileName = QFileDialog::getSaveFileName(
-            transTable->window(), "Export PDF", "transactions_report.pdf",
+            transTable->window(), "Export Financial Report", "financial_report.pdf",
             "PDF Files (*.pdf)");
         if (fileName.isEmpty()) return;
 
-        QPrinter printer(QPrinter::PrinterResolution);
-        printer.setOutputFormat(QPrinter::PdfFormat);
-        printer.setOutputFileName(fileName);
-        printer.setPageSize(QPageSize(QPageSize::A4));
+        double totalRev = 0, totalExp = 0;
+        for (int r = 0; r < transTable->rowCount(); ++r) {
+            double amt = transTable->item(r, 1) ? transTable->item(r, 1)->text().toDouble() : 0.0;
+            QString type = transTable->item(r, 3) ? transTable->item(r, 3)->text().toUpper() : "";
+            if (type == "REVENUE") totalRev += amt;
+            else if (type == "EXPENSE") totalExp += amt;
+        }
 
-        QString html = "<h2 style='color:#1a1a1a;'>Transaction Report</h2>"
-                       "<table style='width:100%; border-collapse:collapse;'>"
-                       "<tr style='background:#f0f0f0;'>"
-                       "<th style='padding:8px; border:1px solid #ddd;'>Amount</th>"
-                       "<th style='padding:8px; border:1px solid #ddd;'>Date</th>"
-                       "<th style='padding:8px; border:1px solid #ddd;'>Type</th>"
-                       "<th style='padding:8px; border:1px solid #ddd;'>Payment</th>"
-                       "<th style='padding:8px; border:1px solid #ddd;'>Description</th>"
-                       "<th style='padding:8px; border:1px solid #ddd;'>Order ID</th>"
-                       "</tr>";
+        QString html =
+            "<html><body style='font-family: Arial, sans-serif; color: #1a1a1a;'>"
+            "<div style='padding: 30pt;'>"
+            "<table width='100%' cellpadding='0' cellspacing='0' style='margin-bottom: 25pt;'>"
+            "  <tr><td style='font-size: 32pt; font-weight: bold;'>Financial Report</td><td align='right' style='font-size: 14pt; color: #666;'>Oil Press Manager Pro</td></tr>"
+            "</table>"
+            "<div style='background-color: #3DDC84; height: 8pt; width: 100%; margin-bottom: 30pt;'></div>"
+
+            "<table width='100%' cellpadding='20' cellspacing='0' style='margin-bottom: 40pt;'>"
+            "  <tr>"
+            "    <td style='background: #f1f8f5; border: 1pt solid #d4edda; text-align: center;'>"
+            "      <div style='font-size: 11pt; color: #555; text-transform: uppercase;'>Total Revenue</div>"
+            "      <div style='font-size: 22pt; font-weight: 800; color: #27ae60;'>" + QString::number(totalRev, 'f', 2) + " TND</div>"
+            "    </td>"
+            "    <td style='background: #fff5f5; border: 1pt solid #fed7d7; text-align: center;'>"
+            "      <div style='font-size: 11pt; color: #555; text-transform: uppercase;'>Total Expenses</div>"
+            "      <div style='font-size: 22pt; font-weight: 800; color: #e74c3c;'>" + QString::number(totalExp, 'f', 2) + " TND</div>"
+            "    </td>"
+            "  </tr>"
+            "</table>"
+
+            "<table width='100%' cellpadding='12' cellspacing='0' style='border: 1pt solid #eee;'>"
+            "  <tr style='background-color: #2C3E1F; color: white;'>"
+            "    <td style='font-size: 11pt;'><b>Amount</b></td><td style='font-size: 11pt;'><b>Date</b></td><td style='font-size: 11pt;'><b>Type</b></td><td style='font-size: 11pt;'><b>Payment</b></td><td style='font-size: 11pt;'><b>Description</b></td>"
+            "  </tr>";
 
         for (int r = 0; r < transTable->rowCount(); ++r) {
           html += "<tr>";
-          for (int c = 1; c <= 6; ++c) { // Skip hidden ID col
+          for (int c = 1; c <= 5; ++c) {
             QString val = transTable->item(r, c) ? transTable->item(r, c)->text() : "";
-            html += "<td style='padding:8px; border:1px solid #ddd;'>" + val + "</td>";
+            html += "<td style='border-bottom: 1pt solid #eee; font-size: 12pt;'>" + val + "</td>";
           }
           html += "</tr>";
         }
-        html += "</table>";
+        html += "</table><div style='text-align: center; margin-top: 50pt; font-size: 10pt; color: #999;'>Oil Press Manager Professional Reporting Suite &copy; 2026</div></div></body></html>";
+
+        QPrinter printer(QPrinter::HighResolution);
+        printer.setOutputFormat(QPrinter::PdfFormat);
+        printer.setOutputFileName(fileName);
+        printer.setPageSize(QPageSize(QPageSize::A4));
 
         QTextDocument doc;
         doc.setHtml(html);
         doc.setPageSize(printer.pageRect(QPrinter::Point).size());
         doc.print(&printer);
 
-        QMessageBox::information(transTable->window(), "Success",
-                                 "PDF Exported Successfully!");
+        QMessageBox::information(nullptr, "Success", "Record Exported Successfully!");
+        QDesktopServices::openUrl(QUrl::fromLocalFile(fileName));
+      });
+
+      // Connect Scan Button
+      QObject::connect(btnScan, &QPushButton::clicked, [transTable]() {
+          int totalAnomalies = 0;
+          QString report = "<h3>Anomaly Detection Report</h3><hr>";
+          int highRisk = 0;
+
+          for (int i = 0; i < transTable->rowCount(); ++i) {
+              QWidget *w = transTable->cellWidget(i, 7);
+              if (w) {
+                  QLabel *icon = w->findChild<QLabel*>();
+                  if (icon && (icon->text() == "⚠️" || icon->text() == "💡")) {
+                      totalAnomalies++;
+                      if (icon->text() == "⚠️") highRisk++;
+                      QString desc = transTable->item(i, 5)->text();
+                      report += QString("<p><b>Row #%1 (ID %2):</b> %3<br><small style='color:#e74c3c'>%4</small></p>")
+                                .arg(i+1)
+                                .arg(transTable->item(i, 0)->text())
+                                .arg(desc)
+                                .arg(icon->toolTip().replace("\n", "<br>"));
+                  }
+              }
+          }
+
+          QDialog *dlg = new QDialog(transTable->window());
+          dlg->setWindowTitle("Advanced Anomaly Scan");
+          dlg->setMinimumSize(500, 450);
+          dlg->setStyleSheet("QDialog { background: white; border-radius: 12px; }");
+          QVBoxLayout *layout = new QVBoxLayout(dlg);
+          layout->setContentsMargins(25, 25, 25, 25);
+          
+          QLabel *title = new QLabel("Anomaly Radar Results");
+          title->setStyleSheet("font-size: 18px; font-weight: 800; color: #2c3e50;");
+          layout->addWidget(title);
+
+          QTextEdit *area = new QTextEdit();
+          area->setHtml(totalAnomalies > 0 ? report : "<p style='color:#27ae60; font-weight:bold; font-size:14px;'>Scan complete. No issues found!</p>");
+          area->setReadOnly(true);
+          area->setStyleSheet("background: #fdfdfd; border: 1px solid #eee; border-radius: 8px; padding: 15px;");
+          layout->addWidget(area);
+
+          QLabel *summary = new QLabel(QString("Summary: %1 Issues found (%2 High Risk)").arg(totalAnomalies).arg(highRisk));
+          summary->setStyleSheet("font-weight: 800; color: " + QString(highRisk > 0 ? "#e74c3c" : "#2c3e50") + ";");
+          layout->addWidget(summary);
+
+          QPushButton *close = new QPushButton("Close Dashboard");
+          close->setStyleSheet("background: #2c3e50; color: white; height: 35px; border-radius: 6px; font-weight: bold;");
+          QObject::connect(close, &QPushButton::clicked, dlg, &QDialog::accept);
+          layout->addWidget(close);
+
+          dlg->exec();
       });
 
       cLayout->addWidget(transContainer);
@@ -2522,38 +2571,57 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
       // Print PDF
       QObject::connect(btnPrint, &QPushButton::clicked, [expTable]() {
         QString fileName = QFileDialog::getSaveFileName(
-            expTable->window(), "Export PDF", "expense_report.pdf",
+            expTable->window(), "Export Expense Report", "expense_report.pdf",
             "PDF Files (*.pdf)");
         if (fileName.isEmpty()) return;
 
-        QPrinter printer(QPrinter::PrinterResolution);
-        printer.setOutputFormat(QPrinter::PdfFormat);
-        printer.setOutputFileName(fileName);
-        printer.setPageSize(QPageSize(QPageSize::A4));
+        // Calculate Stats
+        double totalExp = 0;
+        for (int r = 0; r < expTable->rowCount(); ++r) {
+            totalExp += expTable->item(r, 3) ? expTable->item(r, 3)->text().toDouble() : 0.0;
+        }
 
-        QString html = "<h2>Expense Report</h2>"
-                       "<table style='width:100%; border-collapse:collapse;'>"
-                       "<tr style='background:#f0f0f0;'>"
-                       "<th style='padding:8px; border:1px solid #ddd;'>Date</th>"
-                       "<th style='padding:8px; border:1px solid #ddd;'>Type</th>"
-                       "<th style='padding:8px; border:1px solid #ddd;'>Description</th>"
-                       "<th style='padding:8px; border:1px solid #ddd;'>Amount</th>"
-                       "<th style='padding:8px; border:1px solid #ddd;'>Payment</th></tr>";
+        QString html =
+            "<!DOCTYPE html><html><head><style>"
+            "  body { font-family: 'Segoe UI', sans-serif; padding: 40px; color: #1a1a1a; }"
+            "  .header { border-bottom: 3px solid #e74c3c; padding-bottom: 20px; margin-bottom: 30px; }"
+            "  .title { font-size: 28px; font-weight: 800; color: #1a1a1a; }"
+            "  .stat-card { background: #fff5f5; border-radius: 12px; padding: 20px; border: 1px solid #fed7d7; width: 300px; margin-bottom: 30px; }"
+            "  .stat-lbl { font-size: 11px; text-transform: uppercase; color: #c53030; font-weight: 700; }"
+            "  .stat-val { font-size: 22px; font-weight: 800; margin-top: 5px; color: #e74c3c; }"
+            "  table { width: 100%; border-collapse: collapse; margin-top: 20px; border: 1px solid #eee; border-radius: 8px; overflow: hidden; }"
+            "  th { background: #2d3748; color: white; padding: 12px; text-align: left; font-size: 11px; text-transform: uppercase; }"
+            "  td { padding: 10px; border-bottom: 1px solid #eee; font-size: 12px; color: #4a5568; }"
+            "  .footer { text-align: center; margin-top: 40px; font-size: 10px; color: #aaa; }"
+            "</style></head><body>"
+            "<div class='header'><span class='title'>Expense Tracking Report</span><br>"
+            "<small>Generated on " + QDate::currentDate().toString("dd/MM/yyyy") + "</small></div>"
+            "<div class='stat-card'><div class='stat-lbl'>Total Expenses</div><div class='stat-val'>" + QString::number(totalExp, 'f', 2) + " TND</div></div>"
+            "<table><thead><tr>"
+            "<th>Date</th><th>Type</th><th>Description</th><th>Amount</th><th>Payment</th>"
+            "</tr></thead><tbody>";
+
         for (int r = 0; r < expTable->rowCount(); ++r) {
           html += "<tr>";
           for (int c = 0; c < expTable->columnCount(); ++c) {
             QString val = expTable->item(r, c) ? expTable->item(r, c)->text() : "";
-            html += "<td style='padding:8px; border:1px solid #ddd;'>" + val + "</td>";
+            html += "<td>" + val + "</td>";
           }
           html += "</tr>";
         }
-        html += "</table>";
+        html += "</tbody></table><div class='footer'>Oil Press Manager Backend - Professional Edition</div></body></html>";
+
+        QPrinter printer(QPrinter::HighResolution);
+        printer.setOutputFormat(QPrinter::PdfFormat);
+        printer.setOutputFileName(fileName);
+        printer.setPageSize(QPageSize(QPageSize::A4));
+
         QTextDocument doc;
         doc.setHtml(html);
-        doc.setPageSize(printer.pageRect(QPrinter::Point).size());
         doc.print(&printer);
-        QMessageBox::information(expTable->window(), "Success",
-                                 "PDF Exported Successfully!");
+
+        QMessageBox::information(expTable->window(), "Success", "Expense report exported and saved!");
+        QDesktopServices::openUrl(QUrl::fromLocalFile(fileName));
       });
 
     } else if (name == "Analytics") {
@@ -2601,14 +2669,61 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
           createStatCard("Total Expenses",
                          QString::number(totalExpense, 'f', 2),
                          "From DB", "#e74c3c"));
-      summaryLayout->addWidget(
-          createStatCard("Net Profit",
-                         QString::number(net, 'f', 2),
-                         net >= 0 ? "Positive" : "Negative", netColor));
+       summaryLayout->addWidget(
+           createStatCard("Net Profit",
+                          QString::number(net, 'f', 2),
+                          net >= 0 ? "Positive" : "Negative", netColor));
+ 
+       cLayout->addWidget(summaryBar);
+       cLayout->addWidget(chartContainer);
 
-      cLayout->addWidget(summaryBar);
-      cLayout->addWidget(chartContainer);
-    }
+       // Connect Print Report for Analytics
+       QObject::connect(btnPrint, &QPushButton::clicked, [totalRevenue, totalExpense, net]() {
+           QString fileName = QFileDialog::getSaveFileName(
+               nullptr, "Export Analytics Report", "analytics_report.pdf", "PDF Files (*.pdf)");
+           if (fileName.isEmpty()) return;
+
+           QString html =
+               "<!DOCTYPE html><html><head><style>"
+               "  body { font-family: 'Segoe UI', sans-serif; padding: 50px; color: #1a1a1a; }"
+               "  .header { border-bottom: 4px solid #3DDC84; padding-bottom: 20px; margin-bottom: 40px; }"
+               "  .title { font-size: 32px; font-weight: 900; color: #2C3E1F; }"
+               "  .card-container { display: table; width: 100%; border-spacing: 15px; margin-left: -15px; }"
+               "  .card { display: table-cell; background: #f9fafb; border-radius: 12px; padding: 25px; border: 1px solid #eee; text-align: center; }"
+               "  .card-lbl { font-size: 12px; text-transform: uppercase; color: #888; font-weight: 700; margin-bottom: 10px; }"
+               "  .card-val { font-size: 24px; font-weight: 800; }"
+               "  .footer { text-align: center; margin-top: 60px; font-size: 11px; color: #aaa; }"
+               "</style></head><body>"
+               "<div class='header'><span class='title'>Financial Analytics Summary</span><br>"
+               "<span>Oil Press Manager Professional Report</span></div>"
+
+               "<table width='100%' cellspacing='15'><tr>"
+               "  <td width='33%'><div class='card'><div class='card-lbl'>Total Revenue</div><div class='card-val' style='color:#3DDC84'>" + QString::number(totalRevenue, 'f', 2) + " TND</div></div></td>"
+               "  <td width='33%'><div class='card'><div class='card-lbl'>Total Expenses</div><div class='card-val' style='color:#e74c3c'>" + QString::number(totalExpense, 'f', 2) + " TND</div></div></td>"
+               "  <td width='33%'><div class='card'><div class='card-lbl'>Net Balance</div><div class='card-val' style='color:#2c3e50'>" + QString::number(net, 'f', 2) + " TND</div></div></td>"
+               "</tr></table>"
+
+               "<div style='margin-top:50px; padding:30px; background:#fff; border:1px solid #eee; border-radius:12px;'>"
+               "  <h3 style='margin-top:0;'>Report Insights</h3>"
+               "  <p>This report provides a high-level overview of the current financial health of the oil press operations. "
+               "  The data reflects all processed transactions including raw material procurement and product sales.</p>"
+               "</div>"
+
+               "<div class='footer'>Generated by Oil Press Manager Suite</div></body></html>";
+
+           QPrinter printer(QPrinter::HighResolution);
+           printer.setOutputFormat(QPrinter::PdfFormat);
+           printer.setOutputFileName(fileName);
+           printer.setPageSize(QPageSize(QPageSize::A4));
+
+           QTextDocument doc;
+           doc.setHtml(html);
+           doc.print(&printer);
+
+           QMessageBox::information(nullptr, "Success", "Analytics report saved!");
+           QDesktopServices::openUrl(QUrl::fromLocalFile(fileName));
+       });
+     }
     cLayout->addStretch();
     outNestedStack->addWidget(content);
   }
@@ -4568,7 +4683,6 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
               actionBtnLayout->setContentsMargins(10, 0, 10, 0);
               actionBtnLayout->setSpacing(10);
               actionBtnLayout->setAlignment(Qt::AlignCenter);
-
               QPushButton *btnModify = new QPushButton("Edit");
               btnModify->setCursor(Qt::PointingHandCursor);
               btnModify->setMinimumWidth(70);
