@@ -32,7 +32,8 @@ public:
   bool ajouter();
   bool supprimer(int id);
   bool modifier();
-  QSqlQueryModel *afficher();
+  QSqlQueryModel *afficher(QString sortBy = "", QString order = "ASC");
+  bool exists(QString name, int excludeId = -1);
   QString getLastError() const;
 
 private:

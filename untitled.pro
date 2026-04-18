@@ -21,7 +21,10 @@ SOURCES += \
     machine.cpp \
     emailapi.cpp \
     smsapi.cpp \
-    trackingapi.cpp
+    trackingapi.cpp \
+    marketapi.cpp \
+    consultantagent.cpp \
+    dealgenerator.cpp
 
 HEADERS += \
     article.h \
@@ -36,7 +39,10 @@ HEADERS += \
     machine.h \
     emailapi.h \
     smsapi.h \
-    trackingapi.h
+    trackingapi.h \
+    marketapi.h \
+    consultantagent.h \
+    dealgenerator.h
 
 FORMS += \
     mainwindow.ui

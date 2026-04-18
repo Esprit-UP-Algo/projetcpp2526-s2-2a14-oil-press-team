@@ -7,12 +7,15 @@
 #include <QPushButton>
 #include <QList>
 
+#include <QSystemTrayIcon>
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 public:
     explicit MainWindow(QWidget *parent = nullptr);
     void applyRole(int roleIndex);
+    void checkStockAlerts(bool silent = true);
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
@@ -29,6 +32,7 @@ private:
     bool m_isResizing = false;
     bool m_isMoving = false;
     int m_edgeMargin = 8;
+    QSystemTrayIcon *trayIcon;
     
     QWidget* createTitleBar();
     Qt::Edges getEdge(const QPoint &pos);
