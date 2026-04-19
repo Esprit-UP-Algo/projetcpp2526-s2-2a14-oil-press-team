@@ -2011,7 +2011,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
           Row r;
           r.id = model->data(model->index(i, 0)).toInt();
           r.montant = model->data(model->index(i, 1)).toDouble();
-          r.date = model->data(model->index(i, 2)).toString();
+          r.date = model->data(model->index(i, 2)).toDate().toString("yyyy-MM-dd");
           r.type = model->data(model->index(i, 3)).toString();
           r.mode = model->data(model->index(i, 4)).toString();
           r.desc = model->data(model->index(i, 5)).toString();
@@ -2106,38 +2106,25 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
           QString riskTip = "";
           int riskLevel = 0; // 0=OK, 1=Potential, 2=High Risk
 
-          // 1. Check Date Anomaly (Future Date)
-          if (QDate::fromString(r.date, "yyyy-MM-dd") > QDate::currentDate()) {
-              riskTip += "• Transaction date is in the future.\n";
-              riskLevel = 2;
+          // Use methods from Transaction class to detect anomalies
+          QDate transDate = QDate::fromString(r.date, "yyyy-MM-dd");
+          
+          QString dateErr = Transaction::checkDateAnomaly(transDate);
+          if (!dateErr.isEmpty()) {
+              riskTip += dateErr;
+              riskLevel = 2; // Future date is high risk
           }
 
-          // 2. Check Order Amount Mismatch
-          if (r.commande > 0) {
-              QSqlQuery q;
-              q.prepare("SELECT SUM(P.PRIX_UNITAIRE * C.QUANTITE_DEMANDEE) "
-                        "FROM CONTENIR C JOIN PRODUIT P ON C.ID_CONTENAIR = P.ID_CONTENAIR "
-                        "WHERE C.ID_COMMANDE = :id");
-              q.bindValue(":id", r.commande);
-              if (q.exec() && q.next()) {
-                  double expected = q.value(0).toDouble();
-                  if (expected > 0 && qAbs(expected - r.montant) > 0.01) {
-                      riskTip += QString("• Amount mismatch: Order total is %1 TND, but record shows %2 TND.\n")
-                                 .arg(expected, 0, 'f', 2).arg(r.montant, 0, 'f', 2);
-                      riskLevel = 2;
-                  }
-              }
+          QString amountErr = Transaction::checkAmountMismatch(r.commande, r.montant);
+          if (!amountErr.isEmpty()) {
+              riskTip += amountErr;
+              riskLevel = 2; // Mismatch is high risk
           }
 
-          // 3. Check for Duplicates
-          QSqlQuery d;
-          d.prepare("SELECT COUNT(*) FROM FINANCE WHERE MONTANT = :m AND DATE_TRANSACTION = TO_DATE(:dt, 'YYYY-MM-DD') AND ID_TRANSACTION != :id");
-          d.bindValue(":m", r.montant);
-          d.bindValue(":dt", r.date);
-          d.bindValue(":id", r.id);
-          if (d.exec() && d.next() && d.value(0).toInt() > 0) {
-              riskTip += "• Potential Duplicate: Another identical payment exists.\n";
-              if (riskLevel < 1) riskLevel = 1;
+          QString dupErr = Transaction::checkDuplicateAnomaly(r.id, r.montant, transDate, r.desc);
+          if (!dupErr.isEmpty()) {
+              riskTip += dupErr;
+              if (riskLevel < 1) riskLevel = 1; // Duplicate is potential issue
           }
 
           if (riskLevel > 0) {
@@ -2472,7 +2459,8 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
       });
 
       // Connect Scan Button
-      QObject::connect(btnScan, &QPushButton::clicked, [transTable]() {
+      QObject::connect(btnScan, &QPushButton::clicked, [transTable, refreshTable]() {
+          refreshTable(); // Auto-refresh to include latest entries before scanning
           int totalAnomalies = 0;
           QString report = "<h3>Anomaly Detection Report</h3><hr>";
           int highRisk = 0;

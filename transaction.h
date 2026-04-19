@@ -39,6 +39,11 @@ public:
     QSqlQueryModel* afficher();
     QString getLastError() const;
 
+    // Anomaly Detection Methods
+    static QString checkDateAnomaly(const QDate &date);
+    static QString checkDuplicateAnomaly(int id, double amount, const QDate &date, const QString &desc);
+    static QString checkAmountMismatch(int orderId, double recordedAmount);
+
 private:
     int idTransaction;
     double montant;

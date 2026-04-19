@@ -145,3 +145,58 @@ QSqlQueryModel* Transaction::afficher() {
 
 // --- Get Last Error ---
 QString Transaction::getLastError() const { return lastError; }
+
+// --- Anomaly Detection Methods ---
+
+QString Transaction::checkDateAnomaly(const QDate &date) {
+    if (date > QDate::currentDate()) {
+        return "• Transaction date is in the future.\n";
+    }
+    return "";
+}
+
+QString Transaction::checkDuplicateAnomaly(int id, double amount, const QDate &date, const QString &desc) {
+    QSqlQuery q;
+    // We use TRUNC to compare only the date part in Oracle.
+    // We use CAST and TRIM to handle the CLOB 'DESCRIPTION' field safely for comparison.
+    q.prepare("SELECT COUNT(*) FROM FINANCE WHERE MONTANT = :m "
+              "AND TRUNC(DATE_TRANSACTION) = :dt "
+              "AND (UPPER(TRIM(CAST(DESCRIPTION AS VARCHAR2(4000)))) = UPPER(TRIM(:desc)) "
+              "OR (DESCRIPTION IS NULL AND :desc_empty = 1)) "
+              "AND ID_TRANSACTION != :id");
+    q.bindValue(":m", amount);
+    q.bindValue(":dt", date);
+    q.bindValue(":desc", desc);
+    q.bindValue(":desc_empty", desc.isEmpty() ? 1 : 0);
+    q.bindValue(":id", id);
+    
+    if (!q.exec()) {
+        qDebug() << "Duplicate Check Query Error:" << q.lastError().text();
+        return "";
+    }
+    
+    if (q.next() && q.value(0).toInt() > 0) {
+        return "• Potential Duplicate: Another identical payment exists.\n";
+    }
+    return "";
+}
+
+QString Transaction::checkAmountMismatch(int orderId, double recordedAmount) {
+    if (orderId <= 0) return "";
+    
+    QSqlQuery q;
+    // Calculate expected total from Order details (Contenir + Produit)
+    q.prepare("SELECT SUM(P.PRIX_UNITAIRE * C.QUANTITE_DEMANDEE) "
+              "FROM CONTENIR C JOIN PRODUIT P ON C.ID_CONTENAIR = P.ID_CONTENAIR "
+              "WHERE C.ID_COMMANDE = :id");
+    q.bindValue(":id", orderId);
+    
+    if (q.exec() && q.next()) {
+        double expected = q.value(0).toDouble();
+        if (expected > 0 && qAbs(expected - recordedAmount) > 0.01) {
+            return QString("• Amount mismatch: Order total is %1 TND, but record shows %2 TND.\n")
+                   .arg(expected, 0, 'f', 2).arg(recordedAmount, 0, 'f', 2);
+        }
+    }
+    return "";
+}
