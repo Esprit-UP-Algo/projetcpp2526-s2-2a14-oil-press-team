@@ -4325,7 +4325,7 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
   actionLayout->setSpacing(12);
 
   outNestedStack = new QStackedWidget();
-  QStringList tabNames = {"Product Hub", "Add Product", "Estimation", "Analytics"};
+  QStringList tabNames = {"Product Hub", "Add Product", "Estimation", "Analytics", "AI Advisor"};
   QList<QPushButton *> tabButtons;
 
   // Use a shared pointer to hold the table pointer so the lambda can access it after initialization
@@ -4922,14 +4922,149 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       cLayout->addWidget(scrollArea);
 
     } else if (name == "Analytics") {
-      GenericBarChart *chart = new GenericBarChart("Product Production Overview");
-      chart->addBar("Extra Virgin 1L", 450, QColor(61, 220, 132));
-      chart->addBar("Premium Blend 500ml", 120, QColor(52, 152, 219));
-      chart->addBar("Economy 2L", 80, QColor(241, 196, 15));
-      cLayout->addWidget(chart);
+      QWidget *analyticsContainer = new QWidget();
+      QVBoxLayout *analyticsLayout = new QVBoxLayout(analyticsContainer);
+      analyticsLayout->setContentsMargins(0, 0, 0, 0);
+
+      auto refreshAnalytics = [analyticsLayout]() {
+          QLayoutItem *child;
+          while ((child = analyticsLayout->takeAt(0)) != nullptr) {
+              if (child->widget()) child->widget()->deleteLater();
+              delete child;
+          }
+
+          GenericBarChart *chart = new GenericBarChart("Stock Overview by Capacity");
+          QSqlQuery q("SELECT CAPACITE, SUM(QUANTITE) FROM PRODUIT GROUP BY CAPACITE ORDER BY SUM(QUANTITE) DESC");
+          
+          QList<QColor> colors = {QColor(61, 220, 132), QColor(52, 152, 219), QColor(241, 196, 15), QColor(155, 89, 182), QColor(231, 76, 60)};
+          int count = 0;
+          
+          while (q.next() && count < 5) {
+              QString capacityLabel = QString::number(q.value(0).toInt()) + " L";
+              int totalStock = q.value(1).toInt();
+              chart->addBar("Capacity " + capacityLabel, totalStock, colors[count % colors.size()]);
+              count++;
+          }
+          
+          if (count == 0) {
+              chart->addBar("No Stock Data", 0, QColor(149, 165, 166));
+          }
+          
+          analyticsLayout->addWidget(chart);
+      };
+
+      refreshAnalytics(); // Initial load
+
+      QObject::connect(outNestedStack, &QStackedWidget::currentChanged, [refreshAnalytics](int index) {
+          if (index == 3) { // 3 is the index for Analytics tab in Product Management
+              refreshAnalytics();
+          }
+      });
+
+      cLayout->addWidget(analyticsContainer);
+    } else if (name == "AI Advisor") {
+      QWidget *aiContainer = new QWidget();
+      QVBoxLayout *aiLayout = new QVBoxLayout(aiContainer);
+      aiLayout->setContentsMargins(20, 20, 20, 20);
+      aiLayout->setSpacing(15);
+
+      // Chat history area
+      QTextEdit *chatHistory = new QTextEdit();
+      chatHistory->setReadOnly(true);
+      chatHistory->setStyleSheet("QTextEdit { background-color: #fcfcfc; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px; font-size: 14px; color: #333; }");
+      chatHistory->append("<b>System:</b> Hello! I am the Oil Press AI Advisor. Ask me anything about improving your oil products.");
+
+      // Input area
+      QHBoxLayout *inputLayout = new QHBoxLayout();
+      QLineEdit *userInput = new QLineEdit();
+      userInput->setPlaceholderText("Ask for advice to improve oil grade...");
+      userInput->setStyleSheet(getInputStyle());
+      QPushButton *sendBtn = new QPushButton("Ask AI");
+      sendBtn->setCursor(Qt::PointingHandCursor);
+      sendBtn->setStyleSheet(getButtonStyle());
+
+      inputLayout->addWidget(userInput);
+      inputLayout->addWidget(sendBtn);
+
+      aiLayout->addWidget(chatHistory, 1);
+      aiLayout->addLayout(inputLayout);
+      
+      cLayout->addWidget(aiContainer);
+
+      QNetworkAccessManager *netManager = new QNetworkAccessManager(aiContainer);
+      
+      auto askGemini = [=]() {
+          QString apiKey = "AIzaSyACbsEbdgavfaDbIUr2GiurPdmS_Woam-A"; // PASTE YOUR GOOGLE GEMINI API KEY HERE
+          QString query = userInput->text().trimmed();
+          if (query.isEmpty()) return;
+
+          chatHistory->append("<b>You:</b> " + query.toHtmlEscaped() + "<br/>");
+          userInput->clear();
+
+          // Build context from DB
+          QString dbContext = "Here is the current relevant stock in the oil press:\n";
+          QSqlQuery q("SELECT CAPACITE, QUANTITE, COULEUR, VISCOSITE FROM PRODUIT ORDER BY ID_CONTENAIR DESC LIMIT 10");
+          int count = 0;
+          while (q.next() && count < 10) {
+              dbContext += QString("- Olives/Oil capacity %1, qty %2, color %3, viscosity %4\n")
+                            .arg(q.value(0).toString())
+                            .arg(q.value(1).toString())
+                            .arg(q.value(2).toString())
+                            .arg(q.value(3).toString());
+              count++;
+          }
+          if (count == 0) dbContext += "No recent products found.\n";
+
+          QString fullPrompt = "You are an expert olive oil press consultant. Act as an advisor.\n" + dbContext + "\nUser question: " + query;
+
+          QUrl url("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=" + apiKey);
+          QNetworkRequest request(url);
+          request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+          QJsonObject part;
+          part["text"] = fullPrompt;
+          QJsonArray parts;
+          parts.append(part);
+          QJsonObject contentObj;
+          contentObj["parts"] = parts;
+          QJsonArray contents;
+          contents.append(contentObj);
+          QJsonObject payload;
+          payload["contents"] = contents;
+
+          QNetworkReply *reply = netManager->post(request, QJsonDocument(payload).toJson());
+          sendBtn->setEnabled(false);
+
+          QObject::connect(reply, &QNetworkReply::finished, [reply, chatHistory, sendBtn]() {
+              sendBtn->setEnabled(true);
+              if (reply->error() == QNetworkReply::NoError) {
+                  QByteArray response = reply->readAll();
+                  QJsonDocument doc = QJsonDocument::fromJson(response);
+                  QJsonObject obj = doc.object();
+                  QJsonArray candidates = obj["candidates"].toArray();
+                  if (!candidates.isEmpty()) {
+                      QJsonObject firstCandidate = candidates[0].toObject();
+                      QJsonObject content = firstCandidate["content"].toObject();
+                      QJsonArray parts = content["parts"].toArray();
+                      if (!parts.isEmpty()) {
+                          QString botText = parts[0].toObject()["text"].toString();
+                          chatHistory->append("<b>AI Advisor:</b> " + botText.toHtmlEscaped().replace("\n", "<br/>").replace("\r", "") + "<br/>");
+                      }
+                  } else {
+                      chatHistory->append("<span style='color: orange;'><b>AI Advisor:</b> Received empty response.</span><br/>");
+                  }
+              } else {
+                  chatHistory->append("<span style='color: red;'><b>Error:</b> " + reply->errorString() + "</span><br/>");
+              }
+              reply->deleteLater();
+          });
+      };
+
+      QObject::connect(sendBtn, &QPushButton::clicked, askGemini);
+      QObject::connect(userInput, &QLineEdit::returnPressed, askGemini);
+
     }
-    if (name != "Add Product" && name != "Estimation") {
-        cLayout->addStretch();
+    if (name != "Add Product" && name != "Estimation" && name != "AI Advisor") {
     }
     outNestedStack->addWidget(content);
   }
