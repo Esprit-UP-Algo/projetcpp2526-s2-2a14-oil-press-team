@@ -21,6 +21,7 @@
 #include <QUrl>
 #include <QDate>
 #include <QDateEdit>
+#include <QSpinBox>
 #include <QDateTime>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -761,6 +762,7 @@ static void generateOrderInvoicePdf(QWidget *parent,
                                      const QString &client,
                                      const QString &address)
 {
+    Q_UNUSED(datelivraison);
     // Ask user where to save
     QString defaultName = (orderId > 0) ? QString("invoice_%1.pdf").arg(ref) : QString("receipt_%1.pdf").arg(QDate::currentDate().toString("yyyyMMdd"));
     QString fileName = QFileDialog::getSaveFileName(
@@ -770,28 +772,64 @@ static void generateOrderInvoicePdf(QWidget *parent,
     // Fetch Line Items
     struct LineItem { QString ref; double price; int qty; };
     QVector<LineItem> items;
-    double totalAmt = 0.0;
-    QString payMode = "N/A";
+    double calculatedTotal = 0.0;
+    QString payMode = "Cash"; // Default
 
     if (orderId > 0) {
         QSqlQuery q;
         q.prepare("SELECT P.REF, P.PRIX_UNITAIRE, C.QUANTITE_DEMANDEE FROM CONTENIR C JOIN PRODUIT P ON C.ID_CONTENAIR = P.ID_CONTENAIR WHERE C.ID_COMMANDE = :id");
         q.bindValue(":id", orderId);
-        if (q.exec()) while(q.next()) items.append({q.value(0).toString(), q.value(1).toDouble(), q.value(2).toInt()});
+        if (q.exec()) {
+            while(q.next()) {
+                QString itemRef = q.value(0).toString();
+                double itemPrice = q.value(1).toDouble();
+                int itemQty = q.value(2).toInt();
+                items.append({itemRef, itemPrice, itemQty});
+                calculatedTotal += (itemPrice * itemQty);
+            }
+        }
 
-        QSqlQuery f;
-        f.prepare("SELECT SUM(MONTANT), MAX(MODE_PAIEMENT) FROM FINANCE WHERE ID_COMMANDE = :id");
-        f.bindValue(":id", orderId);
-        if (f.exec() && f.next()) { totalAmt = f.value(0).toDouble(); payMode = f.value(1).toString(); }
+        // Check if a Revenue record already exists in FINANCE
+        QSqlQuery checkF;
+        checkF.prepare("SELECT ID_TRANSACTION, MODE_PAIEMENT FROM FINANCE WHERE ID_COMMANDE = :id AND TYPE_TRANSACTION = 'Revenue'");
+        checkF.bindValue(":id", orderId);
+        
+        if (checkF.exec() && checkF.next()) {
+            int transId = checkF.value(0).toInt();
+            payMode = checkF.value(1).toString();
+            // Update existing record
+            QSqlQuery updF;
+            updF.prepare("UPDATE FINANCE SET MONTANT = :mt WHERE ID_TRANSACTION = :tid");
+            updF.bindValue(":mt", calculatedTotal);
+            updF.bindValue(":tid", transId);
+            updF.exec();
+        } else {
+            // Create new Revenue record
+            QSqlQuery nextIdQ;
+            nextIdQ.exec("SELECT NVL(MAX(ID_TRANSACTION), 0) + 1 FROM FINANCE");
+            int nextId = (nextIdQ.next()) ? nextIdQ.value(0).toInt() : 1;
+
+            QSqlQuery insF;
+            insF.prepare("INSERT INTO FINANCE (ID_TRANSACTION, MONTANT, DATE_TRANSACTION, TYPE_TRANSACTION, MODE_PAIEMENT, DESCRIPTION, ID_COMMANDE) "
+                         "VALUES (:id, :mt, :dt, 'Revenue', :mode, :desc, :oid)");
+            insF.bindValue(":id", nextId);
+            insF.bindValue(":mt", calculatedTotal);
+            insF.bindValue(":dt", QDate::currentDate());
+            insF.bindValue(":mode", "Cash");
+            insF.bindValue(":desc", "Invoice Payment (" + ref + ")");
+            insF.bindValue(":oid", orderId);
+            insF.exec();
+        }
     }
 
-    // Build the Balanced HTML (Reduced PT sizes)
+    // Build the Balanced HTML
     QString html = 
         "<html><body style='font-family: Arial, sans-serif; color: #1a1a1a; margin: 0; padding: 0;'>"
         "<div style='padding: 30pt;'>"
         "<table width='100%' cellpadding='0' cellspacing='0' style='margin-bottom: 20pt;'>"
         "  <tr>"
-        "    <td style='font-size: 32pt; font-weight: 900; color: #000; letter-spacing: -1pt;'>INVOICE</td>"
+        "    <td width='100pt'><img src='qrc:/logo.png' width='80'></td>"
+        "    <td style='font-size: 32pt; font-weight: 900; color: #3DDC84; letter-spacing: -1pt;'>INVOICE</td>"
         "    <td align='right' style='font-size: 11pt; color: #666;'>"
         "      <span style='font-weight: bold; color: #2C3E1F; font-size: 14pt;'>Oil Press Manager Pro</span><br>"
         "      Tunis, Tunisia &nbsp;|&nbsp; contact@oilpress.tn"
@@ -800,7 +838,7 @@ static void generateOrderInvoicePdf(QWidget *parent,
         "</table>"
 
         // THE GREEN BAR
-        "<div style='background-color: #3DDC84; height: 10pt; width: 100%; margin-bottom: 30pt;'></div>"
+        "<div style='background-color: #2C3E1F; height: 4pt; width: 100%; margin-bottom: 30pt;'></div>"
 
         "<table width='100%' cellpadding='0' cellspacing='0' style='margin-bottom: 40pt;'>"
         "  <tr>"
@@ -845,8 +883,8 @@ static void generateOrderInvoicePdf(QWidget *parent,
         "<table width='100%'><tr>"
         "  <td width='60%'></td>"
         "  <td width='40%' align='right' style='background: #f9fafb; padding: 20pt; border: 1pt solid #3DDC84;'>"
-        "    <div style='font-size: 10pt; color: #888; text-transform: uppercase; font-weight: bold;'>Total Amount Due</div>"
-        "    <div style='font-size: 20pt; font-weight: 900; color: #000;'>" + QString::number(totalAmt, 'f', 3) + " TND</div>"
+        "    <div style='font-size: 10pt; color: #888; text-transform: uppercase; font-weight: bold;'>Total Revenue</div>"
+        "    <div style='font-size: 20pt; font-weight: 900; color: #3DDC84;'>" + QString::number(calculatedTotal, 'f', 2) + " TND</div>"
         "  </td>"
         "</tr></table>"
 
@@ -868,7 +906,7 @@ static void generateOrderInvoicePdf(QWidget *parent,
     doc.setPageSize(printer.pageRect(QPrinter::Point).size());
     doc.print(&printer);
 
-    QMessageBox::information(parent, "Success", "Invoice Generated!");
+    QMessageBox::information(parent, "Success", "Invoice Generated and Revenue Updated!");
     QDesktopServices::openUrl(QUrl::fromLocalFile(fileName));
 }
 
@@ -979,6 +1017,72 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       radioLayout->addStretch();
       formLayout->addWidget(radioWidget);
 
+      // --- NEW PRODUCT SELECTION SECTION ---
+      formLayout->addSpacing(20);
+      QLabel *itemsTitle = new QLabel("Order Items (Products):");
+      itemsTitle->setStyleSheet("font-size: 16px; font-weight: 700; color: #1a1a1a; margin-top: 10px;");
+      formLayout->addWidget(itemsTitle);
+
+      QWidget *itemSelectArea = new QWidget();
+      itemSelectArea->setStyleSheet("background-color: #f9fafb; border-radius: 8px; border: 1px solid #eee;");
+      QHBoxLayout *itemSelectLayout = new QHBoxLayout(itemSelectArea);
+      
+      QComboBox *prodCombo = new QComboBox();
+      prodCombo->setPlaceholderText("Select Product...");
+      prodCombo->setStyleSheet(inputStyle + " min-width: 200px;");
+      // Populate Products
+      QSqlQuery prodQuery;
+      prodQuery.exec("SELECT ID_CONTENAIR, REF, PRIX_UNITAIRE FROM PRODUIT");
+      while(prodQuery.next()) {
+          prodCombo->addItem(prodQuery.value(1).toString() + " (" + QString::number(prodQuery.value(2).toDouble(), 'f', 2) + " TND)", 
+                             QVariantList() << prodQuery.value(0).toInt() << prodQuery.value(2).toDouble() << prodQuery.value(1).toString());
+      }
+      
+      QSpinBox *qtySpin = new QSpinBox();
+      qtySpin->setRange(1, 10000);
+      qtySpin->setStyleSheet(inputStyle + " min-width: 80px;");
+      
+      QPushButton *btnAddItem = new QPushButton("Add Item");
+      btnAddItem->setStyleSheet(getTabButtonStyle() + " background-color: #e8fdf2; color: #27ae60; border-color: #3DDC84; font-weight: 700;");
+      btnAddItem->setCursor(Qt::PointingHandCursor);
+      
+      itemSelectLayout->addWidget(new QLabel("Product:"));
+      itemSelectLayout->addWidget(prodCombo);
+      itemSelectLayout->addWidget(new QLabel("Qty:"));
+      itemSelectLayout->addWidget(qtySpin);
+      itemSelectLayout->addWidget(btnAddItem);
+      formLayout->addWidget(itemSelectArea);
+
+      // Temporary items table for the current order
+      QTableWidget *itemsTable = new QTableWidget(0, 4);
+      itemsTable->setHorizontalHeaderLabels({"Ref", "Qty", "Price", "Total"});
+      itemsTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+      itemsTable->setFixedHeight(150);
+      itemsTable->setStyleSheet("QTableWidget { background-color: #fff; border: 1px solid #ddd; border-radius: 4px; }");
+      formLayout->addWidget(itemsTable);
+
+      // List to store IDs and data for final save
+      struct PendingItem { int prodId; QString ref; int qty; double price; };
+      QList<PendingItem> *pendingItems = new QList<PendingItem>();
+
+      QObject::connect(btnAddItem, &QPushButton::clicked, [=]() {
+          if (prodCombo->currentIndex() == -1) return;
+          QVariantList data = prodCombo->currentData().toList();
+          int pid = data[0].toInt();
+          double price = data[1].toDouble();
+          QString ref = data[2].toString();
+          int qty = qtySpin->value();
+
+          pendingItems->append({pid, ref, qty, price});
+          
+          int row = itemsTable->rowCount();
+          itemsTable->insertRow(row);
+          itemsTable->setItem(row, 0, new QTableWidgetItem(ref));
+          itemsTable->setItem(row, 1, new QTableWidgetItem(QString::number(qty)));
+          itemsTable->setItem(row, 2, new QTableWidgetItem(QString::number(price, 'f', 2)));
+          itemsTable->setItem(row, 3, new QTableWidgetItem(QString::number(price * qty, 'f', 2)));
+      });
+
       formLayout->addSpacing(20);
       QPushButton *btnSubmit = new QPushButton("Register Order");
       btnSubmit->setStyleSheet(getButtonStyle());
@@ -1036,10 +1140,35 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
               QMessageBox::warning(nullptr, "Validation Error", "Client's Phone Number cannot be empty.");
               return;
           }
+          if (pendingItems->isEmpty()) {
+              QMessageBox::warning(nullptr, "Validation Error", "Please add at least one product to the order.");
+              return;
+          }
 
           Commande c(id, ref, date, state, client, address, delivery, phone, delivStatus);
           if (c.ajouter()) {
-              QMessageBox::information(nullptr, "Success", "Order added successfully!");
+              // Now we need to get the ID of the command we just added
+              // Commande::ajouter() uses MAX(ID)+1, so let's fetch it
+              QSqlQuery idQ;
+              idQ.exec("SELECT MAX(ID_COMMANDE) FROM COMMANDE");
+              int newOid = 0;
+              if (idQ.next()) newOid = idQ.value(0).toInt();
+
+              // Insert into CONTENIR
+              for (const auto &item : *pendingItems) {
+                  QSqlQuery itemQ;
+                  itemQ.prepare("INSERT INTO CONTENIR (ID_CONTENAIR, ID_COMMANDE, QUANTITE_DEMANDEE) VALUES (:pid, :oid, :qty)");
+                  itemQ.bindValue(":pid", item.prodId);
+                  itemQ.bindValue(":oid", newOid);
+                  itemQ.bindValue(":qty", item.qty);
+                  if (!itemQ.exec()) {
+                      qDebug() << "Failed to add item to order:" << itemQ.lastError().text();
+                  }
+              }
+
+              QMessageBox::information(nullptr, "Success", "Order added successfully with " + QString::number(pendingItems->size()) + " items!");
+              
+              // Clear state
               static_cast<QLineEdit*>(wRef)->clear();
               static_cast<QLineEdit*>(wClient)->clear();
               static_cast<QLineEdit*>(wAddress)->clear();
@@ -1047,10 +1176,17 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
               wDeliveryStatus->setCurrentIndex(0);
               static_cast<QDateEdit*>(wDate)->setDate(QDate::currentDate());
               static_cast<QDateEdit*>(wDelivery)->setDate(QDate::currentDate());
+              pendingItems->clear();
+              itemsTable->setRowCount(0);
 
               // Automatically refresh and switch to Order Hub
               QPushButton *refreshBtn = outNestedStack->findChild<QPushButton*>("orderHubRefreshBtn");
               if (refreshBtn) refreshBtn->click();
+
+              // NEW: Automatically refresh Analytics chart
+              QPushButton *anaRefreshBtn = outNestedStack->findChild<QPushButton*>("analyticsRefreshBtn");
+              if (anaRefreshBtn) anaRefreshBtn->click();
+
               outNestedStack->setCurrentIndex(1); // Order Hub is index 1
               for(QPushButton *btn : tabButtons) {
                   btn->setChecked(btn->text() == "Order Hub");
@@ -1634,36 +1770,60 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       updateTable();
 
       cLayout->addWidget(historyContainer);
-    } else {
-      // Order Statistics Chart (Orders Per Month)
+    } else if (name == "Analytics") {
+      // Bar Chart Analytics
+      QWidget *analyticsHeader = new QWidget();
+      QHBoxLayout *headerLayout = new QHBoxLayout(analyticsHeader);
+      headerLayout->setContentsMargins(0, 0, 0, 10);
+      
+      QLabel *anaTitle = new QLabel("Monthly Order Analytics");
+      anaTitle->setStyleSheet("font-size: 20px; font-weight: 700; color: #1a1a1a;");
+      
+      QPushButton *btnRefreshAna = new QPushButton("Refresh Data");
+      btnRefreshAna->setObjectName("analyticsRefreshBtn");
+      btnRefreshAna->setCursor(Qt::PointingHandCursor);
+      btnRefreshAna->setFixedWidth(140);
+      btnRefreshAna->setStyleSheet(getButtonStyle());
+      
+      headerLayout->addWidget(anaTitle);
+      headerLayout->addStretch();
+      headerLayout->addWidget(btnRefreshAna);
+      cLayout->addWidget(analyticsHeader);
+
       GenericBarChart *chart = new GenericBarChart("Orders per Month");
       
-      QSqlQuery chartQuery;
-      // Fetch count of orders per month, sorted chronologically
-      chartQuery.prepare("SELECT TO_CHAR(DATE_COMMANDE, 'Mon YYYY'), COUNT(*) "
-                         "FROM COMMANDE "
-                         "GROUP BY TO_CHAR(DATE_COMMANDE, 'Mon YYYY'), TRUNC(DATE_COMMANDE, 'MM') "
-                         "ORDER BY TRUNC(DATE_COMMANDE, 'MM') ASC");
-      
-      QColor colors[] = { QColor(52, 152, 219), QColor(61, 220, 132), QColor(155, 89, 182), QColor(241, 196, 15), QColor(230, 126, 34), QColor(26, 188, 156) };
-      int colorIdx = 0;
-      
-      if (chartQuery.exec()) {
-          bool hasData = false;
-          while (chartQuery.next()) {
-              hasData = true;
-              QString monthStr = chartQuery.value(0).toString();
-              int count = chartQuery.value(1).toInt();
-              chart->addBar(monthStr, count, colors[colorIdx % 6]);
-              colorIdx++;
+      auto updateAnalytics = [chart]() {
+          chart->clearBars();
+          QSqlQuery chartQuery;
+          // Fetch count of orders per month, sorted chronologically
+          chartQuery.prepare("SELECT TO_CHAR(DATE_COMMANDE, 'Mon YYYY'), COUNT(*) "
+                             "FROM COMMANDE "
+                             "GROUP BY TO_CHAR(DATE_COMMANDE, 'Mon YYYY'), TRUNC(DATE_COMMANDE, 'MM') "
+                             "ORDER BY TRUNC(DATE_COMMANDE, 'MM') ASC");
+          
+          QColor colors[] = { QColor(52, 152, 219), QColor(61, 220, 132), QColor(155, 89, 182), QColor(241, 196, 15), QColor(230, 126, 34), QColor(26, 188, 156) };
+          int colorIdx = 0;
+          
+          if (chartQuery.exec()) {
+              bool hasData = false;
+              while (chartQuery.next()) {
+                  hasData = true;
+                  QString monthStr = chartQuery.value(0).toString();
+                  int count = chartQuery.value(1).toInt();
+                  chart->addBar(monthStr, count, colors[colorIdx % 6]);
+                  colorIdx++;
+              }
+              if (!hasData) {
+                  chart->addBar("No Data Available", 0, QColor(189, 195, 199));
+              }
+          } else {
+              chart->addBar("Database Error", 0, QColor(231, 76, 60));
           }
-          if (!hasData) {
-              chart->addBar("No Data Available", 0, QColor(189, 195, 199));
-          }
-      } else {
-          chart->addBar("Database Error", 0, QColor(231, 76, 60));
-          qDebug() << "Analytics Query Error:" << chartQuery.lastError().text();
-      }
+      };
+
+      QObject::connect(btnRefreshAna, &QPushButton::clicked, updateAnalytics);
+
+      updateAnalytics();
 
       QWidget *chartContainer = new QWidget();
       chartContainer->setStyleSheet(getCardStyle());
