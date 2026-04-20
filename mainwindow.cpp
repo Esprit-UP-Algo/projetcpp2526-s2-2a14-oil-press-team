@@ -5820,21 +5820,39 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
   // --- Initialize Serial Port for Arduino ---
   serial = new QSerialPort(this);
-  // Auto-detect Arduino or use fallback logic
+  
   bool arduino_is_available = false;
   QString arduino_port_name;
-  for (const QSerialPortInfo &serialPortInfo : QSerialPortInfo::availablePorts()) {
-      if (serialPortInfo.description().contains("Arduino") || serialPortInfo.manufacturer().contains("Arduino") || serialPortInfo.manufacturer().contains("CH340") || serialPortInfo.manufacturer().contains("FTDI")) {
+  
+  // Phase 1: Try to specifically detect Arduino chipsets
+  for (const QSerialPortInfo &info : QSerialPortInfo::availablePorts()) {
+      QString desc = info.description().toLower();
+      QString manu = info.manufacturer().toLower();
+      if (desc.contains("arduino") || manu.contains("arduino") || 
+          manu.contains("ch340") || manu.contains("ftdi")) {
           arduino_is_available = true;
-          arduino_port_name = serialPortInfo.portName();
+          arduino_port_name = info.portName();
           break;
+      }
+  }
+
+  // Phase 2: If not explicitly found, just grab any available connected COM port
+  if (!arduino_is_available) {
+      for (const QSerialPortInfo &info : QSerialPortInfo::availablePorts()) {
+          // Grab the last available port (USB serials are usually highest COM number)
+          // We don't check for busy state because Qt 6 removed the isBusy() function
+          if (!info.isNull()) {
+              arduino_is_available = true;
+              arduino_port_name = info.portName(); 
+          }
       }
   }
 
   if (arduino_is_available) {
       serial->setPortName(arduino_port_name);
+      qDebug() << "[SERIAL] Automatically selecting port:" << arduino_port_name;
   } else {
-      serial->setPortName("COM3"); // Fallback port (Update if required)
+      qDebug() << "[SERIAL] CRITICAL: No COM ports found connected to the PC.";
   }
 
   serial->setBaudRate(QSerialPort::Baud115200);
