@@ -5818,6 +5818,38 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   trayIcon->setToolTip("Oil Press Manager Alerts");
   trayIcon->show();
 
+  // --- Initialize Serial Port for Arduino ---
+  serial = new QSerialPort(this);
+  // Auto-detect Arduino or use fallback logic
+  bool arduino_is_available = false;
+  QString arduino_port_name;
+  for (const QSerialPortInfo &serialPortInfo : QSerialPortInfo::availablePorts()) {
+      if (serialPortInfo.description().contains("Arduino") || serialPortInfo.manufacturer().contains("Arduino") || serialPortInfo.manufacturer().contains("CH340") || serialPortInfo.manufacturer().contains("FTDI")) {
+          arduino_is_available = true;
+          arduino_port_name = serialPortInfo.portName();
+          break;
+      }
+  }
+
+  if (arduino_is_available) {
+      serial->setPortName(arduino_port_name);
+  } else {
+      serial->setPortName("COM3"); // Fallback port (Update if required)
+  }
+
+  serial->setBaudRate(QSerialPort::Baud115200);
+  serial->setDataBits(QSerialPort::Data8);
+  serial->setParity(QSerialPort::NoParity);
+  serial->setStopBits(QSerialPort::OneStop);
+  serial->setFlowControl(QSerialPort::NoFlowControl);
+  
+  if (serial->open(QIODevice::ReadWrite)) {
+      qDebug() << "Serial Port Opened Successfully on" << serial->portName();
+      connect(serial, &QSerialPort::readyRead, this, &MainWindow::handleSerialDataReady);
+  } else {
+      qDebug() << "Failed to open Serial Port.";
+  }
+
   // --- Main Application UI ---
   QWidget *mainAppWidget = new QWidget(this);
   setCentralWidget(mainAppWidget);
@@ -6132,4 +6164,31 @@ void MainWindow::applyRole(int roleIndex) {
           "font-weight: 700; }");
     }
   }
+}
+
+void MainWindow::handleSerialDataReady()
+{
+    if (serial->canReadLine()) {
+        QByteArray incomingData = serial->readLine().trimmed();
+        QString uid = QString::fromUtf8(incomingData);
+        
+        qDebug() << "[SERIAL TX/RX] Received UID from Arduino:" << uid;
+
+        // Find personnel's name using EnterCode
+        QSqlQuery query;
+        // Looking up EnterCode without quotes so Oracle can resolve it case-insensitively
+        query.prepare("SELECT NOM_PERSONNEL FROM PERSONNEL WHERE ENTERCODE = :uid");
+        query.bindValue(":uid", uid);
+
+        if (query.exec() && query.next()) {
+            QString name = query.value(0).toString();
+            qDebug() << "[SERIAL TX/RX] Match found! Sending back Name:" << name;
+            // Send back to arduino
+            serial->write(name.toUtf8() + "\n");
+        } else {
+            // Not found
+            qDebug() << "[SERIAL TX/RX] Match NOT found! Sending 'NOT_FOUND'.";
+            serial->write("NOT_FOUND\n");
+        }
+    }
 }

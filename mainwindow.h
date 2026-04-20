@@ -8,6 +8,9 @@
 #include <QList>
 
 #include <QSystemTrayIcon>
+#include <QSerialPort>
+#include <QSerialPortInfo>
+#include <QDebug>
 
 class MainWindow : public QMainWindow
 {
@@ -26,6 +29,9 @@ protected:
 signals:
     void logoutRequested();
 
+private slots:
+    void handleSerialDataReady();
+
 private:
     QStackedWidget *stackedWidget;
     QPoint m_dragPosition;
@@ -33,6 +39,7 @@ private:
     bool m_isMoving = false;
     int m_edgeMargin = 8;
     QSystemTrayIcon *trayIcon;
+    QSerialPort *serial;
     
     QWidget* createTitleBar();
     Qt::Edges getEdge(const QPoint &pos);
