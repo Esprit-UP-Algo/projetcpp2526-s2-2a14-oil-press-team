@@ -26,7 +26,8 @@ SOURCES += \
     smtp.cpp \
     marketapi.cpp \
     consultantagent.cpp \
-    dealgenerator.cpp
+    dealgenerator.cpp \
+    workforceplanner.cpp
 
 HEADERS += \
     article.h \
@@ -46,7 +47,8 @@ HEADERS += \
     smtp.h \
     marketapi.h \
     consultantagent.h \
-    dealgenerator.h
+    dealgenerator.h \
+    workforceplanner.h
 
 FORMS += \
     mainwindow.ui

@@ -10,7 +10,7 @@ class Personnel {
 public:
     // Constructors
     Personnel();
-    Personnel(int cin, QString nom, double salaire, QString adresse, QString tel, int exp, QString grade, QString role);
+    Personnel(int cin, QString nom, double salaire, QString adresse, QString tel, int exp, QString grade, QString role, QString email, QString status);
 
     // Getters
     int getCin() const;
@@ -21,6 +21,8 @@ public:
     int getExperience() const;
     QString getGrade() const;
     QString getRole() const;
+    QString getEmail() const;
+    QString getStatus() const;
 
     // Setters
     void setCin(int cin);
@@ -31,6 +33,8 @@ public:
     void setExperience(int exp);
     void setGrade(const QString &grade);
     void setRole(const QString &role);
+    void setEmail(const QString &email);
+    void setStatus(const QString &status);
 
     // CRUD Operations
     bool ajouter();
@@ -50,6 +54,8 @@ private:
     int experience;         // Database: EXPERIENCE
     QString grade;          // Database: GRADE
     QString role;           // Database: ROLE
+    QString email;          // Database: EMAIL
+    QString status;         // Database: STATUS
     QString lastError;
 };
 
