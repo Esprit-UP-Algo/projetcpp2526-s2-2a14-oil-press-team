@@ -1,0 +1,7 @@
+{
+  "api_keys": {
+    "brevo": "YOUR_BREVO_API_KEY_HERE",
+    "tunisie_sms": "YOUR_TUNISIE_SMS_TOKEN_HERE",
+    "gemini": "YOUR_GEMINI_API_KEY_HERE"
+  }
+}

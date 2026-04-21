@@ -6,9 +6,8 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 
-// Uses TextBelt free SMS API (https://textbelt.com)
-// Free tier: 1 SMS/day with key "textbelt"
-// For more: buy credits at textbelt.com (very cheap)
+// Integrated with Tunisie SMS REST JSON API (https://www.tunisiesms.tn)
+// Required parameters: api_key, sender, message, recipient
 class SmsAPI : public QObject
 {
     Q_OBJECT

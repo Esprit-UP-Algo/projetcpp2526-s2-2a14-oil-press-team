@@ -1,0 +1,18 @@
+# Qt/C++ Build artifacts
+debug/
+release/
+*.o
+*.obj
+Makefile
+*.Debug
+*.Release
+*.user
+
+# Configuration (Sensitive)
+config.json
+*.env
+
+# Others
+aqtinstall.log
+machine_lines*.txt
+*.pdf
