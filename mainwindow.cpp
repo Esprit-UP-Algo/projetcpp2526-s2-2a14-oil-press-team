@@ -4480,36 +4480,94 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
 
           QString strStream;
           QTextStream out(&strStream);
-          out << "<html><head><meta charset='utf-8'></head>"
-              << "<body style='font-family:Arial,sans-serif;'>"
-              << "<h1 style='text-align:center;color:#2c3e50;'>Rapport Maintenance - Machines</h1>"
-              << "<p style='text-align:center;color:#7f8c8d;'>Genere le: "
-              << QDateTime::currentDateTime().toString("dd/MM/yyyy hh:mm")
-              << "</p>"
-              << "<table border='1' cellspacing='0' cellpadding='8' width='100%' "
-              << "style='border-collapse:collapse;'><thead><tr style='background:#f0f0f0;'>";
+          out << "<html>"
+              << "<head>"
+              << "<style>"
+              << "  body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; color: #2c3e50; }"
+              << "  .header { background: #1D9E75; color: white; padding: 30px 20px; text-align: center; }"
+              << "  .header h1 { margin: 0; font-size: 26px; }"
+              << "  .container { padding: 20px; }"
+              << "  .section-title { background: #f8f9fa; color: #2c3e50; padding: 10px 15px; margin-top: 30px; border-left: 5px solid #1D9E75; font-weight: bold; font-size: 18px; }"
+              << "  .section-marche { border-left-color: #27ae60; color: #27ae60; }"
+              << "  .section-panne { border-left-color: #e74c3c; color: #e74c3c; }"
+              << "  .section-maintenance { border-left-color: #f39c12; color: #f39c12; }"
+              << "  table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; }"
+              << "  th { background-color: #f1f2f6; color: #333; font-weight: bold; text-align: center; padding: 12px; border: 1px solid #dee2e6; font-size: 11px; text-transform: uppercase; }"
+              << "  td { padding: 10px; border: 1px solid #eee; text-align: center; font-size: 12px; }"
+              << "  .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #95a5a6; border-top: 1px solid #eee; padding-top: 10px; }"
+              << "</style>"
+              << "</head>"
+              << "<body>"
+              << "  <div class='header'>"
+              << "    <h1>Rapport Sectorisé des Actifs</h1>"
+              << "    <p>Généré le " << QDateTime::currentDateTime().toString("dd/MM/yyyy à HH:mm") << "</p>"
+              << "  </div>"
+              << "  <div class='container'>";
 
-          for (int c = 0; c < columnCount; ++c)
-              if (!table->isColumnHidden(c) && table->horizontalHeaderItem(c))
-                  out << "<th style='border:1px solid #ccc;'>" << table->horizontalHeaderItem(c)->text() << "</th>";
-          out << "</tr></thead><tbody>";
-
-          for (int r = 0; r < rowCount; ++r) {
-              if (table->isRowHidden(r)) continue;
-              out << "<tr>";
+          auto generateSection = [&](QString title, QString cssClass, QStringList targetStatuses) {
+              bool hasData = false;
+              QString sectionHtml = QString("<div class='section-title %1'>%2</div>").arg(cssClass, title);
+              sectionHtml += "<table border='1' style='width:100%; border-collapse:collapse; margin-bottom:20px;'><thead><tr style='background-color:#f0f0f0;'>";
+              
+              // Headers
               for (int c = 0; c < columnCount; ++c) {
-                  if (table->isColumnHidden(c)) continue;
-                  QString cellData;
-                  if (table->item(r, c)) {
-                      cellData = table->item(r, c)->text();
-                      if (cellData.isEmpty())
-                          cellData = table->item(r, c)->data(Qt::DisplayRole).toString();
+                  if (!table->isColumnHidden(c)) {
+                      QString headerText = table->model()->headerData(c, Qt::Horizontal).toString();
+                      if (headerText.isEmpty() && table->horizontalHeaderItem(c)) headerText = table->horizontalHeaderItem(c)->text();
+                      sectionHtml += QString("<th style='padding:8px; border:1px solid #ccc;'>%1</th>").arg(headerText.isEmpty() ? QString("Col %1").arg(c) : headerText);
                   }
-                  out << "<td style='border:1px solid #ccc;text-align:center;'>" << (cellData.isEmpty() ? "&nbsp;" : cellData.toHtmlEscaped()) << "</td>";
               }
-              out << "</tr>";
-          }
-          out << "</tbody></table></body></html>";
+              sectionHtml += "</tr></thead><tbody>";
+
+              for (int r = 0; r < rowCount; ++r) {
+                  if (table->isRowHidden(r)) continue;
+                  
+                  // Status check robust
+                  QString status = "";
+                  if (table->item(r, 3)) status = table->item(r, 3)->text().trimmed();
+                  if (status.isEmpty()) status = table->model()->data(table->model()->index(r, 3)).toString().trimmed();
+                  
+                  bool match = false;
+                  for(const QString& s : targetStatuses) if(status.toLower() == s.toLower()) match = true;
+                  
+                  if (match) {
+                      hasData = true;
+                      sectionHtml += "<tr>";
+                      for (int c = 0; c < columnCount; ++c) {
+                          if (table->isColumnHidden(c)) continue;
+                          
+                          QString data = "";
+                          // Essayer 3 méthodes pour avoir la donnée
+                          if (table->item(r, c)) data = table->item(r, c)->text();
+                          if (data.isEmpty()) data = table->model()->data(table->model()->index(r, c)).toString();
+                          if (data.isEmpty() && table->item(r, c)) data = table->item(r, c)->data(Qt::DisplayRole).toString();
+                          
+                          qDebug() << "[PDF DEBUG] Row" << r << "Col" << c << "Data:" << data;
+                          sectionHtml += QString("<td style='padding:8px; border:1px solid #ccc; text-align:center;'>%1</td>").arg(data.isEmpty() ? "---" : data.toHtmlEscaped());
+                      }
+                      sectionHtml += "</tr>";
+                  }
+              }
+              sectionHtml += "</tbody></table>";
+              
+              if (hasData) out << sectionHtml;
+              else out << QString("<div class='section-title %1'>%2 (Aucune machine)</div>").arg(cssClass, title);
+          };
+
+          // 1. Machines en Marche
+          generateSection("MACHINES EN MARCHE", "section-marche", {"En marche", "Fonctionnel"});
+          
+          // 2. Machines en Panne ou Danger
+          generateSection("MACHINES EN PANNE / DANGER", "section-panne", {"En panne", "En danger", "Critique"});
+          
+          // 3. Machines en Maintenance
+          generateSection("MACHINES EN MAINTENANCE", "section-maintenance", {"En maintenance", "Réparation"});
+
+          out << "    <div class='footer'>"
+              << "      © 2026 Oil Press Manager - Excellence Opérationnelle"
+              << "    </div>"
+              << "  </div>"
+              << "</body></html>";
 
           // Render to PDF
           QPrinter printer(QPrinter::HighResolution);
@@ -4517,14 +4575,12 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           printer.setOutputFileName(fileName);
           printer.setPageSize(QPageSize(QPageSize::A4));
           printer.setPageOrientation(QPageLayout::Landscape);
-          printer.setPageMargins(QMarginsF(15, 15, 15, 15), QPageLayout::Millimeter);
+          printer.setPageMargins(QMarginsF(10, 10, 10, 10), QPageLayout::Millimeter);
 
           QTextDocument document;
-          document.setPageSize(printer.pageRect(QPrinter::Point).size());
           document.setHtml(strStream);
           document.print(&printer);
 
-          // Verify file was created
           if (QFileInfo::exists(fileName)) {
               QMessageBox::information(table->window(), "Succes",
                   "Le PDF a ete genere avec succes !\nEmplacement: " + fileName);
@@ -5942,6 +5998,34 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   trayIcon->setToolTip("Oil Press Manager Alerts");
   trayIcon->show();
 
+  m_lastEmailTime = QDateTime(); // Initialise à vide
+
+  // --- Initialize Serial Port for Arduino ---
+  serial = new QSerialPort(this);
+  
+  bool arduino_is_available = true;
+  QString arduino_port_name = "COM9"; // FORCÉ SUR COM9 POUR LE TEST DU GAZ
+
+  if (arduino_is_available) {
+      serial->setPortName(arduino_port_name);
+      qDebug() << "[SERIAL] Automatically selecting port:" << arduino_port_name;
+  } else {
+      qDebug() << "[SERIAL] CRITICAL: No COM ports found connected to the PC.";
+  }
+
+  serial->setBaudRate(QSerialPort::Baud115200);
+  serial->setDataBits(QSerialPort::Data8);
+  serial->setParity(QSerialPort::NoParity);
+  serial->setStopBits(QSerialPort::OneStop);
+  serial->setFlowControl(QSerialPort::NoFlowControl);
+  
+  if (serial->open(QIODevice::ReadWrite)) {
+      qDebug() << "Serial Port Opened Successfully on" << serial->portName();
+      connect(serial, &QSerialPort::readyRead, this, &MainWindow::handleSerialDataReady);
+  } else {
+      qDebug() << "Failed to open Serial Port.";
+  }
+
   // --- Main Application UI ---
   QWidget *mainAppWidget = new QWidget(this);
   setCentralWidget(mainAppWidget);
@@ -6258,11 +6342,87 @@ void MainWindow::applyRole(int roleIndex) {
   }
 }
 
-void MainWindow::handleSerialDataReady() {
-    // This is a stub implementation to satisfy the linker.
-    // Add your serial data processing logic here.
-    if (serial && serial->isOpen()) {
-        QByteArray data = serial->readAll();
-        qDebug() << "Serial Data Received:" << data;
+void MainWindow::handleSerialDataReady()
+{
+    if (serial->canReadLine()) {
+        QByteArray incomingData = serial->readLine().trimmed();
+        QString incomingText = QString::fromUtf8(incomingData);
+        
+        if (incomingText.startsWith("ALERT_GAS:")) {
+            QString machineIdStr = incomingText.mid(10);
+            int machineId = machineIdStr.toInt();
+            qDebug() << "[SERIAL TX/RX] Gas Alert for Machine ID:" << machineId;
+
+            // 1. Update MACHINE state
+            QSqlQuery updateQuery;
+            updateQuery.prepare("UPDATE MACHINE SET ETAT_MACHINE = 'En danger' WHERE ID_MACHINE = :id");
+            updateQuery.bindValue(":id", machineId);
+            if (!updateQuery.exec()) {
+                qDebug() << "Failed to update machine state:" << updateQuery.lastError().text();
+            }
+
+            // 2. Insert ALERT record using sequence
+            QSqlQuery insertQuery;
+            insertQuery.prepare("INSERT INTO ALERT (ALERT_ID, ID_MACHINE, ALERT_DATETIME) VALUES (ALERT_SEQ.NEXTVAL, :id, CURRENT_TIMESTAMP)");
+            insertQuery.bindValue(":id", machineId);
+            if (!insertQuery.exec()) {
+                qDebug() << "Failed to insert alert:" << insertQuery.lastError().text();
+            }
+
+            // 3. Fetch Admin Email and Send Email
+            QSqlQuery emailQuery("SELECT EMAIL FROM PERSONNEL WHERE LOWER(ROLE) LIKE '%admin%' AND EMAIL IS NOT NULL AND ROWNUM = 1");
+            
+            // Cooldown de 2 minutes pour éviter les spams
+            bool canSendEmail = !m_lastEmailTime.isValid() || m_lastEmailTime.secsTo(QDateTime::currentDateTime()) > 120;
+
+            if (emailQuery.next() && canSendEmail) {
+                QString adminEmail = emailQuery.value(0).toString();
+                EmailAPI* emailApi = new EmailAPI(this);
+                emailApi->setCredentials(ConfigManager::getInstance().getBrevoKey());
+                
+                QString subject = "URGENT: Gas Detected on Machine " + QString::number(machineId);
+                QString body = "A gas leak has been detected on Machine ID " + QString::number(machineId) + ".\n\n"
+                               "The machine status has been automatically set to 'En danger'.\n"
+                               "Please take immediate action and dispatch the maintenance team.";
+                               
+                // Nettoyage de l'objet après envoi
+                connect(emailApi, &EmailAPI::finished, emailApi, &QObject::deleteLater);
+
+                emailApi->sendEmail(adminEmail, subject, body);
+                m_lastEmailTime = QDateTime::currentDateTime(); // Mise à jour du timer
+                qDebug() << "[EMAIL] Alerte envoyée à :" << adminEmail;
+            } else if (!canSendEmail) {
+                qDebug() << "[EMAIL] Cooldown actif, email ignoré pour éviter le spam.";
+            } else {
+                QMessageBox::warning(this, "Admin introuvable", "Impossible d'envoyer l'email : Aucun 'Admin' trouvé dans la table PERSONNEL !");
+            }
+
+            // 4. Show UI Warning
+            QMessageBox::critical(this, "Gas Alert!", "CRITICAL: Gas leak detected on Machine " + QString::number(machineId) + "!");
+            
+        } else {
+            // Existing logic for RFID/EnterCode
+            QString uid = incomingText;
+            qDebug() << "[SERIAL TX/RX] Received UID from Arduino:" << uid;
+
+            // Find personnel's name using EnterCode
+            QSqlQuery query;
+            // Looking up EnterCode without quotes so Oracle can resolve it case-insensitively
+            query.prepare("SELECT NOM_PERSONNEL FROM PERSONNEL WHERE ENTERCODE = :uid");
+            query.bindValue(":uid", uid);
+
+            if (query.exec() && query.next()) {
+                QString name = query.value(0).toString();
+                qDebug() << "[SERIAL TX/RX] Match found! Sending back Name:" << name;
+                // Send back to arduino
+                serial->write(name.toUtf8() + "\n");
+            } else {
+                // Not found
+                qDebug() << "[SERIAL TX/RX] Match NOT found! Sending 'NOT_FOUND'.";
+                serial->write("NOT_FOUND\n");
+            }
+        }
+
     }
 }
+

@@ -1,4 +1,6 @@
 # Qt/C++ Build artifacts
+build/
+build-*/
 debug/
 release/
 *.o
@@ -7,6 +9,8 @@ Makefile
 *.Debug
 *.Release
 *.user
+.qtc_clangd/
+*.stash
 
 # Configuration (Sensitive)
 config.json
@@ -16,3 +20,4 @@ config.json
 aqtinstall.log
 machine_lines*.txt
 *.pdf
+.DS_Store

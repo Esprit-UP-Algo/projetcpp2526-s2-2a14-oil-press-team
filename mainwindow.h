@@ -11,6 +11,7 @@
 #include <QSerialPort>
 #include <QSerialPortInfo>
 #include <QDebug>
+#include <QDateTime>
 
 class MainWindow : public QMainWindow
 {
@@ -40,6 +41,7 @@ private:
     int m_edgeMargin = 8;
     QSystemTrayIcon *trayIcon;
     QSerialPort *serial;
+    QDateTime m_lastEmailTime;
     
     QWidget* createTitleBar();
     Qt::Edges getEdge(const QPoint &pos);
