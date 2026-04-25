@@ -17,14 +17,7 @@
 #include <QEasingCurve>
 #include <QMouseEvent>
 
-// Dark Theme Styles
-static QString getAuthDarkStyle() {
-    return "QWidget { font-family: 'Segoe UI', sans-serif; }"
-           "QLabel { color: #ecf0f1; font-weight: 500; background: transparent; }"
-           "QLineEdit { background-color: rgba(0, 0, 0, 0.1); border: none; border-bottom: 2px solid #7f8c8d; border-radius: 4px; color: #ecf0f1; padding: 8px; font-size: 14px; margin-bottom: 12px; }" 
-           "QLineEdit:focus { background-color: rgba(0, 0, 0, 0.2); border-bottom: 2px solid #2ecc71; }"
-           "QLineEdit::placeholder { color: #95a5a6; }";
-}
+// Removed unused getAuthDarkStyle()
 
 static QString getPrimaryBtnStyle() {
     return "QPushButton { background-color: #2ecc71; color: white; border-radius: 20px; padding: 12px; font-size: 14px; font-weight: bold; border: none; }"
@@ -62,14 +55,14 @@ AuthWindow::AuthWindow(QWidget *parent) : QMainWindow(parent) {
 
 void AuthWindow::mousePressEvent(QMouseEvent *event) {
     if (event->button() == Qt::LeftButton) {
-        m_dragPosition = event->globalPos() - frameGeometry().topLeft();
+        m_dragPosition = event->globalPosition().toPoint() - frameGeometry().topLeft();
         event->accept();
     }
 }
 
 void AuthWindow::mouseMoveEvent(QMouseEvent *event) {
     if (event->buttons() & Qt::LeftButton) {
-        move(event->globalPos() - m_dragPosition);
+        move(event->globalPosition().toPoint() - m_dragPosition);
         event->accept();
     }
 }

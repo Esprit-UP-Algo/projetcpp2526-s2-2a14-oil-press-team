@@ -5202,8 +5202,8 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       estLayout->addSpacing(10);
 
       QTableWidget *predTable = new QTableWidget();
-      predTable->setColumnCount(2);
-      predTable->setHorizontalHeaderLabels({"Forecast Date", "Predicted Price (DT / Liter)"});
+      predTable->setColumnCount(3);
+      predTable->setHorizontalHeaderLabels({"Forecast Date", "Weather Prediction", "Predicted Price (DT / Liter)"});
       predTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
       predTable->verticalHeader()->setVisible(false);
       predTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -5219,39 +5219,68 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
           statusLabel->setStyleSheet("color: #f39c12; font-weight: bold; font-size: 14px;");
           predTable->setRowCount(0);
 
-          QNetworkRequest request(QUrl("https://jsonplaceholder.typicode.com/todos/1"));
-          QNetworkReply *reply = manager->get(request);
+          QString apiKey = "AIzaSyCYkAxn6q9Cg3N0Ay3zuUtau0OX2RTZvfY"; // Reusing the valid key provided
+          QUrl url("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey);
+
+          QString prompt = "You are a highly advanced agricultural economic model forecasting olive oil prices. "
+                           "Generate a 6-month price forecast for Olive Oil in Tunisia (currency: DT/Liter) starting from next month. "
+                           "The current base price is 28.50 DT. Factor in typical seasonal weather trends and market variables. "
+                           "Return ONLY a valid JSON array of 6 objects. Do not include markdown formatting or explanation. "
+                           "Example format: [{\"date\":\"2024-06\", \"weather\":\"Hot and Dry\", \"price\":28.75}, ...]";
+
+          QNetworkRequest request(url);
+          request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+          QJsonObject part; part["text"] = prompt;
+          QJsonArray parts; parts.append(part);
+          QJsonObject contentObj; contentObj["parts"] = parts;
+          QJsonArray contents; contents.append(contentObj);
+          QJsonObject payload; payload["contents"] = contents;
+
+          QNetworkReply *reply = manager->post(request, QJsonDocument(payload).toJson());
 
           QObject::connect(reply, &QNetworkReply::finished, [reply, statusLabel, predTable]() {
               if (reply->error() == QNetworkReply::NoError) {
-                  QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
-                  if (!doc.isNull()) {
-                      statusLabel->setText("Status: Prediction Complete (API Success)");
-                      statusLabel->setStyleSheet("color: #27ae60; font-weight: bold; font-size: 14px;");
+                  QByteArray response = reply->readAll();
+                  QJsonDocument doc = QJsonDocument::fromJson(response);
+                  QJsonArray candidates = doc.object()["candidates"].toArray();
+                  if (!candidates.isEmpty()) {
+                      QString rawText = candidates[0].toObject()["content"].toObject()["parts"].toArray()[0].toObject()["text"].toString();
+                      rawText = rawText.replace("```json", "").replace("```", "").trimmed(); // Clean markdown if present
+                      
+                      QJsonDocument forecastDoc = QJsonDocument::fromJson(rawText.toUtf8());
+                      if (forecastDoc.isArray()) {
+                          QJsonArray forecastArray = forecastDoc.array();
+                          predTable->setRowCount(forecastArray.size());
+                          statusLabel->setText("Status: Prediction Complete (AI Forecast)");
+                          statusLabel->setStyleSheet("color: #27ae60; font-weight: bold; font-size: 14px;");
 
-                      double basePrice = 28.50; // Converted from 8.50 Euro to DT
-                      predTable->setRowCount(6);
-                      QDate d = QDate::currentDate();
-                      for (int i = 0; i < 6; ++i) {
-                          d = d.addMonths(1);
-                          double factor = 1.0 + ((rand() % 200) - 50) / 1000.0;
-                          basePrice *= factor;
-                          predTable->setItem(i, 0, new QTableWidgetItem(d.toString("yyyy-MM (MMM)")));
-                          predTable->setItem(i, 1, new QTableWidgetItem(QString("%1 DT").arg(basePrice, 0, 'f', 2)));
+                          for (int i = 0; i < forecastArray.size(); ++i) {
+                              QJsonObject item = forecastArray[i].toObject();
+                              predTable->setItem(i, 0, new QTableWidgetItem(item["date"].toString()));
+                              predTable->setItem(i, 1, new QTableWidgetItem(item["weather"].toString()));
+                              predTable->setItem(i, 2, new QTableWidgetItem(QString("%1 DT").arg(item["price"].toDouble(), 0, 'f', 2)));
+                          }
+                      } else {
+                          statusLabel->setText("Status: Forecasting Error (Invalid Model Output)");
+                          statusLabel->setStyleSheet("color: #e74c3c; font-weight: bold; font-size: 14px;");
                       }
                   }
               } else {
                   statusLabel->setText("Status: API Error (" + reply->errorString() + ") - Using Fallback Simulation");
                   statusLabel->setStyleSheet("color: #e74c3c; font-weight: bold; font-size: 14px;");
 
-                  double basePrice = 26.80; // Converted from 8.00 Euro to DT
-                  predTable->setRowCount(4);
+                  // Fallback Simulation logic if the network fails
+                  double basePrice = 28.50;
+                  predTable->setRowCount(6);
                   QDate d = QDate::currentDate();
-                  for (int i = 0; i < 4; ++i) {
+                  for (int i = 0; i < 6; ++i) {
                       d = d.addMonths(1);
-                      basePrice += 0.85; // Roughly equivalent to 0.25 Euro increment
+                      double factor = 1.0 + ((rand() % 200) - 50) / 1000.0;
+                      basePrice *= factor;
                       predTable->setItem(i, 0, new QTableWidgetItem(d.toString("yyyy-MM")));
-                      predTable->setItem(i, 1, new QTableWidgetItem(QString("%1 DT (Fallback)").arg(basePrice, 0, 'f', 2)));
+                      predTable->setItem(i, 1, new QTableWidgetItem("Unknown Weather"));
+                      predTable->setItem(i, 2, new QTableWidgetItem(QString("%1 DT (Fallback)").arg(basePrice, 0, 'f', 2)));
                   }
               }
               reply->deleteLater();
@@ -5334,7 +5363,7 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       QNetworkAccessManager *netManager = new QNetworkAccessManager(aiContainer);
 
       auto askGemini = [=]() {
-          QString apiKey = ConfigManager::getInstance().getGeminiKey();
+          QString apiKey = "AIzaSyCYkAxn6q9Cg3N0Ay3zuUtau0OX2RTZvfY";
           QString query = userInput->text().trimmed();
           if (query.isEmpty()) return;
 
@@ -5357,7 +5386,7 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
 
           QString fullPrompt = "You are an expert olive oil press consultant. Act as an advisor.\n" + dbContext + "\nUser question: " + query;
 
-          QUrl url("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=" + apiKey);
+          QUrl url("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey);
           QNetworkRequest request(url);
           request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
@@ -5388,7 +5417,15 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
                       QJsonArray parts = content["parts"].toArray();
                       if (!parts.isEmpty()) {
                           QString botText = parts[0].toObject()["text"].toString();
-                          chatHistory->append("<b>AI Advisor:</b> " + botText.toHtmlEscaped().replace("\n", "<br/>").replace("\r", "") + "<br/>");
+                          QString formattedText = botText.toHtmlEscaped();
+                          
+                          // Convert Markdown-like syntax to HTML
+                          formattedText.replace(QRegularExpression("\\*\\*(.*?)\\*\\*"), "<b>\\1</b>"); // Bold
+                          formattedText.replace(QRegularExpression("\\*(?!\\s)(.*?)(?<!\\s)\\*"), "<i>\\1</i>"); // Italic
+                          formattedText.replace(QRegularExpression("(^|\n)[\\*\\-]\\s"), "\\1&bull; "); // Bullets
+                          formattedText.replace("\n", "<br/>").replace("\r", ""); // Newlines
+                          
+                          chatHistory->append("<b>AI Advisor:</b><br/>" + formattedText + "<br/>");
                       }
                   } else {
                       chatHistory->append("<span style='color: orange;'><b>AI Advisor:</b> Received empty response.</span><br/>");
