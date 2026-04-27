@@ -5515,11 +5515,8 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
 
       // Table
       personnelTable = new QTableWidget();
-      QStringList headers = {"CIN", "Name", "Salary", "Address", "Phone", "Exp", "Grade", "Role", "Actions"};
-      personnelTable->setColumnCount(headers.size());
-      personnelTable->setHorizontalHeaderLabels(headers);
-      personnelTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-      personnelTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+      personnelTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+      personnelTable->horizontalHeader()->setStretchLastSection(true);
       personnelTable->verticalHeader()->setVisible(false);
       personnelTable->verticalHeader()->setDefaultSectionSize(60);
       personnelTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -5544,10 +5541,21 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
           QSqlQueryModel *model = p.afficher();
           personnelTable->setRowCount(0);
           int rowCount = model->rowCount();
+          int colCount = model->columnCount();
+
+          personnelTable->setColumnCount(colCount + 1); // +1 for Actions
+          QStringList headers;
+          for (int j = 0; j < colCount; ++j) {
+              headers << model->headerData(j, Qt::Horizontal).toString();
+          }
+          headers << "Actions";
+          personnelTable->setHorizontalHeaderLabels(headers);
+          personnelTable->setColumnHidden(0, true); // Hide ID (CIN)
+
           personnelTable->setRowCount(rowCount);
 
           for (int i = 0; i < rowCount; ++i) {
-              for (int j = 0; j < 8; ++j) {
+              for (int j = 0; j < colCount; ++j) {
                   personnelTable->setItem(i, j, new QTableWidgetItem(model->data(model->index(i, j)).toString()));
               }
 
@@ -5678,7 +5686,7 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
                   dialog->exec();
               });
 
-              personnelTable->setCellWidget(i, 8, actionWidget);
+              personnelTable->setCellWidget(i, colCount, actionWidget);
           }
       };
 
@@ -6040,8 +6048,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   // --- Initialize Serial Port for Arduino ---
   serial = new QSerialPort(this);
   
-  bool arduino_is_available = true;
-  QString arduino_port_name = "COM9"; // FORCÉ SUR COM9 POUR LE TEST DU GAZ
+  bool arduino_is_available = false;
+  QString arduino_port_name = "";
+
+  for (const QSerialPortInfo &info : QSerialPortInfo::availablePorts()) {
+      if (!info.isNull() && !info.portName().isEmpty()) {
+          arduino_is_available = true;
+          arduino_port_name = info.portName();
+          // Prioritize USB-connected devices (e.g. Arduino)
+          if (info.hasVendorIdentifier() && info.hasProductIdentifier()) {
+              break;
+          }
+      }
+  }
 
   if (arduino_is_available) {
       serial->setPortName(arduino_port_name);
@@ -6442,17 +6461,48 @@ void MainWindow::handleSerialDataReady()
             QString uid = incomingText;
             qDebug() << "[SERIAL TX/RX] Received UID from Arduino:" << uid;
 
-            // Find personnel's name using EnterCode
+            // Find personnel's name and grade using RFID
             QSqlQuery query;
-            // Looking up EnterCode without quotes so Oracle can resolve it case-insensitively
-            query.prepare("SELECT NOM_PERSONNEL FROM PERSONNEL WHERE ENTERCODE = :uid");
+            // Looking up RFID without quotes so Oracle can resolve it case-insensitively
+            query.prepare("SELECT NOM_PERSONNEL, GRADE FROM PERSONNEL WHERE RFID = :uid");
             query.bindValue(":uid", uid);
 
             if (query.exec() && query.next()) {
                 QString name = query.value(0).toString();
-                qDebug() << "[SERIAL TX/RX] Match found! Sending back Name:" << name;
-                // Send back to arduino
-                serial->write(name.toUtf8() + "\n");
+                QString grade = query.value(1).toString();
+                
+                // Only allow non-Junior (e.g., Senior) to open the door
+                if (grade.compare("Junior", Qt::CaseInsensitive) == 0) {
+                    qDebug() << "[SERIAL TX/RX] Access Denied! Reason: Junior Grade.";
+                    serial->write("DENIED_JUNIOR\n");
+                } else {
+                    // Clock-in / Clock-out logic
+                    if (!activeShifts.contains(uid)) {
+                        // Clock IN
+                        activeShifts[uid] = QDateTime::currentDateTime();
+                        qDebug() << "[RFID CLOCK] Clock IN for" << name << "at" << activeShifts[uid];
+                    } else {
+                        // Clock OUT
+                        QDateTime inTime = activeShifts.take(uid); // Gets and removes the item
+                        QDateTime outTime = QDateTime::currentDateTime();
+                        double secondsWorked = inTime.secsTo(outTime);
+                        double hoursWorked = secondsWorked / 3600.0;
+                        qDebug() << "[RFID CLOCK] Clock OUT for" << name << "Worked:" << hoursWorked << "hours";
+
+                        // Update HOURS in DB
+                        QSqlQuery updateQuery;
+                        updateQuery.prepare("UPDATE PERSONNEL SET HOURS = NVL(HOURS, 0) + :workedHours WHERE RFID = :uid");
+                        updateQuery.bindValue(":workedHours", hoursWorked);
+                        updateQuery.bindValue(":uid", uid);
+                        if (!updateQuery.exec()) {
+                            qDebug() << "[RFID CLOCK] Failed to update HOURS:" << updateQuery.lastError().text();
+                        }
+                    }
+
+                    qDebug() << "[SERIAL TX/RX] Match found! Grade is" << grade << "Sending back Name:" << name;
+                    // Send back to arduino
+                    serial->write(name.toUtf8() + "\n");
+                }
             } else {
                 // Not found
                 qDebug() << "[SERIAL TX/RX] Match NOT found! Sending 'NOT_FOUND'.";

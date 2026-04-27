@@ -128,22 +128,21 @@ bool Personnel::modifier() {
 // CRUD: Afficher
 QSqlQueryModel* Personnel::afficher() {
     QSqlQueryModel* model = new QSqlQueryModel();
-    model->setQuery("SELECT ID_PERSONNEL, NOM_PERSONNEL, SALAIRE_BRUT, ADRESSE, TEL, EXPERIENCE, GRADE, ROLE, EMAIL, STATUS FROM PERSONNEL");
+    model->setQuery("SELECT * FROM PERSONNEL");
 
     if (model->lastError().isValid()) {
         qDebug() << "Afficher Personnel Error:" << model->lastError().text();
     }
 
-    model->setHeaderData(0, Qt::Horizontal, QObject::tr("CIN"));
-    model->setHeaderData(1, Qt::Horizontal, QObject::tr("Name"));
-    model->setHeaderData(2, Qt::Horizontal, QObject::tr("Salary"));
-    model->setHeaderData(3, Qt::Horizontal, QObject::tr("Address"));
-    model->setHeaderData(4, Qt::Horizontal, QObject::tr("Phone"));
-    model->setHeaderData(5, Qt::Horizontal, QObject::tr("Exp"));
-    model->setHeaderData(6, Qt::Horizontal, QObject::tr("Grade"));
-    model->setHeaderData(7, Qt::Horizontal, QObject::tr("Role"));
-    model->setHeaderData(8, Qt::Horizontal, QObject::tr("Email"));
-    model->setHeaderData(9, Qt::Horizontal, QObject::tr("Status"));
+    // Capitalize database column names to use as headers
+    for (int i = 0; i < model->columnCount(); ++i) {
+        QString colName = model->headerData(i, Qt::Horizontal).toString();
+        colName = colName.toLower();
+        if (!colName.isEmpty()) {
+            colName[0] = colName[0].toUpper();
+            model->setHeaderData(i, Qt::Horizontal, colName);
+        }
+    }
 
     return model;
 }

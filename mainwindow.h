@@ -12,7 +12,7 @@
 #include <QSerialPortInfo>
 #include <QDebug>
 #include <QDateTime>
-
+#include <QMap>
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -42,6 +42,7 @@ private:
     QSystemTrayIcon *trayIcon;
     QSerialPort *serial;
     QDateTime m_lastEmailTime;
+    QMap<QString, QDateTime> activeShifts;
     
     QWidget* createTitleBar();
     Qt::Edges getEdge(const QPoint &pos);
