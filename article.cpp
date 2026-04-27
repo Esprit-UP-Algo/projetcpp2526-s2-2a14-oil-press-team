@@ -11,16 +11,18 @@ Article::Article() {
   unite = "";
   prixUnitaire = 0;
   dateAchat = QDate::currentDate();
+  usageCount = 0;
 }
 
 // Parameterized constructor
-Article::Article(int id, QString nom, int quantite, QString unite, int prixUnitaire, QDate dateAchat) {
+Article::Article(int id, QString nom, int quantite, QString unite, int prixUnitaire, QDate dateAchat, int usageCount) {
   this->id = id;
   this->nom = nom;
   this->quantite = quantite;
   this->unite = unite;
   this->prixUnitaire = prixUnitaire;
   this->dateAchat = dateAchat;
+  this->usageCount = usageCount;
 }
 
 // --- Getters ---
@@ -30,6 +32,7 @@ int Article::getQuantite() const { return quantite; }
 QString Article::getUnite() const { return unite; }
 int Article::getPrixUnitaire() const { return prixUnitaire; }
 QDate Article::getDateAchat() const { return dateAchat; }
+int Article::getUsageCount() const { return usageCount; }
 
 // --- Setters ---
 void Article::setId(int id) { this->id = id; }
@@ -38,14 +41,15 @@ void Article::setQuantite(int quantite) { this->quantite = quantite; }
 void Article::setUnite(const QString &unite) { this->unite = unite; }
 void Article::setPrixUnitaire(int prix) { this->prixUnitaire = prix; }
 void Article::setDateAchat(const QDate &date) { this->dateAchat = date; }
+void Article::setUsageCount(int usageCount) { this->usageCount = usageCount; }
 
 // --- CRUD: Ajouter (Create) ---
 bool Article::ajouter() {
   QSqlQuery query;
   query.prepare(
-      "INSERT INTO ARTICLE (ID_ARTICLE, NOM_ARTICLE, QUANTITE, UNITE, PRIX_UNITAIRE, DATE_ACHAT) "
+      "INSERT INTO ARTICLE (ID_ARTICLE, NOM_ARTICLE, QUANTITE, UNITE, PRIX_UNITAIRE, DATE_ACHAT, USAGE_COUNT) "
       "VALUES ((SELECT NVL(MAX(ID_ARTICLE),0)+1 FROM ARTICLE), :nom, "
-      ":quantite, :unite, :prix, :date_achat)");
+      ":quantite, :unite, :prix, :date_achat, 0)");
   query.bindValue(":nom", nom);
   query.bindValue(":quantite", quantite);
   query.bindValue(":unite", unite);
@@ -78,13 +82,14 @@ bool Article::modifier() {
   QSqlQuery query;
   query.prepare(
       "UPDATE ARTICLE SET NOM_ARTICLE = :nom, "
-      "QUANTITE = :quantite, UNITE = :unite, PRIX_UNITAIRE = :prix, DATE_ACHAT = :date_achat WHERE ID_ARTICLE = :id");
+      "QUANTITE = :quantite, UNITE = :unite, PRIX_UNITAIRE = :prix, DATE_ACHAT = :date_achat, USAGE_COUNT = :usage WHERE ID_ARTICLE = :id");
   query.bindValue(":id", id);
   query.bindValue(":nom", nom);
   query.bindValue(":quantite", quantite);
   query.bindValue(":unite", unite);
   query.bindValue(":prix", prixUnitaire);
   query.bindValue(":date_achat", dateAchat);
+  query.bindValue(":usage", usageCount);
 
   if (!query.exec()) {
     qDebug() << "Modifier Error:" << query.lastError().text();

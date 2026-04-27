@@ -10,7 +10,7 @@ class Article {
 public:
   // Constructors
   Article();
-  Article(int id, QString nom, int quantite, QString unite, int prixUnitaire, QDate dateAchat);
+  Article(int id, QString nom, int quantite, QString unite, int prixUnitaire, QDate dateAchat, int usageCount = 0);
 
   // Getters
   int getId() const;
@@ -19,6 +19,7 @@ public:
   QString getUnite() const;
   int getPrixUnitaire() const;
   QDate getDateAchat() const;
+  int getUsageCount() const;
 
   // Setters
   void setId(int id);
@@ -27,6 +28,7 @@ public:
   void setUnite(const QString &unite);
   void setPrixUnitaire(int prix);
   void setDateAchat(const QDate &date);
+  void setUsageCount(int usageCount);
 
   // CRUD
   bool ajouter();
@@ -43,6 +45,7 @@ private:
   QString unite;
   int prixUnitaire;
   QDate dateAchat;
+  int usageCount;
   QString lastError;
 };
 

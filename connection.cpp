@@ -55,6 +55,15 @@ bool Connection::createconnect()
             addPrix.exec("ALTER TABLE PRODUIT ADD (PRIX_UNITAIRE NUMBER(10,2) DEFAULT 0)");
             qDebug() << "Migration: added PRIX_UNITAIRE column to PRODUIT";
         }
+
+        // --- Auto-migration: ensure USAGE_COUNT exists in ARTICLE ---
+        QSqlQuery checkUsage;
+        checkUsage.exec("SELECT COUNT(*) FROM USER_TAB_COLUMNS WHERE TABLE_NAME='ARTICLE' AND COLUMN_NAME='USAGE_COUNT'");
+        if (checkUsage.next() && checkUsage.value(0).toInt() == 0) {
+            QSqlQuery addUsage;
+            addUsage.exec("ALTER TABLE ARTICLE ADD (USAGE_COUNT NUMBER DEFAULT 0)");
+            qDebug() << "Migration: added USAGE_COUNT column to ARTICLE";
+        }
     } else {
         lastError = db.lastError().text();
     }

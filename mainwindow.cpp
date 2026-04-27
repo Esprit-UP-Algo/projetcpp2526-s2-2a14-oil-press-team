@@ -3550,7 +3550,7 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
                                  &QDialog::reject);
                 QObject::connect(
                     saveBtn, &QPushButton::clicked,
-                    [dialog, editNom, editQty, editUnt, editPrix, editDate, itemId,
+                    [dialog, editNom, editQty, editUnt, editPrix, editDate, itemId, qty,
                      stockTable, errNom, errQty, errUnt, errPrix, errDate]() {
                       errNom->hide();
                       errQty->hide();
@@ -3604,13 +3604,31 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
 
                       if (!isValid) return;
 
+                      // Increment usage if quantity decreased
+                      int oldQ = qty.toInt();
+                      int newQ = editQty->text().toInt();
+                      int currentUsage = 0;
+                      
+                      QSqlQuery usageQuery;
+                      usageQuery.prepare("SELECT USAGE_COUNT FROM ARTICLE WHERE ID_ARTICLE = :id");
+                      usageQuery.bindValue(":id", itemId);
+                      if (usageQuery.exec() && usageQuery.next()) {
+                          currentUsage = usageQuery.value(0).toInt();
+                      }
+
                       Article a;
                       a.setId(itemId);
                       a.setNom(editNom->text().trimmed());
-                      a.setQuantite(editQty->text().toInt());
+                      a.setQuantite(newQ);
                       a.setUnite(editUnt->text().trimmed());
                       a.setPrixUnitaire(editPrix->text().toInt());
                       a.setDateAchat(editDate->date());
+                      
+                      if (newQ < oldQ) {
+                          a.setUsageCount(currentUsage + (oldQ - newQ));
+                      } else {
+                          a.setUsageCount(currentUsage);
+                      }
 
                         if (a.modifier()) {
                           QMessageBox::information(nullptr, "Success",
@@ -3706,7 +3724,7 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
                  "<table border=1 cellspacing=0 cellpadding=10 width=\"100%\" style=\"border-collapse: collapse; font-family: Arial, sans-serif; margin-top: 20px;\">\n"
                  "<thead><tr bgcolor=#f8f9fa style=\"color: #333;\">"
                  "<th style=\"border: 1px solid #ddd;\">Item Name</th>"
-                 "<th style=\"border: 1px solid #ddd;\">Current Stock</th>"
+                 "<th style=\"border: 1px solid #ddd;\">Quantity to Buy</th>"
                  "<th style=\"border: 1px solid #ddd;\">Unit</th>"
                  "<th style=\"border: 1px solid #ddd;\">Unit Price</th>"
                  "</tr></thead>\n<tbody>\n";
@@ -3716,7 +3734,7 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
               count++;
               out << "<tr>"
                   << "<td style=\"border: 1px solid #ddd;\">" << query.value(0).toString() << "</td>"
-                  << "<td style=\"border: 1px solid #ddd; font-weight: bold; color: #d32f2f; text-align: center;\">" << query.value(1).toString() << "</td>"
+                  << "<td style=\"border: 1px solid #ddd; font-weight: bold; color: #d32f2f; text-align: center;\">" << (30 - query.value(1).toInt()) << "</td>"
                   << "<td style=\"border: 1px solid #ddd; text-align: center;\">" << query.value(2).toString() << "</td>"
                   << "<td style=\"border: 1px solid #ddd; text-align: right;\">" << query.value(3).toString() << " DT</td>"
                   << "</tr>\n";
@@ -3805,22 +3823,22 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
 
           QList<QColor> colors = {QColor(52, 152, 219), QColor(46, 204, 113), QColor(241, 196, 15), QColor(155, 89, 182), QColor(231, 76, 60)};
 
-          // 1. Stock Statistics Chart
-          GenericBarChart *chart = new GenericBarChart("Most Stocked Items (Top 5)");
-          QSqlQuery q("SELECT NOM_ARTICLE, QUANTITE FROM ARTICLE ORDER BY QUANTITE DESC");
-          int count = 0;
-          while (q.next() && count < 5) {
-              chart->addBar(q.value(0).toString(), q.value(1).toInt(), colors[count % colors.size()]);
-              count++;
+          // 2. Most Used Items Chart
+          GenericBarChart *usageChart = new GenericBarChart("Most Frequently Used Items (Top 5)");
+          QSqlQuery q2("SELECT NOM_ARTICLE, USAGE_COUNT FROM ARTICLE WHERE USAGE_COUNT > 0 ORDER BY USAGE_COUNT DESC");
+          int count2 = 0;
+          while (q2.next() && count2 < 5) {
+              usageChart->addBar(q2.value(0).toString(), q2.value(1).toDouble(), colors[(count2 + 2) % colors.size()]);
+              count2++;
           }
-          if (count == 0) chart->addBar("No Data Available", 0, QColor(149, 165, 166));
+          if (count2 == 0) usageChart->addBar("No Usage Data Yet", 0, QColor(189, 195, 199));
 
-          QWidget *chartCard = new QWidget();
-          chartCard->setStyleSheet(getCardStyle());
-          QVBoxLayout *v1 = new QVBoxLayout(chartCard);
-          v1->setContentsMargins(20, 20, 20, 20);
-          v1->addWidget(chart);
-          chartsLayout->addWidget(chartCard);
+          QWidget *usageCard = new QWidget();
+          usageCard->setStyleSheet(getCardStyle());
+          QVBoxLayout *v2 = new QVBoxLayout(usageCard);
+          v2->setContentsMargins(20, 20, 20, 20);
+          v2->addWidget(usageChart);
+          chartsLayout->addWidget(usageCard);
       };
 
       QObject::connect(btnRefreshStats, &QPushButton::clicked, refreshAnalytics);
