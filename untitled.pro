@@ -27,7 +27,9 @@ SOURCES += \
     marketapi.cpp \
     consultantagent.cpp \
     dealgenerator.cpp \
-    workforceplanner.cpp
+    workforceplanner.cpp \
+    anomalyapi.cpp \
+    ocrscannerapi.cpp
 
 HEADERS += \
     article.h \
@@ -48,7 +50,9 @@ HEADERS += \
     marketapi.h \
     consultantagent.h \
     dealgenerator.h \
-    workforceplanner.h
+    workforceplanner.h \
+    anomalyapi.h \
+    ocrscannerapi.h
 
 FORMS += \
     mainwindow.ui

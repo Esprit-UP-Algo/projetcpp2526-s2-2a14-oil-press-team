@@ -15,6 +15,8 @@
 #include "marketapi.h"
 #include "consultantagent.h"
 #include "dealgenerator.h"
+#include "anomalyapi.h"
+#include "ocrscannerapi.h"
 #include <functional>
 #include <QComboBox>
 #include <QScrollBar>
@@ -2016,10 +2018,21 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
       outerLayout->setSpacing(0);
 
       // Title
+      // Title with Scan Button
+      QHBoxLayout *titleRow = new QHBoxLayout();
       QLabel *titleLabel = new QLabel("New Transaction");
-      titleLabel->setStyleSheet(
-          "font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 18px;");
-      outerLayout->addWidget(titleLabel);
+      titleLabel->setStyleSheet("font-size: 22px; font-weight: 700; color: #1a1a1a;");
+      
+      QPushButton *btnScanInvoice = new QPushButton("Scan Invoice Image");
+      btnScanInvoice->setStyleSheet("QPushButton { background-color: #2C3E1F; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; padding: 10px 15px; } QPushButton:hover { background-color: #3DDC84; }");
+      btnScanInvoice->setCursor(Qt::PointingHandCursor);
+      btnScanInvoice->setFixedWidth(180);
+
+      titleRow->addWidget(titleLabel);
+      titleRow->addStretch();
+      titleRow->addWidget(btnScanInvoice);
+      outerLayout->addLayout(titleRow);
+      outerLayout->addSpacing(18);
 
       // Field style — explicitly covers QLineEdit, QDateEdit AND QComboBox
       QString fieldStyle =
@@ -2195,6 +2208,68 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
                   "Failed to add transaction.\n\nDB Error: " + t.getLastError());
             }
           });
+
+      // --- Connect Scan Invoice ---
+      QObject::connect(btnScanInvoice, &QPushButton::clicked, [=]() {
+          QString fileName = QFileDialog::getOpenFileName(formContainer->window(), "Select Invoice File", "", "Invoice Files (*.png *.jpg *.jpeg *.bmp *.pdf);;All Files (*.*)");
+          if (fileName.isEmpty()) return;
+
+          OCRScannerAPI *scanner = new OCRScannerAPI(formContainer);
+          
+          // Disable button during scan
+          btnScanInvoice->setEnabled(false);
+          btnScanInvoice->setText("Scanning...");
+
+          QObject::connect(scanner, &OCRScannerAPI::scanFinished, [=](bool success, double amount, const QString &dateStr, const QString &text) {
+              btnScanInvoice->setEnabled(true);
+              btnScanInvoice->setText("Scan Invoice Image");
+
+              if (!success) {
+                  QMessageBox::warning(formContainer->window(), "Scan Failed", "OCR Error: " + text);
+              } else {
+                  if (amount > 0) {
+                      inputMontant->setText(QString::number(amount, 'f', 2));
+                  }
+                  
+                  if (!dateStr.isEmpty()) {
+                      QString normalizedDate = dateStr;
+                      normalizedDate.replace(".", "-").replace("/", "-");
+                      
+                      QDate parsedDate = QDate::fromString(normalizedDate, "yyyy-MM-dd");
+                      if (!parsedDate.isValid()) parsedDate = QDate::fromString(normalizedDate, "dd-MM-yyyy");
+                      if (!parsedDate.isValid()) parsedDate = QDate::fromString(normalizedDate, "d-M-yyyy");
+                      if (!parsedDate.isValid()) parsedDate = QDate::fromString(normalizedDate, "yyyy-M-d");
+                      
+                      if (parsedDate.isValid()) {
+                          inputDate->setDate(parsedDate);
+                      }
+                  }
+                  
+                  if (amount > 0 || !dateStr.isEmpty()) {
+                      QMessageBox::information(formContainer->window(), "Scan Complete", "Invoice data extracted successfully.");
+                  } else {
+                      // Diagnostic view to help user understand what the OCR saw
+                      QDialog *diag = new QDialog(formContainer->window());
+                      diag->setWindowTitle("Scan Results - No Data Found");
+                      diag->setMinimumSize(400, 300);
+                      QVBoxLayout *v = new QVBoxLayout(diag);
+                      v->addWidget(new QLabel("The OCR engine read the text, but couldn't identify a Total or Date.\nRaw text detected:"));
+                      QTextEdit *te = new QTextEdit(text);
+                      te->setReadOnly(true);
+                      te->setStyleSheet("font-family: monospace; font-size: 11px; background: #f4f4f4;");
+                      v->addWidget(te);
+                      QPushButton *btnOk = new QPushButton("Close");
+                      btnOk->setStyleSheet(getButtonStyle());
+                      QObject::connect(btnOk, &QPushButton::clicked, diag, &QDialog::accept);
+                      v->addWidget(btnOk);
+                      diag->show(); // Show non-modally so they can compare with image
+                  }
+              }
+              scanner->deleteLater();
+          });
+
+          scanner->scanInvoice(fileName);
+      });
 
     } else if (name == "Transaction Hub") {
       // ========== AFFICHER (READ) + MODIFIER (UPDATE) + SUPPRIMER (DELETE) ==========
@@ -2742,57 +2817,87 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
         QDesktopServices::openUrl(QUrl::fromLocalFile(fileName));
       });
 
-      // Connect Scan Button
-      QObject::connect(btnScan, &QPushButton::clicked, [transTable, refreshTable]() {
+      // Connect Scan Button to External API
+      QObject::connect(btnScan, &QPushButton::clicked, [transTable, refreshTable, btnScan]() {
           refreshTable(); // Auto-refresh to include latest entries before scanning
-          int totalAnomalies = 0;
-          QString report = "<h3>Anomaly Detection Report</h3><hr>";
-          int highRisk = 0;
+          
+          btnScan->setText("SCANNING VIA API...");
+          btnScan->setEnabled(false);
+          btnScan->setStyleSheet("background-color: #f39c12; color: white; border-radius: 6px; font-weight: bold;");
 
+          QJsonArray transactionsToScan;
           for (int i = 0; i < transTable->rowCount(); ++i) {
-              QWidget *w = transTable->cellWidget(i, 7);
-              if (w) {
-                  QLabel *icon = w->findChild<QLabel*>();
-                  if (icon && (icon->text() == "⚠️" || icon->text() == "💡")) {
-                      totalAnomalies++;
-                      if (icon->text() == "⚠️") highRisk++;
-                      QString desc = transTable->item(i, 5)->text();
-                      report += QString("<p><b>Row #%1 (ID %2):</b> %3<br><small style='color:#e74c3c'>%4</small></p>")
-                                .arg(i+1)
-                                .arg(transTable->item(i, 0)->text())
-                                .arg(desc)
-                                .arg(icon->toolTip().replace("\n", "<br>"));
-                  }
-              }
+              QJsonObject tx;
+              tx["id"] = transTable->item(i, 0)->text().toInt();
+              tx["amount"] = transTable->item(i, 1)->text().toDouble();
+              tx["date"] = transTable->item(i, 2)->text();
+              tx["type"] = transTable->item(i, 3)->text();
+              tx["payment_mode"] = transTable->item(i, 4)->text();
+              tx["description"] = transTable->item(i, 5)->text();
+              transactionsToScan.append(tx);
           }
 
-          QDialog *dlg = new QDialog(transTable->window());
-          dlg->setWindowTitle("Advanced Anomaly Scan");
-          dlg->setMinimumSize(500, 450);
-          dlg->setStyleSheet("QDialog { background: white; border-radius: 12px; }");
-          QVBoxLayout *layout = new QVBoxLayout(dlg);
-          layout->setContentsMargins(25, 25, 25, 25);
+          AnomalyAPI *api = new AnomalyAPI(btnScan);
+          QObject::connect(api, &AnomalyAPI::scanFinished, [transTable, btnScan, api](const QJsonObject &report) {
+              btnScan->setText("ANOMALY SCAN");
+              btnScan->setEnabled(true);
+              btnScan->setStyleSheet("QPushButton { background-color: #2C3E50; color: #ffffff; border: none; border-radius: 6px; padding: 10px 20px; font-weight: 700; font-size: 13px; } QPushButton:hover { background-color: #34495e; }");
 
-          QLabel *title = new QLabel("Anomaly Radar Results");
-          title->setStyleSheet("font-size: 18px; font-weight: 800; color: #2c3e50;");
-          layout->addWidget(title);
+              int totalScanned = report["total_scanned"].toInt();
+              int totalAnomalies = report["anomalies_found"].toInt();
+              int highRisk = report["high_risk"].toInt();
+              QJsonArray results = report["results"].toArray();
 
-          QTextEdit *area = new QTextEdit();
-          area->setHtml(totalAnomalies > 0 ? report : "<p style='color:#27ae60; font-weight:bold; font-size:14px;'>Scan complete. No issues found!</p>");
-          area->setReadOnly(true);
-          area->setStyleSheet("background: #fdfdfd; border: 1px solid #eee; border-radius: 8px; padding: 15px;");
-          layout->addWidget(area);
+              QString htmlReport = "<h3>Cloud API Anomaly Detection Report</h3><hr>";
+              
+              if (totalAnomalies > 0) {
+                  for(const QJsonValue& val : results) {
+                      QJsonObject res = val.toObject();
+                      QString status = res["fraudlabspro_status"].toString();
+                      if (status == "REVIEW" || status == "REJECT" || status == "ERROR" || status == "NETWORK_ERROR") {
+                          QJsonObject tx = res["transaction"].toObject();
+                          QString riskLevel = (res["fraudlabspro_score"].toInt() > 70 || status == "REJECT") ? "<span style='color:#e74c3c;font-weight:bold;'>HIGH RISK</span>" : "<span style='color:#f39c12;font-weight:bold;'>POTENTIAL RISK</span>";
+                          htmlReport += QString("<p><b>Tx ID %1:</b> %2<br>%3<br><small style='color:#e74c3c'>Score: %4 - %5</small></p>")
+                                          .arg(tx["id"].toInt())
+                                          .arg(tx["description"].toString())
+                                          .arg(riskLevel)
+                                          .arg(res["fraudlabspro_score"].toInt())
+                                          .arg(res["fraudlabspro_message"].toString());
+                      }
+                  }
+              }
 
-          QLabel *summary = new QLabel(QString("Summary: %1 Issues found (%2 High Risk)").arg(totalAnomalies).arg(highRisk));
-          summary->setStyleSheet("font-weight: 800; color: " + QString(highRisk > 0 ? "#e74c3c" : "#2c3e50") + ";");
-          layout->addWidget(summary);
+              QDialog *dlg = new QDialog(transTable->window());
+              dlg->setWindowTitle("Advanced Anomaly Scan (FraudLabs Pro API)");
+              dlg->setMinimumSize(500, 450);
+              dlg->setStyleSheet("QDialog { background: white; border-radius: 12px; }");
+              QVBoxLayout *layout = new QVBoxLayout(dlg);
+              layout->setContentsMargins(25, 25, 25, 25);
 
-          QPushButton *close = new QPushButton("Close Dashboard");
-          close->setStyleSheet("background: #2c3e50; color: white; height: 35px; border-radius: 6px; font-weight: bold;");
-          QObject::connect(close, &QPushButton::clicked, dlg, &QDialog::accept);
-          layout->addWidget(close);
+              QLabel *title = new QLabel("Anomaly Radar Results");
+              title->setStyleSheet("font-size: 18px; font-weight: 800; color: #2c3e50;");
+              layout->addWidget(title);
 
-          dlg->exec();
+              QTextEdit *area = new QTextEdit();
+              area->setHtml(totalAnomalies > 0 ? htmlReport : "<p style='color:#27ae60; font-weight:bold; font-size:14px;'>Scan complete. No issues found by API!</p>");
+              area->setReadOnly(true);
+              area->setStyleSheet("background: #fdfdfd; border: 1px solid #eee; border-radius: 8px; padding: 15px;");
+              layout->addWidget(area);
+
+              QLabel *summary = new QLabel(QString("Summary: %1 Scanned | %2 Issues found (%3 High Risk)").arg(totalScanned).arg(totalAnomalies).arg(highRisk));
+              summary->setStyleSheet("font-weight: 800; color: " + QString(highRisk > 0 ? "#e74c3c" : "#2c3e50") + ";");
+              layout->addWidget(summary);
+
+              QPushButton *close = new QPushButton("Close Dashboard");
+              close->setStyleSheet("background: #2c3e50; color: white; height: 35px; border-radius: 6px; font-weight: bold;");
+              QObject::connect(close, &QPushButton::clicked, dlg, &QDialog::accept);
+              layout->addWidget(close);
+
+              api->deleteLater();
+              dlg->exec();
+          });
+
+          api->scanTransactions(transactionsToScan);
       });
 
       cLayout->addWidget(transContainer);
@@ -6087,7 +6192,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
       qDebug() << "[SERIAL] CRITICAL: No COM ports found connected to the PC.";
   }
 
-  serial->setBaudRate(QSerialPort::Baud115200);
+  serial->setBaudRate(QSerialPort::Baud9600);
   serial->setDataBits(QSerialPort::Data8);
   serial->setParity(QSerialPort::NoParity);
   serial->setStopBits(QSerialPort::OneStop);
@@ -6475,56 +6580,85 @@ void MainWindow::handleSerialDataReady()
             QMessageBox::critical(this, "Gas Alert!", "CRITICAL: Gas leak detected on Machine " + QString::number(machineId) + "!");
             
         } else {
-            // Existing logic for RFID/EnterCode
-            QString uid = incomingText;
-            qDebug() << "[SERIAL TX/RX] Received UID from Arduino:" << uid;
+            // New: Machine Breakdown Reporting Logic
+            bool isNumericId;
+            int mId = incomingText.toInt(&isNumericId);
+            bool breakdownProcessed = false;
 
-            // Find personnel's name and grade using RFID
-            QSqlQuery query;
-            // Looking up RFID without quotes so Oracle can resolve it case-insensitively
-            query.prepare("SELECT NOM_PERSONNEL, GRADE FROM PERSONNEL WHERE RFID = :uid");
-            query.bindValue(":uid", uid);
+            if (isNumericId) {
+                QSqlQuery mQuery;
+                mQuery.prepare("SELECT LOCALISATION FROM MACHINE WHERE ID_MACHINE = :id");
+                mQuery.bindValue(":id", mId);
 
-            if (query.exec() && query.next()) {
-                QString name = query.value(0).toString();
-                QString grade = query.value(1).toString();
-                
-                // Only allow non-Junior (e.g., Senior) to open the door
-                if (grade.compare("Junior", Qt::CaseInsensitive) == 0) {
-                    qDebug() << "[SERIAL TX/RX] Access Denied! Reason: Junior Grade.";
-                    serial->write("DENIED_JUNIOR\n");
-                } else {
-                    // Clock-in / Clock-out logic
-                    if (!activeShifts.contains(uid)) {
-                        // Clock IN
-                        activeShifts[uid] = QDateTime::currentDateTime();
-                        qDebug() << "[RFID CLOCK] Clock IN for" << name << "at" << activeShifts[uid];
-                    } else {
-                        // Clock OUT
-                        QDateTime inTime = activeShifts.take(uid); // Gets and removes the item
-                        QDateTime outTime = QDateTime::currentDateTime();
-                        double secondsWorked = inTime.secsTo(outTime);
-                        double hoursWorked = secondsWorked / 3600.0;
-                        qDebug() << "[RFID CLOCK] Clock OUT for" << name << "Worked:" << hoursWorked << "hours";
-
-                        // Update HOURS in DB
-                        QSqlQuery updateQuery;
-                        updateQuery.prepare("UPDATE PERSONNEL SET HOURS = NVL(HOURS, 0) + :workedHours WHERE RFID = :uid");
-                        updateQuery.bindValue(":workedHours", hoursWorked);
-                        updateQuery.bindValue(":uid", uid);
-                        if (!updateQuery.exec()) {
-                            qDebug() << "[RFID CLOCK] Failed to update HOURS:" << updateQuery.lastError().text();
-                        }
+                if (mQuery.exec() && mQuery.next()) {
+                    QString location = mQuery.value(0).toString();
+                    
+                    // Update machine state to 'En panne'
+                    QSqlQuery uQuery;
+                    uQuery.prepare("UPDATE MACHINE SET ETAT_MACHINE = 'En panne' WHERE ID_MACHINE = :id");
+                    uQuery.bindValue(":id", mId);
+                    
+                    if (uQuery.exec()) {
+                        qDebug() << "[SERIAL] Machine Breakdown Reported! ID:" << mId << "Loc:" << location;
+                        
+                        // NEW PROTOCOL: S<ID>,<Location>\n
+                        QString response = "S" + QString::number(mId) + "," + location + "\n";
+                        serial->write(response.toUtf8());
+                        
+                        // Show confirmation in console only (no popup on PC)
+                        qDebug() << "[SERIAL] Machine " << mId << " updated to 'En panne'. Response sent to OLED.";
+                        
+                        breakdownProcessed = true;
                     }
-
-                    qDebug() << "[SERIAL TX/RX] Match found! Grade is" << grade << "Sending back Name:" << name;
-                    // Send back to arduino
-                    serial->write(name.toUtf8() + "\n");
+                } else {
+                    // NEW PROTOCOL: F\n for "Not Found"
+                    qDebug() << "[SERIAL] Machine ID" << mId << "not found. Sending F.";
+                    serial->write("F\n");
+                    breakdownProcessed = true; // Managed as a breakdown attempt
                 }
-            } else {
-                // Not found
-                qDebug() << "[SERIAL TX/RX] Match NOT found! Sending 'NOT_FOUND'.";
-                serial->write("NOT_FOUND\n");
+            }
+
+            if (!breakdownProcessed) {
+                // Existing logic for RFID/EnterCode
+                QString uid = incomingText;
+                qDebug() << "[SERIAL TX/RX] Received UID from Arduino:" << uid;
+
+                // Find personnel's name and grade using RFID
+                QSqlQuery query;
+                query.prepare("SELECT NOM_PERSONNEL, GRADE FROM PERSONNEL WHERE RFID = :uid");
+                query.bindValue(":uid", uid);
+
+                if (query.exec() && query.next()) {
+                    QString name = query.value(0).toString();
+                    QString grade = query.value(1).toString();
+                    
+                    if (grade.compare("Junior", Qt::CaseInsensitive) == 0) {
+                        qDebug() << "[SERIAL TX/RX] Access Denied! Reason: Junior Grade.";
+                        serial->write("DENIED_JUNIOR\n");
+                    } else {
+                        if (!activeShifts.contains(uid)) {
+                            activeShifts[uid] = QDateTime::currentDateTime();
+                            qDebug() << "[RFID CLOCK] Clock IN for" << name << "at" << activeShifts[uid];
+                        } else {
+                            QDateTime inTime = activeShifts.take(uid);
+                            QDateTime outTime = QDateTime::currentDateTime();
+                            double secondsWorked = inTime.secsTo(outTime);
+                            double hoursWorked = secondsWorked / 3600.0;
+
+                            QSqlQuery updateQuery;
+                            updateQuery.prepare("UPDATE PERSONNEL SET HOURS = NVL(HOURS, 0) + :workedHours WHERE RFID = :uid");
+                            updateQuery.bindValue(":workedHours", hoursWorked);
+                            updateQuery.bindValue(":uid", uid);
+                            updateQuery.exec();
+                        }
+
+                        qDebug() << "[SERIAL TX/RX] Match found! Name:" << name;
+                        serial->write(name.toUtf8() + "\n");
+                    }
+                } else {
+                    qDebug() << "[SERIAL TX/RX] Match NOT found! Sending 'NOT_FOUND'.";
+                    serial->write("NOT_FOUND\n");
+                }
             }
         }
 
