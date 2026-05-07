@@ -1,9 +1,14 @@
 #include "anomalyapi.h"
 #include <QEventLoop>
 #include <QTimer>
+#include <QUrlQuery>
+
+#include <QNetworkProxyFactory>
 
 AnomalyAPI::AnomalyAPI(QObject *parent) : QObject(parent)
 {
+    // Force using system proxy settings (Windows credentials pass-through)
+    QNetworkProxyFactory::setUseSystemConfiguration(true);
     manager = new QNetworkAccessManager(this);
 }
 
@@ -38,9 +43,10 @@ void AnomalyAPI::processNextTransaction()
         
         for (const QJsonValue &val : completedResults) {
             QJsonObject res = val.toObject();
-            if (res["fraudlabspro_status"].toString() == "REVIEW" || res["fraudlabspro_status"].toString() == "REJECT") {
+            QString status = res["fraudlabspro_status"].toString().toUpper();
+            if (status == "REVIEW" || status == "REJECT") {
                 anomalies++;
-                if (res["fraudlabspro_score"].toInt() > 70 || res["fraudlabspro_status"].toString() == "REJECT") {
+                if (res["fraudlabspro_score"].toInt() > 70 || status == "REJECT") {
                     highRisk++;
                 }
             }
@@ -56,24 +62,23 @@ void AnomalyAPI::processNextTransaction()
 
     QJsonObject transaction = pendingTransactions[currentIndex].toObject();
     
-    // Beeceptor free echo API for demo purposes (NO KEY REQUIRED)
-    QUrl url("https://echo.free.beeceptor.com");
+    // FraudLabs Pro v1 API — simple GET with query parameters
+    QUrl url("https://api.fraudlabspro.com/v1/order/screen");
+    QUrlQuery params;
+    params.addQueryItem("key", "IUYHB8ITVD1M7UCVW0OM9M45YB4X9WNY");
+    params.addQueryItem("format", "json");
+    params.addQueryItem("ip", "8.8.8.8");
+    params.addQueryItem("amount", QString::number(transaction["amount"].toDouble(), 'f', 2));
+    params.addQueryItem("currency", "TND");
+    params.addQueryItem("user_order_id", QString::number(transaction["id"].toInt()));
+    params.addQueryItem("payment_mode", transaction["payment_mode"].toString());
+    url.setQuery(params);
+
     QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-
-    QJsonObject payload;
-    payload["transaction_id"] = transaction["id"].toInt();
-    payload["amount"] = transaction["amount"].toDouble();
-    payload["description"] = transaction["description"].toString();
-    payload["payment_mode"] = transaction["payment_mode"].toString();
-    payload["origin"] = "Oil Press Manager Pro - Anomaly Scan";
-
-    // Since Beeceptor just echoes back, we'll demonstrate a successful POST
-    manager->post(request, QJsonDocument(payload).toJson());
-    
-    // Disconnect previously connected slots to avoid multiple triggers
-    manager->disconnect(SIGNAL(finished(QNetworkReply*)));
-    connect(manager, &QNetworkAccessManager::finished, this, &AnomalyAPI::onReplyFinished);
+    QNetworkReply *reply = manager->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        this->onReplyFinished(reply);
+    });
 }
 
 void AnomalyAPI::onReplyFinished(QNetworkReply *reply)
@@ -82,37 +87,26 @@ void AnomalyAPI::onReplyFinished(QNetworkReply *reply)
     QJsonObject resultObj;
     resultObj["transaction"] = originalTx;
 
-    if (reply->error() == QNetworkReply::NoError) {
-        QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
-        QJsonObject root = doc.object();
-        
-        // Since it's an echo API, we'll "enrich" the response to simulate anomaly detection
-        // based on the data we received back.
-        
-        double amt = originalTx["amount"].toDouble();
-        
+    // Always read the response body first (even on error, the server may send useful JSON)
+    QByteArray responseData = reply->readAll();
+    QJsonDocument doc = QJsonDocument::fromJson(responseData);
+    QJsonObject root = doc.object();
+
+    if (reply->error() == QNetworkReply::NoError && !root.isEmpty()) {
         resultObj["status"] = "PROCESSED";
-        resultObj["api_response"] = "SUCCESS (Beeceptor Echo)";
+        resultObj["fraudlabspro_status"] = root["fraudlabspro_status"].toString();
+        resultObj["fraudlabspro_score"] = root["fraudlabspro_score"].toInt();
+        resultObj["fraudlabspro_message"] = root["fraudlabspro_message"].toString();
         
-        // Let's simulate some logic based on the "cloud" response
-        if (amt > 10000) {
-            resultObj["fraud_status"] = "REJECT";
-            resultObj["fraud_score"] = 95;
-            resultObj["fraud_message"] = "Cloud Analysis: Transaction amount exceeds safety threshold for manual review.";
-        } else if (originalTx["description"].toString().toLower().contains("test")) {
-            resultObj["fraud_status"] = "REVIEW";
-            resultObj["fraud_score"] = 65;
-            resultObj["fraud_message"] = "Cloud Analysis: Suspicious keywords detected in meta-description.";
-        } else {
-            resultObj["fraud_status"] = "APPROVE";
-            resultObj["fraud_score"] = 5;
-            resultObj["fraud_message"] = "Cloud Analysis: Transaction patterns align with standard profile.";
-        }
     } else {
-        // Network error
-        resultObj["fraud_status"] = "NETWORK_ERROR";
-        resultObj["fraud_score"] = 0;
-        resultObj["fraud_message"] = "Connection Error: " + reply->errorString();
+        // Network error diagnostics — include server response if available
+        int errorCode = (int)reply->error();
+        QString serverMsg = root.isEmpty() ? reply->errorString() : root["fraudlabspro_message"].toString();
+        if (serverMsg.isEmpty()) serverMsg = QString::fromUtf8(responseData.left(200));
+        
+        resultObj["fraudlabspro_status"] = "NETWORK_ERROR";
+        resultObj["fraudlabspro_score"] = 0;
+        resultObj["fraudlabspro_message"] = QString("Error %1: %2").arg(errorCode).arg(serverMsg);
     }
     
     reply->deleteLater();

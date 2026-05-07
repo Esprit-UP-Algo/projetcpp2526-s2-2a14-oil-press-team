@@ -18,7 +18,7 @@ public:
     void scanInvoice(const QString &imagePath);
 
 signals:
-    void scanFinished(bool success, double amount, const QString &date, const QString &rawText);
+    void scanFinished(bool success, double amount, const QString &date, const QString &desc, const QString &mode, const QString &rawText);
 
 private slots:
     void onReplyFinished(QNetworkReply *reply);

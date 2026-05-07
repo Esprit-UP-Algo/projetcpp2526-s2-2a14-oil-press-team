@@ -764,7 +764,10 @@ static void generateOrderInvoicePdf(QWidget *parent,
                                      const QString &datelivraison,
                                      const QString &etat,
                                      const QString &client,
-                                     const QString &address)
+                                     const QString &address,
+                                     double  transAmount = 0.0,
+                                     const QString &transRef = "",
+                                     const QString &transDesc = "")
 {
     Q_UNUSED(datelivraison);
     // Ask user where to save
@@ -777,7 +780,9 @@ static void generateOrderInvoicePdf(QWidget *parent,
     struct LineItem { QString ref; double price; int qty; };
     QVector<LineItem> items;
     double calculatedTotal = 0.0;
-    QString payMode = "Cash"; // Default
+    QString payMode = "Cash"; 
+    
+    QString finalRef = transRef.isEmpty() ? ref : transRef;
 
     if (orderId > 0) {
         QSqlQuery q;
@@ -791,6 +796,11 @@ static void generateOrderInvoicePdf(QWidget *parent,
                 items.append({itemRef, itemPrice, itemQty});
                 calculatedTotal += (itemPrice * itemQty);
             }
+        }
+
+        // Fix: If calculatedTotal is 0 (empty order), use the passed amount
+        if (calculatedTotal <= 0.01 && transAmount > 0) {
+            calculatedTotal = transAmount;
         }
 
         // Check if a Revenue record already exists in FINANCE
@@ -809,21 +819,31 @@ static void generateOrderInvoicePdf(QWidget *parent,
             updF.exec();
         } else {
             // Create new Revenue record
+            QString newRef = Transaction::generateRandomRef();
             QSqlQuery nextIdQ;
             nextIdQ.exec("SELECT NVL(MAX(ID_TRANSACTION), 0) + 1 FROM FINANCE");
             int nextId = (nextIdQ.next()) ? nextIdQ.value(0).toInt() : 1;
 
             QSqlQuery insF;
-            insF.prepare("INSERT INTO FINANCE (ID_TRANSACTION, MONTANT, DATE_TRANSACTION, TYPE_TRANSACTION, MODE_PAIEMENT, DESCRIPTION, ID_COMMANDE) "
-                         "VALUES (:id, :mt, :dt, 'Revenue', :mode, :desc, :oid)");
+            insF.prepare("INSERT INTO FINANCE (ID_TRANSACTION, MONTANT, DATE_TRANSACTION, TYPE_TRANSACTION, MODE_PAIEMENT, DESCRIPTION, ID_COMMANDE, REF_TRANSACTION) "
+                         "VALUES (:id, :mt, :dt, 'Revenue', :mode, 'Invoice Payment (' || :oid_str || ')', :oid, :ref)");
             insF.bindValue(":id", nextId);
             insF.bindValue(":mt", calculatedTotal);
             insF.bindValue(":dt", QDate::currentDate());
             insF.bindValue(":mode", "Cash");
-            insF.bindValue(":desc", "Invoice Payment (" + ref + ")");
             insF.bindValue(":oid", orderId);
+            insF.bindValue(":oid_str", QString::number(orderId));
+            insF.bindValue(":ref", newRef);
             insF.exec();
+            
+            // Set finalRef to the newly generated one for the PDF display
+            finalRef = newRef;
         }
+    }
+
+    // Fix: If calculatedTotal is 0 (manual transaction or empty order), use the passed amount
+    if (calculatedTotal <= 0.01 && transAmount > 0) {
+        calculatedTotal = transAmount;
     }
 
     // Build the Balanced HTML
@@ -836,6 +856,7 @@ static void generateOrderInvoicePdf(QWidget *parent,
         "    <td style='font-size: 32pt; font-weight: 900; color: #3DDC84; letter-spacing: -1pt;'>INVOICE</td>"
         "    <td align='right' style='font-size: 11pt; color: #666;'>"
         "      <span style='font-weight: bold; color: #2C3E1F; font-size: 14pt;'>Oil Press Manager Pro</span><br>"
+        "      <span style='color: #3DDC84; font-weight: 800;'>TX REF: " + finalRef + "</span><br>"
         "      Tunis, Tunisia &nbsp;|&nbsp; contact@oilpress.tn"
         "    </td>"
         "  </tr>"
@@ -855,7 +876,8 @@ static void generateOrderInvoicePdf(QWidget *parent,
         "      <b>Reference:</b> " + (ref.isEmpty() ? "N/A" : ref.toHtmlEscaped()) + "<br>"
         "      <b>Date:</b> " + dateCommande + "<br>"
         "      <b>Payment:</b> " + (payMode.isEmpty() ? "Cash" : payMode) + "<br>"
-        "      <b>Status:</b> <span style='color: #27ae60;'>" + etat.toUpper() + "</span>"
+        "      <b>Status:</b> <span style='color: #27ae60;'>" + etat.toUpper() + "</span><br>"
+        "      <b>Description:</b> " + (transDesc.isEmpty() ? "N/A" : transDesc.toHtmlEscaped()) +
         "    </td>"
         "  </tr>"
         "</table>"
@@ -869,7 +891,13 @@ static void generateOrderInvoicePdf(QWidget *parent,
         "  </tr>";
 
     if (items.isEmpty()) {
-        html += "<tr><td colspan='4' align='center' style='padding: 30pt; color: #aaa; border-bottom: 1pt solid #eee; font-size: 12pt;'>No items found.</td></tr>";
+        html += 
+            "<tr>"
+            "  <td style='border-bottom: 1pt solid #eee; font-size: 11pt; padding: 20pt;'><b>" + (transDesc.isEmpty() ? "Manual Transaction" : transDesc.toHtmlEscaped()) + "</b></td>"
+            "  <td align='center' style='border-bottom: 1pt solid #eee;'>1</td>"
+            "  <td align='right' style='border-bottom: 1pt solid #eee;'>" + QString::number(transAmount, 'f', 2) + "</td>"
+            "  <td align='right' style='border-bottom: 1pt solid #eee;'><b>" + QString::number(transAmount, 'f', 2) + " TND</b></td>"
+            "</tr>";
     } else {
         for (const auto &li : items) {
             html +=
@@ -887,8 +915,8 @@ static void generateOrderInvoicePdf(QWidget *parent,
         "<table width='100%'><tr>"
         "  <td width='60%'></td>"
         "  <td width='40%' align='right' style='background: #f9fafb; padding: 20pt; border: 1pt solid #3DDC84;'>"
-        "    <div style='font-size: 10pt; color: #888; text-transform: uppercase; font-weight: bold;'>Total Revenue</div>"
-        "    <div style='font-size: 20pt; font-weight: 900; color: #3DDC84;'>" + QString::number(calculatedTotal, 'f', 2) + " TND</div>"
+        "    <div style='font-size: 10pt; color: #888; text-transform: uppercase; font-weight: bold;'>TOTAL AMOUNT</div>"
+        "    <div style='font-size: 20pt; font-weight: 900; color: #3DDC84;'>TOTAL: " + QString::number(calculatedTotal, 'f', 2) + " TND</div>"
         "  </td>"
         "</tr></table>"
 
@@ -1627,7 +1655,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
               [table, orderId, ref, date, livraison, etat, client, address]() {
                   generateOrderInvoicePdf(
                       table->window(),
-                      orderId, ref, date, livraison, etat, client, address);
+                      orderId, ref, date, livraison, etat, client, address, 0.0, ref, "Order Invoice");
               });
 
           // Connect Modify
@@ -2113,7 +2141,8 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
               isValid = false;
             } else {
               bool ok = false;
-              montant = inputMontant->text().toDouble(&ok);
+              QString rawAmount = inputMontant->text().replace(",", "."); // Handle locale commas
+              montant = rawAmount.toDouble(&ok);
               if (!ok || montant < 0) {
                 errMontant->setText("Amount must be a valid positive number.");
                 errMontant->show();
@@ -2152,6 +2181,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
             t.setModePaiement(inputMode->currentText());
             t.setDescription(inputDesc->text().trimmed());
             t.setIdCommande(inputCommande->text().toInt());
+            t.setReference(Transaction::generateRandomRef());
 
             if (t.ajouter()) {
               QMessageBox::information(nullptr, "Success",
@@ -2180,7 +2210,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
           btnScanInvoice->setEnabled(false);
           btnScanInvoice->setText("Scanning...");
 
-          QObject::connect(scanner, &OCRScannerAPI::scanFinished, [=](bool success, double amount, const QString &dateStr, const QString &text) {
+          QObject::connect(scanner, &OCRScannerAPI::scanFinished, [=](bool success, double amount, const QString &dateStr, const QString &desc, const QString &mode, const QString &text) {
               btnScanInvoice->setEnabled(true);
               btnScanInvoice->setText("Scan Invoice Image");
 
@@ -2204,8 +2234,15 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
                           inputDate->setDate(parsedDate);
                       }
                   }
-                  
-                  if (amount > 0 || !dateStr.isEmpty()) {
+                  if (!desc.isEmpty()) {
+                      inputDesc->setText(desc);
+                  }
+
+                  if (!mode.isEmpty()) {
+                      inputMode->setCurrentText(mode);
+                  }
+
+                  if (amount > 0 || !dateStr.isEmpty() || !desc.isEmpty()) {
                       QMessageBox::information(formContainer->window(), "Scan Complete", "Invoice data extracted successfully.");
                   } else {
                       // Diagnostic view to help user understand what the OCR saw
@@ -2286,8 +2323,8 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
 
       // 2. Table
       transTable = new QTableWidget();
-      QStringList headers = {"ID", "Amount", "Date", "Type", "Payment Mode",
-                             "Description", "Order ID", "Actions"};
+      QStringList headers = {"ID", "Ref", "Amount", "Date", "Type", "Payment Mode",
+                             "Description", "Actions"};
       transTable->setColumnCount(headers.size());
       transTable->setHorizontalHeaderLabels(headers);
       transTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -2322,19 +2359,20 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
 
         // Read all into a local list for filtering/sorting
         struct Row {
-          int id; double montant; QString date; QString type;
+          int id; QString reference; double montant; QString date; QString type;
           QString mode; QString desc; int commande;
         };
         QList<Row> allRows;
         for (int i = 0; i < model->rowCount(); ++i) {
           Row r;
           r.id = model->data(model->index(i, 0)).toInt();
-          r.montant = model->data(model->index(i, 1)).toDouble();
-          r.date = model->data(model->index(i, 2)).toDate().toString("yyyy-MM-dd");
-          r.type = model->data(model->index(i, 3)).toString();
-          r.mode = model->data(model->index(i, 4)).toString();
-          r.desc = model->data(model->index(i, 5)).toString();
-          r.commande = model->data(model->index(i, 6)).toInt();
+          r.reference = model->data(model->index(i, 1)).toString();
+          r.montant = model->data(model->index(i, 2)).toDouble();
+          r.date = model->data(model->index(i, 3)).toDate().toString("yyyy-MM-dd");
+          r.type = model->data(model->index(i, 4)).toString();
+          r.mode = model->data(model->index(i, 5)).toString();
+          r.desc = model->data(model->index(i, 6)).toString();
+          r.commande = model->data(model->index(i, 7)).toInt();
           allRows.append(r);
         }
         delete model;
@@ -2363,12 +2401,12 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
         for (int i = 0; i < filtered.size(); ++i) {
           const auto &r = filtered[i];
           transTable->setItem(i, 0, new QTableWidgetItem(QString::number(r.id)));
-          transTable->setItem(i, 1, new QTableWidgetItem(QString::number(r.montant, 'f', 2)));
-          transTable->setItem(i, 2, new QTableWidgetItem(r.date));
-          transTable->setItem(i, 3, new QTableWidgetItem(r.type));
-          transTable->setItem(i, 4, new QTableWidgetItem(r.mode));
-          transTable->setItem(i, 5, new QTableWidgetItem(r.desc));
-          transTable->setItem(i, 6, new QTableWidgetItem(QString::number(r.commande)));
+          transTable->setItem(i, 1, new QTableWidgetItem(r.reference));
+          transTable->setItem(i, 2, new QTableWidgetItem(QString::number(r.montant, 'f', 2)));
+          transTable->setItem(i, 3, new QTableWidgetItem(r.date));
+          transTable->setItem(i, 4, new QTableWidgetItem(r.type));
+          transTable->setItem(i, 5, new QTableWidgetItem(r.mode));
+          transTable->setItem(i, 6, new QTableWidgetItem(r.desc));
 
           // --- Action Buttons (Edit + Delete) ---
           QWidget *actionWidget = new QWidget();
@@ -2459,8 +2497,10 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
           QString descForPdf = r.desc;
           QString dateForPdf = r.date;
           QString typeForPdf = r.type;
+          double amtForPdf = r.montant;
+          QString refTransForPdf = r.reference;
 
-          QObject::connect(btnInvoice, &QPushButton::clicked, [transTable, orderIdForPdf, descForPdf, dateForPdf, typeForPdf]() {
+          QObject::connect(btnInvoice, &QPushButton::clicked, [transTable, orderIdForPdf, descForPdf, dateForPdf, typeForPdf, amtForPdf, refTransForPdf]() {
               // If there's an Order ID, we try to fetch associated order details
               QString client = "N/A", address = "N/A", ref = descForPdf, dateCmd = dateForPdf, dateLiv = "N/A", etat = typeForPdf;
 
@@ -2479,7 +2519,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
                   }
               }
 
-              generateOrderInvoicePdf(transTable->window(), orderIdForPdf, ref, dateCmd, dateLiv, etat, client, address);
+              generateOrderInvoicePdf(transTable->window(), orderIdForPdf, ref, dateCmd, dateLiv, etat, client, address, amtForPdf, refTransForPdf, descForPdf);
           });
 
           // --- Connect Edit ---
@@ -2615,7 +2655,8 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
                     isValid = false;
                   } else {
                     bool ok = false;
-                    double montant = editMontant->text().toDouble(&ok);
+                    QString rawAmount = editMontant->text().replace(",", "."); // Handle locale commas
+                    double montant = rawAmount.toDouble(&ok);
                     if (!ok || montant < 0) {
                       errMontant->setText("Amount must be a valid positive number.");
                       errMontant->show();
@@ -2661,6 +2702,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
                   t.setModePaiement(editMode->currentText());
                   t.setDescription(editDesc->text().trimmed());
                   t.setIdCommande(editCommande->text().toInt());
+                  t.setReference(transTable->item(row, 1)->text());
 
                   if (t.modifier()) {
                     QMessageBox::information(
@@ -2789,11 +2831,12 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
           for (int i = 0; i < transTable->rowCount(); ++i) {
               QJsonObject tx;
               tx["id"] = transTable->item(i, 0)->text().toInt();
-              tx["amount"] = transTable->item(i, 1)->text().toDouble();
-              tx["date"] = transTable->item(i, 2)->text();
-              tx["type"] = transTable->item(i, 3)->text();
-              tx["payment_mode"] = transTable->item(i, 4)->text();
-              tx["description"] = transTable->item(i, 5)->text();
+              tx["ref"] = transTable->item(i, 1)->text(); // Capture Reference
+              tx["amount"] = transTable->item(i, 2)->text().toDouble();
+              tx["date"] = transTable->item(i, 3)->text();
+              tx["type"] = transTable->item(i, 4)->text();
+              tx["payment_mode"] = transTable->item(i, 5)->text();
+              tx["description"] = transTable->item(i, 6)->text();
               transactionsToScan.append(tx);
           }
 
@@ -2808,24 +2851,46 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
               int highRisk = report["high_risk"].toInt();
               QJsonArray results = report["results"].toArray();
 
-              QString htmlReport = "<h3>Cloud API Anomaly Detection Report</h3><hr>";
-              
-              if (totalAnomalies > 0) {
-                  for(const QJsonValue& val : results) {
-                      QJsonObject res = val.toObject();
-                      QString status = res["fraudlabspro_status"].toString();
-                      if (status == "REVIEW" || status == "REJECT" || status == "ERROR" || status == "NETWORK_ERROR") {
-                          QJsonObject tx = res["transaction"].toObject();
-                          QString riskLevel = (res["fraudlabspro_score"].toInt() > 70 || status == "REJECT") ? "<span style='color:#e74c3c;font-weight:bold;'>HIGH RISK</span>" : "<span style='color:#f39c12;font-weight:bold;'>POTENTIAL RISK</span>";
-                          htmlReport += QString("<p><b>Tx ID %1:</b> %2<br>%3<br><small style='color:#e74c3c'>Score: %4 - %5</small></p>")
-                                          .arg(tx["id"].toInt())
-                                          .arg(tx["description"].toString())
-                                          .arg(riskLevel)
-                                          .arg(res["fraudlabspro_score"].toInt())
-                                          .arg(res["fraudlabspro_message"].toString());
-                      }
+              QString htmlReport = "<h3>FraudLabs Pro™ Cloud Analysis</h3><hr>";
+              htmlReport += "<table width='100%' style='border-collapse: collapse; font-size: 12px;'>";
+              htmlReport += "<tr style='background: #f4f4f4;'> <th align='left' style='padding: 5px;'>Reference</th> <th align='left' style='padding: 5px;'>Description</th> <th align='left' style='padding: 5px;'>Cloud Status</th> </tr>";
+
+              for(const QJsonValue& val : results) {
+                  QJsonObject res = val.toObject();
+                  QJsonObject tx = res["transaction"].toObject();
+                  QString status = res["fraudlabspro_status"].toString();
+                  QString displayStatus = status.toUpper();
+                  QString color = "#27ae60"; // Green for Approve
+                  
+                  if (status == "REVIEW") color = "#f39c12"; // Orange
+                  else if (status == "REJECT") color = "#e74c3c"; // Red
+                  else if (status == "NETWORK_ERROR" || status == "ERROR") {
+                      color = "#7f8c8d";
+                      displayStatus = res["fraudlabspro_message"].toString(); // Show the full diagnostic!
                   }
+                  
+                  htmlReport += QString("<tr>"
+                                       "<td style='padding: 5px; border-bottom: 1px solid #eee; font-weight: bold;'>%1</td>"
+                                       "<td style='padding: 5px; border-bottom: 1px solid #eee;'>%2</td>"
+                                       "<td style='padding: 5px; border-bottom: 1px solid #eee; font-weight: bold; color: %3;'>%4</td>"
+                                       "</tr>")
+                                  .arg(tx["ref"].toString())
+                                  .arg(tx["description"].toString())
+                                  .arg(color)
+                                  .arg(displayStatus.startsWith("[") ? displayStatus : "[" + displayStatus + "]");
               }
+              htmlReport += "</table>";
+
+              if (totalAnomalies > 0) {
+                  htmlReport += QString("<div style='margin-top: 15px; padding: 10px; background: #fff5f5; border: 1px solid #ffccbc; color: #c62828;'>"
+                                       "<b>Alert:</b> Cloud API flagged %1 potential issues. Please review highlighted items."
+                                       "</div>").arg(totalAnomalies);
+              } else {
+                  htmlReport += "<div style='margin-top: 15px; padding: 10px; background: #e8f5e9; border: 1px solid #c8e6c9; color: #2e7d32;'>"
+                                "<b>Success:</b> FraudLabs Pro™ Cloud API has screened these transactions and found no external risk patterns."
+                                "</div>";
+              }
+              
 
               QDialog *dlg = new QDialog(transTable->window());
               dlg->setWindowTitle("Advanced Anomaly Scan (FraudLabs Pro API)");
@@ -2839,7 +2904,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
               layout->addWidget(title);
 
               QTextEdit *area = new QTextEdit();
-              area->setHtml(totalAnomalies > 0 ? htmlReport : "<p style='color:#27ae60; font-weight:bold; font-size:14px;'>Scan complete. No issues found by API!</p>");
+              area->setHtml(htmlReport);
               area->setReadOnly(true);
               area->setStyleSheet("background: #fdfdfd; border: 1px solid #eee; border-radius: 8px; padding: 15px;");
               layout->addWidget(area);

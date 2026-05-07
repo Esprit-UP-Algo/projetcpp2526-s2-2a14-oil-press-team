@@ -14,7 +14,7 @@ void OCRScannerAPI::scanInvoice(const QString &imagePath) {
     // API Key (Using a public trial key provided by OCR.space for demo)
     QHttpPart keyPart;
     keyPart.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant("form-data; name=\"apikey\""));
-    keyPart.setBody("helloworld"); 
+    keyPart.setBody("K81704964888957"); 
     multiPart->append(keyPart);
 
     // Language
@@ -78,25 +78,23 @@ void OCRScannerAPI::onReplyFinished(QNetworkReply *reply) {
         if (!results.isEmpty()) {
             QString text = results[0].toObject()["ParsedText"].toString();
             
-            // Logic to find Amount (Improved Regex)
+            // Logic to find Amount (Restored working version)
             double foundAmount = 0.0;
-            // Matches "Total", "Montant", etc. followed by digits, spaces, dots or commas
             QRegularExpression amtRegex("(?:Total|Amount|Sum|Net|Due|TOTAL|Montant|TTC)[:\\s]*([\\d\\s,.]+)");
             QRegularExpressionMatchIterator it = amtRegex.globalMatch(text);
             while (it.hasNext()) {
                 QRegularExpressionMatch match = it.next();
                 QString valStr = match.captured(1).trimmed();
-                valStr.remove(" "); // Remove thousands separator spaces
+                valStr.remove(" "); 
 
-                // Heuristic: if it contains both comma and dot, determine which is decimal
                 if (valStr.contains(",") && valStr.contains(".")) {
                     if (valStr.lastIndexOf(",") > valStr.lastIndexOf(".")) {
-                        valStr.remove("."); valStr.replace(",", "."); // Comma is decimal
+                        valStr.remove("."); valStr.replace(",", "."); 
                     } else {
-                        valStr.remove(","); // Dot is decimal
+                        valStr.remove(","); 
                     }
                 } else if (valStr.contains(",")) {
-                    valStr.replace(",", "."); // Assume comma is decimal (common in TN/FR)
+                    valStr.replace(",", ".");
                 }
 
                 bool ok = false;
@@ -106,17 +104,40 @@ void OCRScannerAPI::onReplyFinished(QNetworkReply *reply) {
 
             // Logic to find Date (Improved Regex)
             QString foundDate = "";
-            // Matches various date formats: YYYY-MM-DD, DD/MM/YYYY, DD.MM.YYYY, etc.
             QRegularExpression dateRegex("(\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4})|(\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2})");
             QRegularExpressionMatch dateMatch = dateRegex.match(text);
             if (dateMatch.hasMatch()) foundDate = dateMatch.captured(0);
 
-            emit scanFinished(true, foundAmount, foundDate, text);
+            // Logic to find Payment Mode
+            QString foundMode = "Cash"; // Default
+            QRegularExpression modeRegex("(?i)(Check|Chèque|Card|Carte|Virement|Bank|Banque|Transfer|Espèces|Cash)");
+            QRegularExpressionMatch modeMatch = modeRegex.match(text);
+            if (modeMatch.hasMatch()) {
+                QString m = modeMatch.captured(0).toLower();
+                if (m.contains("check") || m.contains("chèque")) foundMode = "Check";
+                else if (m.contains("card") || m.contains("carte")) foundMode = "Card";
+                else if (m.contains("virement") || m.contains("bank") || m.contains("transfer")) foundMode = "Transfer";
+            }
+
+            // Logic to find Description/Subject
+            QString foundDesc = "";
+            QRegularExpression descRegex("(?i)(?:Libellé|Description|Designation|Subject|Objet)[:\\s]*([^\\n\\r]+)");
+            QRegularExpressionMatch descMatch = descRegex.match(text);
+            if (descMatch.hasMatch()) {
+                foundDesc = descMatch.captured(1).trimmed();
+            } else {
+                // Heuristic fallback: take first snippet of the second line or first line
+                QStringList lines = text.split("\n", Qt::SkipEmptyParts);
+                if (lines.size() > 1) foundDesc = lines[1].left(40).trimmed();
+                else foundDesc = text.left(40).trimmed();
+            }
+
+            emit scanFinished(true, foundAmount, foundDate, foundDesc, foundMode, text);
         } else {
-            emit scanFinished(false, 0, "", "No text found in image.");
+            emit scanFinished(false, 0, "", "", "", "No text found in image.");
         }
     } else {
-        emit scanFinished(false, 0, "", "Network Error: " + reply->errorString());
+        emit scanFinished(false, 0, "", "", "", "Network Error: " + reply->errorString());
     }
     reply->deleteLater();
 }

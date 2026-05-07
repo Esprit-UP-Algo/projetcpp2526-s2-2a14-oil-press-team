@@ -12,7 +12,7 @@ public:
     Transaction();
     Transaction(int idTransaction, double montant, const QDate &dateTransaction,
                 const QString &typeTransaction, const QString &modePaiement,
-                const QString &description, int idCommande);
+                const QString &description, int idCommande, const QString &reference = "");
 
     // Getters
     int getIdTransaction() const;
@@ -22,6 +22,7 @@ public:
     QString getModePaiement() const;
     QString getDescription() const;
     int getIdCommande() const;
+    QString getReference() const;
 
     // Setters
     void setIdTransaction(int id);
@@ -31,6 +32,10 @@ public:
     void setModePaiement(const QString &mode);
     void setDescription(const QString &desc);
     void setIdCommande(int idCommande);
+    void setReference(const QString &ref);
+
+    // Helpers
+    static QString generateRandomRef();
 
     // CRUD
     bool ajouter();
@@ -52,6 +57,7 @@ private:
     QString modePaiement;
     QString description;
     int idCommande;
+    QString reference;
     QString lastError;
 };
 

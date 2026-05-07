@@ -11,12 +11,13 @@ Transaction::Transaction() {
     modePaiement = "";
     description = "";
     idCommande = 0;
+    reference = "";
 }
 
 // Parameterized constructor
 Transaction::Transaction(int idTransaction, double montant, const QDate &dateTransaction,
                          const QString &typeTransaction, const QString &modePaiement,
-                         const QString &description, int idCommande) {
+                         const QString &description, int idCommande, const QString &reference) {
     this->idTransaction = idTransaction;
     this->montant = montant;
     this->dateTransaction = dateTransaction;
@@ -24,6 +25,7 @@ Transaction::Transaction(int idTransaction, double montant, const QDate &dateTra
     this->modePaiement = modePaiement;
     this->description = description;
     this->idCommande = idCommande;
+    this->reference = reference;
 }
 
 // --- Getters ---
@@ -34,6 +36,7 @@ QString Transaction::getTypeTransaction() const { return typeTransaction; }
 QString Transaction::getModePaiement() const { return modePaiement; }
 QString Transaction::getDescription() const { return description; }
 int Transaction::getIdCommande() const { return idCommande; }
+QString Transaction::getReference() const { return reference; }
 
 // --- Setters ---
 void Transaction::setIdTransaction(int id) { this->idTransaction = id; }
@@ -43,6 +46,7 @@ void Transaction::setTypeTransaction(const QString &type) { this->typeTransactio
 void Transaction::setModePaiement(const QString &mode) { this->modePaiement = mode; }
 void Transaction::setDescription(const QString &desc) { this->description = desc; }
 void Transaction::setIdCommande(int idCommande) { this->idCommande = idCommande; }
+void Transaction::setReference(const QString &ref) { this->reference = ref; }
 
 // --- CRUD: Ajouter (Create) ---
 bool Transaction::ajouter() {
@@ -60,9 +64,9 @@ bool Transaction::ajouter() {
     QSqlQuery query;
     query.prepare(
         "INSERT INTO FINANCE (ID_TRANSACTION, MONTANT, DATE_TRANSACTION, "
-        "TYPE_TRANSACTION, MODE_PAIEMENT, DESCRIPTION, ID_COMMANDE) "
+        "TYPE_TRANSACTION, MODE_PAIEMENT, DESCRIPTION, ID_COMMANDE, REF_TRANSACTION) "
         "VALUES (:id, :montant, :dateTransaction, :typeTransaction, "
-        ":modePaiement, :description, :idCommande)");
+        ":modePaiement, :description, :idCommande, :ref)");
     query.bindValue(":id", nextId);
     query.bindValue(":montant", montant);
     query.bindValue(":dateTransaction", dateTransaction);
@@ -70,6 +74,7 @@ bool Transaction::ajouter() {
     query.bindValue(":modePaiement", modePaiement);
     query.bindValue(":description", description);
     query.bindValue(":idCommande", idCommande);
+    query.bindValue(":ref", reference);
 
     if (!query.exec()) {
         qDebug() << "Transaction Ajouter Error:" << query.lastError().text();
@@ -102,7 +107,8 @@ bool Transaction::modifier() {
         "TYPE_TRANSACTION = :typeTransaction, "
         "MODE_PAIEMENT = :modePaiement, "
         "DESCRIPTION = :description, "
-        "ID_COMMANDE = :idCommande "
+        "ID_COMMANDE = :idCommande, "
+        "REF_TRANSACTION = :ref "
         "WHERE ID_TRANSACTION = :id");
     query.bindValue(":id", idTransaction);
     query.bindValue(":montant", montant);
@@ -111,6 +117,7 @@ bool Transaction::modifier() {
     query.bindValue(":modePaiement", modePaiement);
     query.bindValue(":description", description);
     query.bindValue(":idCommande", idCommande);
+    query.bindValue(":ref", reference);
 
     if (!query.exec()) {
         qDebug() << "Transaction Modifier Error:" << query.lastError().text();
@@ -124,7 +131,7 @@ bool Transaction::modifier() {
 QSqlQueryModel* Transaction::afficher() {
     QSqlQueryModel *model = new QSqlQueryModel();
     model->setQuery(
-        "SELECT ID_TRANSACTION, MONTANT, DATE_TRANSACTION, TYPE_TRANSACTION, "
+        "SELECT ID_TRANSACTION, REF_TRANSACTION, MONTANT, DATE_TRANSACTION, TYPE_TRANSACTION, "
         "MODE_PAIEMENT, DESCRIPTION, ID_COMMANDE FROM FINANCE "
         "ORDER BY DATE_TRANSACTION DESC");
 
@@ -133,12 +140,13 @@ QSqlQueryModel* Transaction::afficher() {
     }
 
     model->setHeaderData(0, Qt::Horizontal, QObject::tr("ID"));
-    model->setHeaderData(1, Qt::Horizontal, QObject::tr("Amount"));
-    model->setHeaderData(2, Qt::Horizontal, QObject::tr("Date"));
-    model->setHeaderData(3, Qt::Horizontal, QObject::tr("Type"));
-    model->setHeaderData(4, Qt::Horizontal, QObject::tr("Payment Mode"));
-    model->setHeaderData(5, Qt::Horizontal, QObject::tr("Description"));
-    model->setHeaderData(6, Qt::Horizontal, QObject::tr("Order ID"));
+    model->setHeaderData(1, Qt::Horizontal, QObject::tr("Ref"));
+    model->setHeaderData(2, Qt::Horizontal, QObject::tr("Amount"));
+    model->setHeaderData(3, Qt::Horizontal, QObject::tr("Date"));
+    model->setHeaderData(4, Qt::Horizontal, QObject::tr("Type"));
+    model->setHeaderData(5, Qt::Horizontal, QObject::tr("Payment Mode"));
+    model->setHeaderData(6, Qt::Horizontal, QObject::tr("Description"));
+    model->setHeaderData(7, Qt::Horizontal, QObject::tr("Order ID"));
 
     return model;
 }
@@ -199,4 +207,16 @@ QString Transaction::checkAmountMismatch(int orderId, double recordedAmount) {
         }
     }
     return "";
+}
+
+// --- Helpers ---
+QString Transaction::generateRandomRef() {
+    const QString chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    QString result = "";
+    // Seed once if needed, but rand() is usually seeded at startup
+    for (int i = 0; i < 4; ++i) {
+        int index = rand() % chars.length();
+        result.append(chars.at(index));
+    }
+    return result;
 }
