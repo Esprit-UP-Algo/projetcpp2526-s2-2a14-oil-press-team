@@ -151,9 +151,14 @@ void Smtp::readyRead()
     }
     else
     {
-        if (responseLine == "") { return; }
-        // Something went wrong
-        QMessageBox::warning(nullptr, "Erreur SMTP", "Une erreur inattendue est survenue: " + responseLine + "\n" + response);
+        if (responseLine == "" && socket->state() != QAbstractSocket::UnconnectedState) { return; }
+        
+        QString errorMsg = "Une erreur SMTP est survenue.\n";
+        errorMsg += "État interne: " + QString::number(state) + "\n";
+        errorMsg += "Code réponse: " + responseLine + "\n";
+        errorMsg += "Réponse complète: " + response;
+
+        QMessageBox::critical(nullptr, "Erreur SMTP", errorMsg);
         state = Close;
         emit status("Failed to send message: " + response);
     }

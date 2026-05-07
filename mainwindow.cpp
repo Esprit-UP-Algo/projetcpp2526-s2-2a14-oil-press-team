@@ -11,6 +11,7 @@
 #include "personnel.h"
 #include "machine.h"
 #include "smtp.h"
+#include "GasAlertWidget.h"
 #include "emailapi.h"
 #include "marketapi.h"
 #include "consultantagent.h"
@@ -4502,173 +4503,201 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           (*refreshMachineTable)();
       });
 
-      QObject::connect(btnAlert, &QPushButton::clicked, [table]() {
-          if (!table) return;
+      QObject::connect(btnAlert, &QPushButton::clicked, [table, refreshMachineTable]() {
+          if (!table || !table->model()) return;
+          
           QString alertMsg;
           bool hasAlerts = false;
-          for (int i = 0; i < table->rowCount(); ++i) {
-             int id = table->item(i, 0)->text().toInt();
-             QString nom = table->item(i, 1)->text();
-             int heures = table->item(i, 4)->data(Qt::DisplayRole).toInt();
-             int seuil = table->item(i, 5)->data(Qt::DisplayRole).toInt();
+          int rowCount = table->rowCount();
+
+          for (int i = 0; i < rowCount; ++i) {
+             if (table->isRowHidden(i)) continue;
+
+             // Use model for reliable data extraction
+             int id = table->model()->index(i, 0).data().toInt();
+             QString nom = table->model()->index(i, 1).data().toString();
+             int heures = table->model()->index(i, 4).data().toInt();
+             int seuil = table->model()->index(i, 5).data().toInt();
+             QString currentStatus = table->model()->index(i, 3).data().toString();
+
+             if (id <= 0) continue;
+
+             Machine m;
+             m.setId(id);
+             m.setNom(nom);
+             
+             // Fetch machine details for update
+             QSqlQuery fetchQuery;
+             fetchQuery.prepare("SELECT TYPE_MACHINE, HEURESFONCTIONNEMENT, SEUILMAINTENANCE, LOCALISATION, DATEDERNIEREMAINTENANCE FROM MACHINE WHERE ID_MACHINE = :id");
+             fetchQuery.bindValue(":id", id);
+             if(fetchQuery.exec() && fetchQuery.next()) {
+                 m.setType(fetchQuery.value(0).toString());
+                 m.setHeures(fetchQuery.value(1).toInt());
+                 m.setSeuil(fetchQuery.value(2).toInt());
+                 m.setLocalisation(fetchQuery.value(3).toString());
+                 m.setDateM(fetchQuery.value(4).toDate());
+             }
+
              if (heures >= seuil && seuil > 0) {
-                alertMsg += "Machine " + QString::number(id) + " (" + nom + ") a atteint/dépassé son seuil (" + QString::number(heures) + "/" + QString::number(seuil) + "h).\n";
+                alertMsg += "Machine " + QString::number(id) + " (" + nom + ") nécessite maintenance.\n";
                 hasAlerts = true;
-                for(int c=0; c<table->columnCount() - 1; ++c) { // Exclude actions col
-                   if(table->item(i, c)) table->item(i, c)->setBackground(QColor(255, 200, 200)); // Red tint
+                
+                if (currentStatus != "En maintenance") {
+                    m.setEtat("En maintenance");
+                    m.modifier();
+                }
+
+                for(int c=0; c<table->columnCount() - 1; ++c) {
+                   if(table->item(i, c)) table->item(i, c)->setBackground(QColor(255, 200, 200));
                 }
              } else {
+                if (currentStatus == "En maintenance") {
+                    m.setEtat("Normal");
+                    m.modifier();
+                }
+
                 for(int c=0; c<table->columnCount() - 1; ++c) {
-                   if(table->item(i, c)) table->item(i, c)->setBackground(QBrush()); // Reset
+                   if(table->item(i, c)) table->item(i, c)->setBackground(QBrush());
                 }
              }
           }
+
           if (hasAlerts) {
               QMessageBox::warning(table->window(), "Alertes de Maintenance", alertMsg);
-              // Sending Alert via API REST (Advanced Feature)
-              EmailAPI* email = new EmailAPI(table);
-              // NOTE: User must replace this with the real Brevo API key
-              email->setCredentials(ConfigManager::getInstance().getBrevoKey());
+              
+              // Direct API call in mainwindow.cpp
+              QNetworkAccessManager *mgr = new QNetworkAccessManager(table);
+              QUrl url("https://api.brevo.com/v3/smtp/email"); 
+              QNetworkRequest request(url);
+              
+              QString apiKey = ConfigManager::getInstance().getBrevoKey();
+              QString senderEmail = ConfigManager::getInstance().getSenderEmail();
+              QString adminEmail = ConfigManager::getInstance().getAdminEmail();
 
-              QObject::connect(email, &EmailAPI::finished, [table](bool success, const QString &msg) {
-                  if (success) {
-                      qDebug() << "Email Alert sent successfully via API.";
+              if (apiKey.isEmpty() || apiKey == "YOUR_BREVO_API_KEY_HERE") {
+                  QMessageBox::critical(table->window(), "Email Error", "Brevo API Key is missing or invalid in config.json.\nPlease update the configuration to enable maintenance alerts.");
+                  return;
+              }
+
+              request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+              request.setRawHeader("api-key", apiKey.toUtf8());
+
+              QJsonObject sender;
+              sender["name"] = "Oil Press Manager";
+              sender["email"] = senderEmail;
+
+              QJsonObject to;
+              to["email"] = adminEmail;
+              
+              QJsonArray toArray;
+              toArray.append(to);
+
+              QJsonObject root;
+              root["sender"] = sender;
+              root["to"] = toArray;
+              root["subject"] = "Alerte Maintenance Critique";
+              root["htmlContent"] = "<html><body><h2>Alerte de Seuil Atteint</h2><p>" + alertMsg.replace("\n", "<br>") + "</p></body></html>";
+
+              QObject::connect(mgr, &QNetworkAccessManager::finished, [mgr, table](QNetworkReply* reply) {
+                  if (reply->error() == QNetworkReply::NoError) {
+                      qDebug() << "Email sent successfully via direct URL.";
+                      QMessageBox::information(table->window(), "Succès", "L'e-mail d'alerte a été envoyé avec succès à l'administrateur.");
                   } else {
-                      qDebug() << "API Email Failure:" << msg;
-                      QMessageBox::critical(table->window(), "API Error",
-                          "L'envoi de l'alerte via l'API a échoué.\n"
-                          "Veuillez vérifier vos clés API et votre connexion.\n\nDétails: " + msg);
+                      QString errorResp = reply->readAll();
+                      qDebug() << "Email failed:" << errorResp;
+                      QMessageBox::critical(table->window(), "Erreur Email", "Échec de l'envoi de l'e-mail: " + reply->errorString() + "\n\n" + errorResp);
                   }
+                  reply->deleteLater();
+                  mgr->deleteLater();
               });
 
-              email->sendEmail("nour.benrhoumakok@gmail.com",
-                               "Alerte de Maintenance Critique (API REST)",
-                               "Les machines suivantes nécessitent une maintenance immédiate :\n\n" + alertMsg);
+              mgr->post(request, QJsonDocument(root).toJson());
+
           } else {
-              QMessageBox::information(table->window(), "Maintenance", "Toutes les machines sont en dessous de leur seuil de maintenance.");
+              QMessageBox::information(table->window(), "Maintenance", "Tout est opérationnel.");
           }
+
+          (*refreshMachineTable)();
       });
 
       QObject::connect(btnPrint, &QPushButton::clicked, [table]() {
           if (!table) return;
 
-          QString defaultName = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + "_Rapport_Machines.pdf";
-          QString fileName = QFileDialog::getSaveFileName(table->window(), "Exporter en PDF", defaultName, "PDF Files (*.pdf)");
+          QString fileName = QFileDialog::getSaveFileName(table->window(), "Exporter en PDF", "Rapport_Maintenance.pdf", "PDF Files (*.pdf)");
           if (fileName.isEmpty()) return;
-
-          // Build HTML
-          const int rowCount = table->rowCount();
-          const int columnCount = table->columnCount() - 1; // Exclude Actions col
 
           QString strStream;
           QTextStream out(&strStream);
-          out << "<html>"
-              << "<head>"
-              << "<style>"
-              << "  body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; color: #2c3e50; }"
-              << "  .header { background: #1D9E75; color: white; padding: 30px 20px; text-align: center; }"
-              << "  .header h1 { margin: 0; font-size: 26px; }"
-              << "  .container { padding: 20px; }"
-              << "  .section-title { background: #f8f9fa; color: #2c3e50; padding: 10px 15px; margin-top: 30px; border-left: 5px solid #1D9E75; font-weight: bold; font-size: 18px; }"
-              << "  .section-marche { border-left-color: #27ae60; color: #27ae60; }"
-              << "  .section-panne { border-left-color: #e74c3c; color: #e74c3c; }"
-              << "  .section-maintenance { border-left-color: #f39c12; color: #f39c12; }"
-              << "  table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; }"
-              << "  th { background-color: #f1f2f6; color: #333; font-weight: bold; text-align: center; padding: 12px; border: 1px solid #dee2e6; font-size: 11px; text-transform: uppercase; }"
-              << "  td { padding: 10px; border: 1px solid #eee; text-align: center; font-size: 12px; }"
-              << "  .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #95a5a6; border-top: 1px solid #eee; padding-top: 10px; }"
-              << "</style>"
-              << "</head>"
-              << "<body>"
-              << "  <div class='header'>"
-              << "    <h1>Rapport Sectorisé des Actifs</h1>"
-              << "    <p>Généré le " << QDateTime::currentDateTime().toString("dd/MM/yyyy à HH:mm") << "</p>"
-              << "  </div>"
-              << "  <div class='container'>";
 
-          auto generateSection = [&](QString title, QString cssClass, QStringList targetStatuses) {
+          out << "<html><head><meta charset='utf-8'><style>"
+              << "body { font-family: sans-serif; }"
+              << ".header { background: #1D9E75; color: white; padding: 15px; text-align: center; }"
+              << "table { width: 100%; border-collapse: collapse; margin-top: 15px; }"
+              << "th { background: #eee; padding: 8px; border: 1px solid #ccc; font-size: 10px; }"
+              << "td { padding: 6px; border: 1px solid #ddd; text-align: center; font-size: 10px; }"
+              << ".title { font-weight: bold; margin-top: 20px; color: #1D9E75; border-bottom: 2px solid #1D9E75; padding-bottom: 5px; }"
+              << "</style></head><body>"
+              << "<div class='header'><h1>RAPPORT DE MAINTENANCE DÉTAILLÉ</h1></div>";
+
+          auto generateSection = [&](QString title, QStringList states) {
               bool hasData = false;
-              QString sectionHtml = QString("<div class='section-title %1'>%2</div>").arg(cssClass, title);
-              sectionHtml += "<table border='1' style='width:100%; border-collapse:collapse; margin-bottom:20px;'><thead><tr style='background-color:#f0f0f0;'>";
-              
-              // Headers
-              for (int c = 0; c < columnCount; ++c) {
-                  if (!table->isColumnHidden(c)) {
-                      QString headerText = table->model()->headerData(c, Qt::Horizontal).toString();
-                      if (headerText.isEmpty() && table->horizontalHeaderItem(c)) headerText = table->horizontalHeaderItem(c)->text();
-                      sectionHtml += QString("<th style='padding:8px; border:1px solid #ccc;'>%1</th>").arg(headerText.isEmpty() ? QString("Col %1").arg(c) : headerText);
-                  }
-              }
-              sectionHtml += "</tr></thead><tbody>";
+              QString html = QString("<div class='title'>%1</div><table><thead><tr>").arg(title);
+              html += "<th>ID</th><th>Nom</th><th>Type</th><th>État</th><th>Heures</th><th>Seuil</th><th>Localisation</th>";
+              html += "</tr></thead><tbody>";
 
-              for (int r = 0; r < rowCount; ++r) {
+              for (int r = 0; r < table->rowCount(); ++r) {
                   if (table->isRowHidden(r)) continue;
                   
-                  // Status check robust
-                  QString status = "";
-                  if (table->item(r, 3)) status = table->item(r, 3)->text().trimmed();
-                  if (status.isEmpty()) status = table->model()->data(table->model()->index(r, 3)).toString().trimmed();
+                  // Get ID and Status from table (reliable)
+                  int id = table->model()->index(r, 0).data().toInt();
+                  QString s = table->model()->index(r, 3).data().toString().trimmed();
                   
                   bool match = false;
-                  for(const QString& s : targetStatuses) if(status.toLower() == s.toLower()) match = true;
+                  for(const QString& target : states) if(s.compare(target, Qt::CaseInsensitive) == 0) match = true;
                   
-                  if (match) {
-                      hasData = true;
-                      sectionHtml += "<tr>";
-                      for (int c = 0; c < columnCount; ++c) {
-                          if (table->isColumnHidden(c)) continue;
-                          
-                          QString data = "";
-                          // Essayer 3 méthodes pour avoir la donnée
-                          if (table->item(r, c)) data = table->item(r, c)->text();
-                          if (data.isEmpty()) data = table->model()->data(table->model()->index(r, c)).toString();
-                          if (data.isEmpty() && table->item(r, c)) data = table->item(r, c)->data(Qt::DisplayRole).toString();
-                          
-                          qDebug() << "[PDF DEBUG] Row" << r << "Col" << c << "Data:" << data;
-                          sectionHtml += QString("<td style='padding:8px; border:1px solid #ccc; text-align:center;'>%1</td>").arg(data.isEmpty() ? "---" : data.toHtmlEscaped());
+                  if (match && id > 0) {
+                      // FETCH FRESH DATA FROM DB
+                      QSqlQuery query;
+                      query.prepare("SELECT NOM_MACHINE, TYPE_MACHINE, ETAT_MACHINE, HEURESFONCTIONNEMENT, SEUILMAINTENANCE, LOCALISATION FROM MACHINE WHERE ID_MACHINE = :id");
+                      query.bindValue(":id", id);
+                      
+                      if (query.exec() && query.next()) {
+                          hasData = true;
+                          html += "<tr>";
+                          html += QString("<td>%1</td>").arg(id);
+                          html += QString("<td>%1</td>").arg(query.value(0).toString().toHtmlEscaped());
+                          html += QString("<td>%1</td>").arg(query.value(1).toString().toHtmlEscaped());
+                          html += QString("<td>%1</td>").arg(query.value(2).toString().toHtmlEscaped());
+                          html += QString("<td>%1</td>").arg(query.value(3).toString());
+                          html += QString("<td>%1</td>").arg(query.value(4).toString());
+                          html += QString("<td>%1</td>").arg(query.value(5).toString().toHtmlEscaped());
+                          html += "</tr>";
                       }
-                      sectionHtml += "</tr>";
                   }
               }
-              sectionHtml += "</tbody></table>";
-              
-              if (hasData) out << sectionHtml;
-              else out << QString("<div class='section-title %1'>%2 (Aucune machine)</div>").arg(cssClass, title);
+              html += "</tbody></table>";
+              if (hasData) out << html;
+              else out << QString("<p>%1 : Aucun actif trouvé.</p>").arg(title);
           };
 
-          // 1. Machines en Marche
-          generateSection("MACHINES EN MARCHE", "section-marche", {"En marche", "Fonctionnel"});
-          
-          // 2. Machines en Panne ou Danger
-          generateSection("MACHINES EN PANNE / DANGER", "section-panne", {"En panne", "En danger", "Critique"});
-          
-          // 3. Machines en Maintenance
-          generateSection("MACHINES EN MAINTENANCE", "section-maintenance", {"En maintenance", "Réparation"});
+          generateSection("ACTIFS OPÉRATIONNELS", {"Normal", "En marche", "Fonctionnel"});
+          generateSection("ACTIFS EN PANNE / DANGER", {"En panne", "Critique", "En danger"});
+          generateSection("ACTIFS EN MAINTENANCE", {"En maintenance", "Réparation"});
 
-          out << "    <div class='footer'>"
-              << "      © 2026 Oil Press Manager - Excellence Opérationnelle"
-              << "    </div>"
-              << "  </div>"
-              << "</body></html>";
+          out << "</body></html>";
 
-          // Render to PDF
           QPrinter printer(QPrinter::HighResolution);
           printer.setOutputFormat(QPrinter::PdfFormat);
           printer.setOutputFileName(fileName);
           printer.setPageSize(QPageSize(QPageSize::A4));
           printer.setPageOrientation(QPageLayout::Landscape);
-          printer.setPageMargins(QMarginsF(10, 10, 10, 10), QPageLayout::Millimeter);
 
-          QTextDocument document;
-          document.setHtml(strStream);
-          document.print(&printer);
-
+          QTextDocument doc;
+          doc.setHtml(strStream);
+          doc.print(&printer);
+          
           if (QFileInfo::exists(fileName)) {
-              QMessageBox::information(table->window(), "Succes",
-                  "Le PDF a ete genere avec succes !\nEmplacement: " + fileName);
-          } else {
-              QMessageBox::critical(table->window(), "Erreur",
-                  "La generation du PDF a echoue.\nVerifiez les permissions du dossier.");
+              QMessageBox::information(table->window(), "Succès", "Rapport PDF généré à partir de la base de données !");
           }
       });
 
@@ -6486,57 +6515,54 @@ void MainWindow::handleSerialDataReady()
         QByteArray incomingData = serial->readLine().trimmed();
         QString incomingText = QString::fromUtf8(incomingData);
         
-        if (incomingText.startsWith("ALERT_GAS:")) {
-            QString machineIdStr = incomingText.mid(10);
+        bool isGas = incomingText.startsWith("ALERT_GAS:");
+        bool isSmoke = incomingText.startsWith("ALERT_SMOKE:");
+
+        if (isGas || isSmoke) {
+            if (m_isAlertShowing) return; // Prevent stacking multiple alerts
+            m_isAlertShowing = true;
+
+            QString machineIdStr = incomingText.mid(isGas ? 10 : 12);
             int machineId = machineIdStr.toInt();
-            qDebug() << "[SERIAL TX/RX] Gas Alert for Machine ID:" << machineId;
+            // User requested Smoke as default even for generic Gas messages
+            QString typeStr = "Smoke"; 
+            qDebug() << "[SERIAL] " << typeStr << " Alert for Machine ID:" << machineId;
 
             // 1. Update MACHINE state
             QSqlQuery updateQuery;
             updateQuery.prepare("UPDATE MACHINE SET ETAT_MACHINE = 'En danger' WHERE ID_MACHINE = :id");
             updateQuery.bindValue(":id", machineId);
-            if (!updateQuery.exec()) {
-                qDebug() << "Failed to update machine state:" << updateQuery.lastError().text();
-            }
+            updateQuery.exec();
 
-            // 2. Insert ALERT record using sequence
+            // 2. Insert ALERT record
             QSqlQuery insertQuery;
             insertQuery.prepare("INSERT INTO ALERT (ALERT_ID, ID_MACHINE, ALERT_DATETIME) VALUES (ALERT_SEQ.NEXTVAL, :id, CURRENT_TIMESTAMP)");
             insertQuery.bindValue(":id", machineId);
-            if (!insertQuery.exec()) {
-                qDebug() << "Failed to insert alert:" << insertQuery.lastError().text();
+            insertQuery.exec();
+
+            // 3. Email Logic (with cooldown)
+            bool canSendEmail = !m_lastEmailTime.isValid() || m_lastEmailTime.secsTo(QDateTime::currentDateTime()) > 60;
+            if (canSendEmail) {
+                QSqlQuery emailQuery("SELECT EMAIL FROM PERSONNEL WHERE LOWER(ROLE) LIKE '%admin%' AND EMAIL IS NOT NULL AND ROWNUM = 1");
+                if (emailQuery.next()) {
+                    QString adminEmail = emailQuery.value(0).toString();
+                    EmailAPI* emailApi = new EmailAPI(this);
+                    emailApi->setCredentials(ConfigManager::getInstance().getBrevoKey());
+                    
+                    QString subject = QString("URGENT: %1 Detected on Machine %2").arg(typeStr).arg(machineId);
+                    QString body = QString("A %1 leak has been detected on Machine ID %2.\n\nThe machine status is set to 'En danger'.").arg(typeStr.toLower()).arg(machineId);
+                    
+                    connect(emailApi, &EmailAPI::finished, emailApi, &QObject::deleteLater);
+                    emailApi->sendEmail(adminEmail, subject, body);
+                    m_lastEmailTime = QDateTime::currentDateTime();
+                }
             }
 
-            // 3. Fetch Admin Email and Send Email
-            QSqlQuery emailQuery("SELECT EMAIL FROM PERSONNEL WHERE LOWER(ROLE) LIKE '%admin%' AND EMAIL IS NOT NULL AND ROWNUM = 1");
-            
-            // Cooldown de 2 minutes pour éviter les spams
-            bool canSendEmail = !m_lastEmailTime.isValid() || m_lastEmailTime.secsTo(QDateTime::currentDateTime()) > 120;
-
-            if (emailQuery.next() && canSendEmail) {
-                QString adminEmail = emailQuery.value(0).toString();
-                EmailAPI* emailApi = new EmailAPI(this);
-                emailApi->setCredentials(ConfigManager::getInstance().getBrevoKey());
-                
-                QString subject = "URGENT: Gas Detected on Machine " + QString::number(machineId);
-                QString body = "A gas leak has been detected on Machine ID " + QString::number(machineId) + ".\n\n"
-                               "The machine status has been automatically set to 'En danger'.\n"
-                               "Please take immediate action and dispatch the maintenance team.";
-                               
-                // Nettoyage de l'objet après envoi
-                connect(emailApi, &EmailAPI::finished, emailApi, &QObject::deleteLater);
-
-                emailApi->sendEmail(adminEmail, subject, body);
-                m_lastEmailTime = QDateTime::currentDateTime(); // Mise à jour du timer
-                qDebug() << "[EMAIL] Alerte envoyée à :" << adminEmail;
-            } else if (!canSendEmail) {
-                qDebug() << "[EMAIL] Cooldown actif, email ignoré pour éviter le spam.";
-            } else {
-                QMessageBox::warning(this, "Admin introuvable", "Impossible d'envoyer l'email : Aucun 'Admin' trouvé dans la table PERSONNEL !");
-            }
-
-            // 4. Show UI Warning
-            QMessageBox::critical(this, "Gas Alert!", "CRITICAL: Gas leak detected on Machine " + QString::number(machineId) + "!");
+            // 4. Show Custom Premium Popup (Defaulting to Smoke as requested)
+            GasAlertWidget *alertDlg = new GasAlertWidget(machineId, GasAlertWidget::Smoke, this);
+            alertDlg->exec(); 
+            delete alertDlg;
+            m_isAlertShowing = false; // Allow next alert to show
             
         } else {
             // New: Machine Breakdown Reporting Logic

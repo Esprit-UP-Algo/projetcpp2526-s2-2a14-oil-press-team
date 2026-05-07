@@ -43,6 +43,7 @@ private:
     QSerialPort *serial;
     QDateTime m_lastEmailTime;
     QMap<QString, QDateTime> activeShifts;
+    bool m_isAlertShowing = false;
     
     QWidget* createTitleBar();
     Qt::Edges getEdge(const QPoint &pos);

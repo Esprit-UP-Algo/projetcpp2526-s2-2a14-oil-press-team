@@ -1,6 +1,7 @@
 #include "LoginSystem.h"
 #include "AuthWidgets.h"
 #include "smtp.h"
+#include "ConfigManager.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -504,18 +505,22 @@ QWidget* LoginSystem::createActivationVerifyWidget() {
 }
 
 void LoginSystem::sendActivationEmail(const QString& toEmail, const QString& code) {
-    // We instantiate the Smtp class. Since you haven't provided credentials in the code yet,
-    // this will connect to smtp.gmail.com with placeholder details that you will need to fill in.
-    
-    // TODO: REPLACE "YOUR_APP_PASSWORD" WITH A REAL GMAIL APP PASSWORD
-    Smtp* smtp = new Smtp("oilpress71@gmail.com", "misaoqheryptlqju", "smtp.gmail.com", 465, 30000);
+    QString smtpUser = ConfigManager::getInstance().getSmtpUser();
+    QString smtpPass = ConfigManager::getInstance().getSmtpPass();
+
+    if (smtpUser.isEmpty() || smtpPass.isEmpty()) {
+        qDebug() << "SMTP Error: Credentials missing in config.json";
+        return;
+    }
+
+    Smtp* smtp = new Smtp(smtpUser, smtpPass, "smtp.gmail.com", 465, 30000);
     
     QString body = "Hello " + currentActivationName + ",\n\n"
                    "Your account activation code for Oil Press Manager is: " + code + "\n\n"
                    "Once verified, you will be able to log in using your ID Personnel as your password.\n";
 
     // Ensure the sender matches your authentication email
-    smtp->sendMail("oilpress71@gmail.com", toEmail, "Account Activation Code", body);
+    smtp->sendMail(smtpUser, toEmail, "Account Activation Code", body);
     
     // We delete it later just like in the other usages
     connect(smtp, &Smtp::status, [smtp](const QString & /*statusStr*/){

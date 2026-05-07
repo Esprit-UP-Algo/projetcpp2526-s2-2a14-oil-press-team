@@ -7,6 +7,8 @@
 #include <QJsonDocument>
 #include <QDebug>
 #include <QMessageBox>
+#include <QCoreApplication>
+#include <QDir>
 
 class ConfigManager {
 public:
@@ -18,6 +20,12 @@ public:
     QString getSmsToken() const { return getValue("api_keys", "tunisie_sms"); }
     QString getBrevoKey() const { return getValue("api_keys", "brevo"); }
     QString getGeminiKey() const { return getValue("api_keys", "gemini"); }
+    
+    // Email Settings
+    QString getSenderEmail() const { return getValue("email_settings", "sender_email"); }
+    QString getAdminEmail() const { return getValue("email_settings", "admin_email"); }
+    QString getSmtpUser() const { return getValue("email_settings", "smtp_user"); }
+    QString getSmtpPass() const { return getValue("email_settings", "smtp_pass"); }
 
     // SMS Configuration
     QString getSmsSender() const { 
@@ -35,11 +43,21 @@ private:
     }
 
     void loadConfig() {
-        QFile file("config.json");
+        QString path = "config.json";
+        qDebug() << "Checking for config at current dir:" << QDir::currentPath() + "/" + path;
+        
+        if (!QFile::exists(path)) {
+            path = QCoreApplication::applicationDirPath() + "/config.json";
+            qDebug() << "Not found. Checking app dir:" << path;
+        }
+
+        QFile file(path);
         if (!file.open(QIODevice::ReadOnly)) {
-            qWarning() << "Could not open config.json. Features requiring API keys will fail.";
+            qWarning() << "CRITICAL: Could not open config.json at" << path;
+            qWarning() << "Please ensure config.json exists in either the working directory or the application directory.";
             return;
         }
+        qDebug() << "Successfully loaded config from:" << path;
 
         QByteArray data = file.readAll();
         QJsonDocument doc = QJsonDocument::fromJson(data);

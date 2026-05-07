@@ -52,11 +52,12 @@ HEADERS += \
     dealgenerator.h \
     workforceplanner.h \
     anomalyapi.h \
-    ocrscannerapi.h
+    ocrscannerapi.h \
+    GasAlertWidget.h
 
 FORMS += \
     mainwindow.ui
-
+ 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin
