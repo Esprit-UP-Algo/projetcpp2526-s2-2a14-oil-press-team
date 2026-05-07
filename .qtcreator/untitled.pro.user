@@ -1,10 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE QtCreatorProject>
-<<<<<<< HEAD
-<!-- Written by QtCreator 18.0.1, 2026-05-06T20:33:25. -->
-=======
-<!-- Written by QtCreator 18.0.2, 2026-05-07T09:32:49. -->
->>>>>>> 06076f0 (Fix email functionality and add premium gas alerts)
+<!-- Written by QtCreator 18.0.2, 2026-05-07T19:46:55. -->
 <qtcreator>
  <data>
   <variable>EnvironmentId</variable>
@@ -169,11 +165,7 @@
      <value type="QString" key="PerfRecordArgsId">-e cpu-cycles --call-graph &quot;dwarf,4096&quot; -F 250</value>
      <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName"></value>
      <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">Qt4ProjectManager.Qt4RunConfiguration:</value>
-<<<<<<< HEAD
-     <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">C:/fuge 21/projetcpp2526-s2-2a14-oil-press-team/untitled.pro</value>
-=======
-     <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">C:/Users/Dell/Desktop/26.04/projetcpp2526-s2-2a14-oil-press-team/untitled.pro</value>
->>>>>>> 06076f0 (Fix email functionality and add premium gas alerts)
+     <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">C:/Users/Dell/Desktop/07.05/07.05/untitled.pro</value>
      <value type="bool" key="ProjectExplorer.RunConfiguration.Customized">false</value>
      <value type="QString" key="ProjectExplorer.RunConfiguration.UniqueId"></value>
      <value type="bool" key="RunConfiguration.UseCppDebuggerAuto">true</value>
@@ -210,11 +202,7 @@
     <value type="QString" key="PerfRecordArgsId">-e cpu-cycles --call-graph &quot;dwarf,4096&quot; -F 250</value>
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName"></value>
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">Qt4ProjectManager.Qt4RunConfiguration:</value>
-<<<<<<< HEAD
-    <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">C:/fuge 21/projetcpp2526-s2-2a14-oil-press-team/untitled.pro</value>
-=======
-    <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">C:/Users/Dell/Desktop/26.04/projetcpp2526-s2-2a14-oil-press-team/untitled.pro</value>
->>>>>>> 06076f0 (Fix email functionality and add premium gas alerts)
+    <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">C:/Users/Dell/Desktop/07.05/07.05/untitled.pro</value>
     <value type="bool" key="ProjectExplorer.RunConfiguration.Customized">false</value>
     <value type="QString" key="ProjectExplorer.RunConfiguration.UniqueId"></value>
     <value type="bool" key="RunConfiguration.UseCppDebuggerAuto">true</value>

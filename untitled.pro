@@ -57,6 +57,10 @@ HEADERS += \
 
 FORMS += \
     mainwindow.ui
+
+DISTFILES += \
+    config.json \
+    config.json.example
  
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
