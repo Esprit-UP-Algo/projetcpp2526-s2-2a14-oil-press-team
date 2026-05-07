@@ -986,7 +986,8 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
           new QRegularExpressionValidator(QRegularExpression("^[A-Za-z]{0,2}[0-9]*$"), page));
       static_cast<QLineEdit*>(wRef)->setPlaceholderText("e.g. AB12");
       addField(formLayout, labelStyle, inputStyle, "Order Date:", "", wDate, true);
-      static_cast<QDateEdit*>(wDate)->setMinimumDate(QDate::currentDate());
+      static_cast<QDateEdit*>(wDate)->setMinimumDate(QDate::currentDate().addDays(-7));
+      static_cast<QDateEdit*>(wDate)->setMaximumDate(QDate::currentDate());
       addField(formLayout, labelStyle, inputStyle, "Client's Name:", "Enter client's name", wClient, false);
       static_cast<QLineEdit*>(wClient)->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z \\.]*$"), page));
       addField(formLayout, labelStyle, inputStyle, "Client's Address:", "Enter address", wAddress, false);
@@ -1105,7 +1106,6 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
       // Connect Button
       QObject::connect(btnSubmit, &QPushButton::clicked, [=]() {
-          QMessageBox::information(nullptr, "DEBUG", "Register Order button clicked!");
           int id = 0; // ID will be auto-generated
           QString ref = static_cast<QLineEdit*>(wRef)->text().trimmed();
           QDate date = static_cast<QDateEdit*>(wDate)->date();
@@ -1170,7 +1170,6 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                   }
               }
 
-              QMessageBox::information(nullptr, "Success", "[DEBUG] Order added successfully with " + QString::number(pendingItems->size()) + " items!");
 
               // Capture phone again to be 100% safe
               QString phoneForSms = static_cast<QLineEdit*>(wPhone)->text().trimmed();
@@ -1205,8 +1204,6 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                   btn->setChecked(btn->text() == "Order Hub");
               }
 
-              QMessageBox::information(nullptr, "DEBUG: Pre-SMS", "About to trigger SMS for phone: " + phoneForSms);
-
               // Fire SMS Confirmation
               SmsAPI *sms = new SmsAPI(outNestedStack);
 
@@ -1224,8 +1221,6 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
               QString txtMsg = QString("Order confirmed successfuly! Client: %1, Ref: %2, Total: %3 TND")
                                   .arg(client, ref, QString::number(totalAmount, 'f', 2));
               sms->sendSMS(phoneForSms, txtMsg);
-
-              qDebug() << "DEBUG: sendSMS call reached for:" << phoneForSms;
 
           } else {
               QMessageBox::critical(nullptr, "Error", "Failed to add order.\n\nDB Error: " + c.getLastError());
@@ -1263,11 +1258,6 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       sortCombo->setStyleSheet(getInputStyle());
       sortCombo->setFixedWidth(200);
 
-      // Print PDF Button
-      QPushButton *btnPrint = new QPushButton("Print PDF");
-      btnPrint->setCursor(Qt::PointingHandCursor);
-      btnPrint->setStyleSheet(getButtonStyle());
-      btnPrint->setFixedWidth(120);
 
       // Refresh Button
       QPushButton *btnRefresh = new QPushButton("Refresh");
@@ -1282,8 +1272,6 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       controlLayout->addWidget(sortCombo);
       controlLayout->addStretch();
       controlLayout->addWidget(btnRefresh);
-      controlLayout->addSpacing(10);
-      controlLayout->addWidget(btnPrint);
 
       histLayout->addWidget(controlBar);
 
@@ -1311,66 +1299,6 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
       histLayout->addWidget(table);
 
-      // Connect Print — exports exactly what is currently visible in the table
-      QObject::connect(btnPrint, &QPushButton::clicked, [table, searchEdit]() {
-        QString fileName = QFileDialog::getSaveFileName(
-            table->window(), "Export Order History", QString(),
-            "PDF Files (*.pdf)");
-        if (fileName.isEmpty())
-          return;
-        if (QFileInfo(fileName).suffix().isEmpty())
-          fileName.append(".pdf");
-
-        QPrinter printer(QPrinter::PrinterResolution);
-        printer.setOutputFormat(QPrinter::PdfFormat);
-        printer.setPageSize(QPageSize(QPageSize::A4));
-        printer.setOutputFileName(fileName);
-
-        QTextDocument doc;
-        QString html = "<h1 style='text-align:center; color:#333;'>Order History Report</h1>";
-        html += "<h3 style='text-align:center; color:#666;'>" +
-                QDate::currentDate().toString("dd MMMM yyyy") + "</h3>";
-
-        // Show active filter in report if search is active
-        QString activeSearch = searchEdit->text().trimmed();
-        if (!activeSearch.isEmpty()) {
-            html += "<p style='text-align:center; color:#888; font-size:12px;'>"
-                    "Filtered by: <b>" + activeSearch.toHtmlEscaped() + "</b></p>";
-        }
-        html += "<br>";
-        html += "<table border='1' cellspacing='0' cellpadding='6' width='100%' "
-                "style='border-collapse:collapse; border-color:#ccc;'>";
-
-        // Headers — skip hidden ID column (col 0 is Reference, all cols visible)
-        html += "<thead style='background-color:#f2f2f2;'><tr>";
-        for (int c = 0; c < table->columnCount() - 1; ++c) { // Skip 'Actions'
-          if (!table->isColumnHidden(c))
-            html += "<th style='padding:8px; text-align:left;'>" +
-                    table->horizontalHeaderItem(c)->text() + "</th>";
-        }
-        html += "</tr></thead>";
-
-        // Body — only currently visible rows
-        html += "<tbody>";
-        for (int r = 0; r < table->rowCount(); ++r) {
-          if (table->isRowHidden(r)) continue;
-          html += "<tr>";
-          for (int c = 0; c < table->columnCount() - 1; ++c) {
-            if (table->isColumnHidden(c)) continue;
-            QTableWidgetItem *item = table->item(r, c);
-            html += "<td style='padding:8px;'>" + (item ? item->text().toHtmlEscaped() : "") + "</td>";
-          }
-          html += "</tr>";
-        }
-        html += "</tbody></table>";
-
-        doc.setHtml(html);
-        doc.setPageSize(printer.pageRect(QPrinter::Point).size());
-        doc.print(&printer);
-
-        QMessageBox::information(table->window(), "Success",
-                                 "PDF Exported Successfully!");
-      });
 
       // 3. Data & Logic
       auto updateTable = [table, searchEdit, sortCombo, btnRefresh]() {
@@ -1383,18 +1311,22 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
         // Collect all rows first
         struct Row {
-            QString id, ref, date, etat, client, address, livraison, delivStatus, telephone;
+            QString id, ref;
+            QDateTime date;
+            QString etat, client, address;
+            QDateTime livraison;
+            QString delivStatus, telephone;
         };
         QVector<Row> rows;
         for (int i = 0; i < model->rowCount(); ++i) {
           Row row;
           row.id       = model->record(i).value("ID_COMMANDE").toString();
           row.ref      = model->record(i).value("REFERENCE").toString();
-          row.date     = model->record(i).value("DATE_COMMANDE").toDate().toString("yyyy-MM-dd");
+          row.date     = model->record(i).value("DATE_COMMANDE").toDateTime();
           row.etat     = model->record(i).value("ETAT_COMMANDE").toString();
           row.client   = model->record(i).value("NOM_CLIENT").toString();
           row.address  = model->record(i).value("ADRESSE_CLIENT").toString();
-          row.livraison= model->record(i).value("DATE_LIVRAISON").toDate().toString("yyyy-MM-dd");
+          row.livraison= model->record(i).value("DATE_LIVRAISON").toDateTime();
           row.delivStatus = model->record(i).value("DELIVERY_STATUS").toString();
           row.telephone= model->record(i).value("NUMERO_TELEPHONE").toString();
 
@@ -1408,19 +1340,20 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
         }
 
         // Sort
-        if (sortOpt == "Date (Newest First)") {
+        int sortIdx = sortCombo->currentIndex();
+        if (sortIdx == 0) { // Date (Newest First)
           std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
-            return a.date > b.date; // descending
+            return a.date > b.date;
           });
-        } else if (sortOpt == "Date (Oldest First)") {
+        } else if (sortIdx == 1) { // Date (Oldest First)
           std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
-            return a.date < b.date; // ascending
+            return a.date < b.date;
           });
-        } else if (sortOpt == "Client Name (A \u2192 Z)") {
+        } else if (sortIdx == 2) { // Client Name (A -> Z)
           std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
             return a.client.toLower() < b.client.toLower();
           });
-        } else if (sortOpt == "Client Name (Z \u2192 A)") {
+        } else if (sortIdx == 3) { // Client Name (Z -> A)
           std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b){
             return a.client.toLower() > b.client.toLower();
           });
@@ -1431,11 +1364,11 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
         for (const Row &row : rows) {
           QString id       = row.id;
           QString ref      = row.ref;
-          QString date     = row.date;
+          QString date     = row.date.toString("yyyy-MM-dd");
           QString etat     = row.etat;
           QString client   = row.client;
           QString address  = row.address;
-          QString livraison= row.livraison;
+          QString livraison= row.livraison.toString("yyyy-MM-dd");
           QString delivStatus = row.delivStatus;
           QString phone    = row.telephone;
 
@@ -1723,13 +1656,26 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                 QDateEdit *dateEdit = new QDateEdit(QDate::fromString(date, "yyyy-MM-dd"));
                 dateEdit->setDisplayFormat("yyyy-MM-dd");
                 dateEdit->setCalendarPopup(true);
-                dateEdit->setMinimumDate(QDate::currentDate().addYears(-10)); // allow past dates when editing
+                dateEdit->setMinimumDate(QDate::currentDate().addDays(-7));
+                dateEdit->setMaximumDate(QDate::currentDate());
                 QLineEdit *clientEdit = new QLineEdit(client);
                 clientEdit->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z \\.]*$"), &dlg));
                 QLineEdit *addressEdit = new QLineEdit(address);
+                // Fetch current quantity from CONTENIR
+                int currentQty = 0;
+                QSqlQuery qtyQ;
+                qtyQ.prepare("SELECT QUANTITE_DEMANDEE FROM CONTENIR WHERE ID_COMMANDE = :id");
+                qtyQ.bindValue(":id", orderId);
+                if (qtyQ.exec() && qtyQ.next()) currentQty = qtyQ.value(0).toInt();
+
                 QDateEdit *livraisonEdit = new QDateEdit(QDate::fromString(livraison, "yyyy-MM-dd"));
                 livraisonEdit->setDisplayFormat("yyyy-MM-dd");
                 livraisonEdit->setCalendarPopup(true);
+
+                QLineEdit *phoneEdit = new QLineEdit(phone);
+                QSpinBox *qtyEdit = new QSpinBox();
+                qtyEdit->setRange(1, 10000);
+                qtyEdit->setValue(currentQty);
 
                 auto styleField = [&](QWidget *w) {
                   w->setStyleSheet(
@@ -1752,6 +1698,8 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                 styleField(clientEdit);
                 styleField(addressEdit);
                 styleField(livraisonEdit);
+                styleField(phoneEdit);
+                styleField(qtyEdit);
 
                 QWidget *radioWidget = new QWidget();
                 radioWidget->setStyleSheet("background: transparent; border: none;");
@@ -1780,6 +1728,8 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                 addRow("Order Date:", dateEdit);
                 addRow("Client Name:", clientEdit);
                 addRow("Address:", addressEdit);
+                addRow("Phone:", phoneEdit);
+                addRow("Quantity:", qtyEdit);
                 addRow("Delivery Date:", livraisonEdit);
                 addRow("State:", radioWidget);
 
@@ -1830,8 +1780,17 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
                 if (dlg.exec() == QDialog::Accepted) {
                     QString newState = pendingRadio->isChecked() ? "Pending" : "Completed";
                     QString newDelivStatus = delivStatusEdit->currentText();
+                    QString newPhone = phoneEdit->text().trimmed();
+                    int newQty = qtyEdit->value();
 
-                    Commande c(orderId, refEdit->text().trimmed(), dateEdit->date(), newState, clientEdit->text().trimmed(), addressEdit->text().trimmed(), livraisonEdit->date(), phone, newDelivStatus);
+                    // Update quantity in CONTENIR
+                    QSqlQuery updQty;
+                    updQty.prepare("UPDATE CONTENIR SET QUANTITE_DEMANDEE = :qty WHERE ID_COMMANDE = :id");
+                    updQty.bindValue(":qty", newQty);
+                    updQty.bindValue(":id", orderId);
+                    updQty.exec();
+
+                    Commande c(orderId, refEdit->text().trimmed(), dateEdit->date(), newState, clientEdit->text().trimmed(), addressEdit->text().trimmed(), livraisonEdit->date(), newPhone, newDelivStatus);
                     if (c.modifier()) {
                         QMessageBox::information(table->window(), "Success", "Order updated successfully!");
 
@@ -1902,7 +1861,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       QHBoxLayout *headerLayout = new QHBoxLayout(analyticsHeader);
       headerLayout->setContentsMargins(0, 0, 0, 10);
 
-      QLabel *anaTitle = new QLabel("Monthly Order Analytics");
+      QLabel *anaTitle = new QLabel("Monthly Delivery Analytics");
       anaTitle->setStyleSheet("font-size: 20px; font-weight: 700; color: #1a1a1a;");
 
       QPushButton *btnRefreshAna = new QPushButton("Refresh Data");
@@ -1916,16 +1875,16 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       headerLayout->addWidget(btnRefreshAna);
       cLayout->addWidget(analyticsHeader);
 
-      GenericBarChart *chart = new GenericBarChart("Orders per Month");
+      GenericBarChart *chart = new GenericBarChart("Deliveries per Month");
 
       auto updateAnalytics = [chart]() {
           chart->clearBars();
           QSqlQuery chartQuery;
           // Fetch count of orders per month, sorted chronologically
-          chartQuery.prepare("SELECT TO_CHAR(DATE_COMMANDE, 'Mon YYYY'), COUNT(*) "
+          chartQuery.prepare("SELECT TO_CHAR(DATE_LIVRAISON, 'Mon YYYY'), COUNT(*) "
                              "FROM COMMANDE "
-                             "GROUP BY TO_CHAR(DATE_COMMANDE, 'Mon YYYY'), TRUNC(DATE_COMMANDE, 'MM') "
-                             "ORDER BY TRUNC(DATE_COMMANDE, 'MM') ASC");
+                             "GROUP BY TO_CHAR(DATE_LIVRAISON, 'Mon YYYY'), TRUNC(DATE_LIVRAISON, 'MM') "
+                             "ORDER BY TRUNC(DATE_LIVRAISON, 'MM') ASC");
 
           QColor colors[] = { QColor(52, 152, 219), QColor(61, 220, 132), QColor(155, 89, 182), QColor(241, 196, 15), QColor(230, 126, 34), QColor(26, 188, 156) };
           int colorIdx = 0;

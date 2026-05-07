@@ -34,26 +34,24 @@ void SmsAPI::sendSMS(const QString &toNumber, const QString &messageBody)
         sanitizedNumber = "216" + sanitizedNumber;
     }
 
-    // DEBUG: Show the exact string being sent
-    QMessageBox::information(nullptr, "SMS DEBUG: Number Format",
-                             "Original: " + toNumber + "\nSanitized: " + sanitizedNumber);
 
-    // Official Endpoint
-    QUrl url("https://mystudents.tunisiesms.tn/api/sms");
+    // Endpoint from Config
+    QUrl url(ConfigManager::getInstance().getSmsEndpoint());
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
     // Auth: Bearer Token
     QString apiKey = ConfigManager::getInstance().getSmsToken();
     if (apiKey.isEmpty()) {
-        qWarning() << "SMS API Key is missing in config.json";
+        // apiKey = "36qQASFUsnp6TEG7fPyId8v5j!G1XFPbatDnCL0xjcctcneBYSFAkNiNZ!Rkoy9b9dsSu2pKtcCCYtJLC2XBcqMOsLOzn06ka1SJAK55";
+        apiKey = ""; // Provide a default or handle the error
     }
     request.setRawHeader("Authorization", "Bearer " + apiKey.trimmed().toUtf8());
 
     // Payload: Type 55 is MANDATORY per docs
     QJsonObject payload;
     payload.insert("type", "55"); 
-    payload.insert("sender", "TunSMS Test"); // IMPORTANT: User may need to change this to their authorized sender
+    payload.insert("sender", ConfigManager::getInstance().getSmsSender());
 
     QJsonObject smsObj;
     smsObj.insert("mobile", sanitizedNumber);
@@ -74,8 +72,6 @@ void SmsAPI::onReplyFinished(QNetworkReply *reply)
     int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     QByteArray responseData = reply->readAll();
 
-    qDebug() << "Tunisie SMS - HTTP Status:" << statusCode;
-    qDebug() << "Tunisie SMS - Response Content:" << responseData;
 
     bool isSuccess = false;
     QString displayMsg = "";
@@ -115,10 +111,11 @@ void SmsAPI::onReplyFinished(QNetworkReply *reply)
             displayMsg = "Non-standard response format:\n" + QString(responseData);
         }
     } else {
-        displayMsg = QString("Network Error %1: %2\nBody: %3")
+        displayMsg = QString("Network Error %1: %2\nTarget URL: %4\nBody: %3")
             .arg(statusCode)
             .arg(reply->errorString())
-            .arg(QString(responseData));
+            .arg(QString(responseData))
+            .arg(reply->url().toString());
     }
 
     if (isSuccess) {

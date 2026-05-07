@@ -19,6 +19,16 @@ public:
     QString getBrevoKey() const { return getValue("api_keys", "brevo"); }
     QString getGeminiKey() const { return getValue("api_keys", "gemini"); }
 
+    // SMS Configuration
+    QString getSmsSender() const { 
+        QString s = getValue("sms_config", "sender");
+        return s.isEmpty() ? "TunSMS Test" : s;
+    }
+    QString getSmsEndpoint() const { 
+        QString e = getValue("sms_config", "endpoint");
+        return e.isEmpty() ? "https://mystudents.tunisiesms.tn/api/sms" : e;
+    }
+
 private:
     ConfigManager() {
         loadConfig();
