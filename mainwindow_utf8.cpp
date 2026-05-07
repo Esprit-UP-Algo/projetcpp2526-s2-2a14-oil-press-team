@@ -1,4 +1,4 @@
-﻿#include "mainwindow.h"
+#include "mainwindow.h"
 #include "AuthWidgets.h"
 #include "EyeSaverButton.h"
 #include "article.h"
@@ -2519,10 +2519,11 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       table->setItem(i, 1, new QTableWidgetItem(model->data(model->index(i, 1)).toString()));
       table->setItem(i, 2, new QTableWidgetItem(model->data(model->index(i, 2)).toString()));
       table->setItem(i, 3, new QTableWidgetItem(model->data(model->index(i, 3)).toString()));
+      table->setItem(i, 4, new QTableWidgetItem(model->data(model->index(i, 4)).toString()));
       
       QTableWidgetItem *hItem = new QTableWidgetItem();
-      hItem->setData(Qt::DisplayRole, model->data(model->index(i, 4)).toInt());
-      table->setItem(i, 4, hItem);
+      hItem->setData(Qt::DisplayRole, model->data(model->index(i, 5)).toInt());
+      table->setItem(i, 5, hItem);
 
       // --- Actions ---
       QWidget *actionWidget = new QWidget();
@@ -2548,7 +2549,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
 
       al->addWidget(btnMod);
       al->addWidget(btnDel);
-      table->setCellWidget(i, 5, actionWidget);
+      table->setCellWidget(i, 6, actionWidget);
 
       // Connect Edit
       QObject::connect(btnMod, &QPushButton::clicked, [table, mid, refreshMachineTable]() {
@@ -2562,10 +2563,10 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           }
           if(row == -1) return;
 
-          QString currentName = table->item(row, 1)->text();
-          QString currentType = table->item(row, 2)->text();
-          QString currentStatus = table->item(row, 3)->text();
-          int currentHours = table->item(row, 4)->data(Qt::DisplayRole).toInt();
+          QString currentName = table->item(row, 2)->text();
+          QString currentType = table->item(row, 3)->text();
+          QString currentStatus = table->item(row, 4)->text();
+          int currentHours = table->item(row, 5)->data(Qt::DisplayRole).toInt();
 
           QDialog dlg(table->window());
           dlg.setWindowTitle("Modify Machine");
@@ -2728,7 +2729,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       controlLayout->addStretch();
       controlLayout->addWidget(btnPrint);
 
-      QStringList headers = {"ID", "Name", "Type", "Status", "Hours", "Actions"};
+      QStringList headers = {"ID", "Code", "Name", "Type", "Status", "Hours", "Actions"};
       QTableWidget *table = new QTableWidget();
       *machineTablePtr = table;
       table->setColumnCount(headers.size());
@@ -2746,15 +2747,15 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       cLayout->addWidget(table);
 
       QObject::connect(sortType, &QComboBox::currentTextChanged, [table](const QString &text) {
-          if (text == "Status") table->sortItems(3, Qt::AscendingOrder);
-          else if (text == "Hours") table->sortItems(4, Qt::AscendingOrder);
+          if (text == "Status") table->sortItems(4, Qt::AscendingOrder);
+          else if (text == "Hours") table->sortItems(5, Qt::AscendingOrder);
           // For "All" we could ideally sort by ID if needed, but keeping it simple
           else if (text == "All") table->sortItems(0, Qt::AscendingOrder);
       });
 
       auto updateFilter = [table, searchEdit, searchType]() {
           QString lowerQuery = searchEdit->text().toLower();
-          int col = (searchType->currentText() == "Type") ? 2 : 1; // 1 = Name, 2 = Type
+          int col = (searchType->currentText() == "Type") ? 3 : 2; // 2 = Name, 3 = Type
           
           for (int i = 0; i < table->rowCount(); ++i) {
               bool match = false;

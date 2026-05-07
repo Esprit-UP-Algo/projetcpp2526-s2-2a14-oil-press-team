@@ -64,6 +64,16 @@ bool Connection::createconnect()
             addUsage.exec("ALTER TABLE ARTICLE ADD (USAGE_COUNT NUMBER DEFAULT 0)");
             qDebug() << "Migration: added USAGE_COUNT column to ARTICLE";
         }
+        // --- Auto-migration: ensure CODE exists in MACHINE ---
+        QSqlQuery checkCode;
+        checkCode.exec("SELECT COUNT(*) FROM USER_TAB_COLUMNS WHERE TABLE_NAME='MACHINE' AND COLUMN_NAME='CODE'");
+        if (checkCode.next() && checkCode.value(0).toInt() == 0) {
+            QSqlQuery addCode;
+            addCode.exec("ALTER TABLE MACHINE ADD (CODE VARCHAR2(4))");
+            QSqlQuery updateCode;
+            updateCode.exec("UPDATE MACHINE SET CODE = TO_CHAR(MOD(ABS(DBMS_RANDOM.RANDOM), 9000) + 1000) WHERE CODE IS NULL");
+            qDebug() << "Migration: added CODE column to MACHINE";
+        }
     } else {
         lastError = db.lastError().text();
     }

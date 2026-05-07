@@ -4142,16 +4142,17 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       table->setItem(i, 1, new QTableWidgetItem(model->data(model->index(i, 1)).toString()));
       table->setItem(i, 2, new QTableWidgetItem(model->data(model->index(i, 2)).toString()));
       table->setItem(i, 3, new QTableWidgetItem(model->data(model->index(i, 3)).toString()));
+      table->setItem(i, 4, new QTableWidgetItem(model->data(model->index(i, 4)).toString()));
 
       QTableWidgetItem *hItem = new QTableWidgetItem();
-      hItem->setData(Qt::DisplayRole, model->data(model->index(i, 4)).toInt());
-      table->setItem(i, 4, hItem);
+      hItem->setData(Qt::DisplayRole, model->data(model->index(i, 5)).toInt());
+      table->setItem(i, 5, hItem);
 
       QTableWidgetItem *sItem = new QTableWidgetItem();
-      sItem->setData(Qt::DisplayRole, model->data(model->index(i, 5)).toInt());
-      table->setItem(i, 5, sItem);
+      sItem->setData(Qt::DisplayRole, model->data(model->index(i, 6)).toInt());
+      table->setItem(i, 6, sItem);
 
-      table->setItem(i, 6, new QTableWidgetItem(model->data(model->index(i, 6)).toString()));
+      table->setItem(i, 7, new QTableWidgetItem(model->data(model->index(i, 7)).toString()));
 
       // --- Actions ---
       QWidget *actionWidget = new QWidget();
@@ -4177,7 +4178,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
 
       al->addWidget(btnMod);
       al->addWidget(btnDel);
-      table->setCellWidget(i, 7, actionWidget);
+      table->setCellWidget(i, 8, actionWidget);
 
       // Connect Edit
       QObject::connect(btnMod, &QPushButton::clicked, [table, mid, refreshMachineTable]() {
@@ -4191,12 +4192,12 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           }
           if(row == -1) return;
 
-          QString currentName = table->item(row, 1)->text();
-          QString currentType = table->item(row, 2)->text();
-          QString currentStatus = table->item(row, 3)->text();
-          int currentHours = table->item(row, 4)->data(Qt::DisplayRole).toInt();
-          int currentSeuil = table->item(row, 5)->data(Qt::DisplayRole).toInt();
-          QString currentLoc = table->item(row, 6)->text();
+          QString currentName = table->item(row, 2)->text();
+          QString currentType = table->item(row, 3)->text();
+          QString currentStatus = table->item(row, 4)->text();
+          int currentHours = table->item(row, 5)->data(Qt::DisplayRole).toInt();
+          int currentSeuil = table->item(row, 6)->data(Qt::DisplayRole).toInt();
+          QString currentLoc = table->item(row, 7)->text();
 
           QDialog dlg(table->window());
           dlg.setWindowTitle("Modify Machine");
@@ -4459,7 +4460,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       controlLayout->addSpacing(10);
       controlLayout->addWidget(btnPrint);
 
-      QStringList headers = {"ID", "Name", "Type", "Status", "Hours", "Threshold", "Location", "Actions"};
+      QStringList headers = {"ID", "Code", "Name", "Type", "Status", "Hours", "Threshold", "Location", "Actions"};
       QTableWidget *table = new QTableWidget();
       *machineTablePtr = table;
       table->setColumnCount(headers.size());
@@ -4477,15 +4478,15 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       cLayout->addWidget(table);
 
       QObject::connect(sortType, &QComboBox::currentTextChanged, [table](const QString &text) {
-          if (text == "Status") table->sortItems(3, Qt::AscendingOrder);
-          else if (text == "Hours") table->sortItems(4, Qt::AscendingOrder);
+          if (text == "Status") table->sortItems(4, Qt::AscendingOrder);
+          else if (text == "Hours") table->sortItems(5, Qt::AscendingOrder);
           // For "All" we could ideally sort by ID if needed, but keeping it simple
           else if (text == "All") table->sortItems(0, Qt::AscendingOrder);
       });
 
       auto updateFilter = [table, searchEdit, searchType]() {
           QString lowerQuery = searchEdit->text().toLower();
-          int col = (searchType->currentText() == "Type") ? 2 : 1; // 1 = Name, 2 = Type
+          int col = (searchType->currentText() == "Type") ? 3 : 2; // 2 = Name, 3 = Type
 
           for (int i = 0; i < table->rowCount(); ++i) {
               bool match = false;
@@ -6180,7 +6181,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
       qDebug() << "[SERIAL] CRITICAL: No COM ports found connected to the PC.";
   }
 
-  serial->setBaudRate(QSerialPort::Baud9600);
+  serial->setBaudRate(QSerialPort::Baud115200);
   serial->setDataBits(QSerialPort::Data8);
   serial->setParity(QSerialPort::NoParity);
   serial->setStopBits(QSerialPort::OneStop);
@@ -6522,8 +6523,19 @@ void MainWindow::handleSerialDataReady()
             if (m_isAlertShowing) return; // Prevent stacking multiple alerts
             m_isAlertShowing = true;
 
-            QString machineIdStr = incomingText.mid(isGas ? 10 : 12);
-            int machineId = machineIdStr.toInt();
+            QString machineCodeStr = incomingText.mid(isGas ? 10 : 12).trimmed();
+            
+            int machineId = -1;
+            QSqlQuery findId;
+            findId.prepare("SELECT ID_MACHINE FROM MACHINE WHERE CODE = :code");
+            findId.bindValue(":code", machineCodeStr);
+            if (findId.exec() && findId.next()) {
+                machineId = findId.value(0).toInt();
+            } else {
+                qDebug() << "[SERIAL] Unknown Alert Code:" << machineCodeStr;
+                m_isAlertShowing = false;
+                return;
+            }
             // User requested Smoke as default even for generic Gas messages
             QString typeStr = "Smoke"; 
             qDebug() << "[SERIAL] " << typeStr << " Alert for Machine ID:" << machineId;
@@ -6571,33 +6583,35 @@ void MainWindow::handleSerialDataReady()
             bool breakdownProcessed = false;
 
             if (isNumericId) {
+                QString machineCodeStr = incomingText.trimmed();
                 QSqlQuery mQuery;
-                mQuery.prepare("SELECT LOCALISATION FROM MACHINE WHERE ID_MACHINE = :id");
-                mQuery.bindValue(":id", mId);
+                mQuery.prepare("SELECT ID_MACHINE, LOCALISATION FROM MACHINE WHERE CODE = :code");
+                mQuery.bindValue(":code", machineCodeStr);
 
                 if (mQuery.exec() && mQuery.next()) {
-                    QString location = mQuery.value(0).toString();
+                    int realMId = mQuery.value(0).toInt();
+                    QString location = mQuery.value(1).toString();
                     
                     // Update machine state to 'En panne'
                     QSqlQuery uQuery;
                     uQuery.prepare("UPDATE MACHINE SET ETAT_MACHINE = 'En panne' WHERE ID_MACHINE = :id");
-                    uQuery.bindValue(":id", mId);
+                    uQuery.bindValue(":id", realMId);
                     
                     if (uQuery.exec()) {
-                        qDebug() << "[SERIAL] Machine Breakdown Reported! ID:" << mId << "Loc:" << location;
+                        qDebug() << "[SERIAL] Machine Breakdown Reported! Code:" << machineCodeStr << " Loc:" << location;
                         
-                        // NEW PROTOCOL: S<ID>,<Location>\n
-                        QString response = "S" + QString::number(mId) + "," + location + "\n";
+                        // NEW PROTOCOL: S<CODE>,<Location>\n
+                        QString response = "S" + machineCodeStr + "," + location + "\n";
                         serial->write(response.toUtf8());
                         
                         // Show confirmation in console only (no popup on PC)
-                        qDebug() << "[SERIAL] Machine " << mId << " updated to 'En panne'. Response sent to OLED.";
+                        qDebug() << "[SERIAL] Machine Code " << machineCodeStr << " updated to 'En panne'. Response sent to OLED.";
                         
                         breakdownProcessed = true;
                     }
                 } else {
                     // NEW PROTOCOL: F\n for "Not Found"
-                    qDebug() << "[SERIAL] Machine ID" << mId << "not found. Sending F.";
+                    qDebug() << "[SERIAL] Machine Code" << machineCodeStr << "not found. Sending F.";
                     serial->write("F\n");
                     breakdownProcessed = true; // Managed as a breakdown attempt
                 }

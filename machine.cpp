@@ -1,6 +1,7 @@
 #include "machine.h"
 #include <QSqlError>
 #include <QDebug>
+#include <random>
 
 Machine::Machine()
 {
@@ -48,9 +49,35 @@ void Machine::setDateM(QDate dateM) { this->dateDerniereMaintenance = dateM; }
 
 bool Machine::ajouter()
 {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distrib(1000, 9999);
+    
+    QString codeStr;
+    bool isUnique = false;
+    QSqlQuery checkQuery;
+    checkQuery.prepare("SELECT COUNT(*) FROM MACHINE WHERE CODE = :code");
+    
+    // Loop until we generate a code that doesn't already exist in the database
+    while (!isUnique) {
+        codeStr = QString::number(distrib(gen));
+        checkQuery.bindValue(":code", codeStr);
+        
+        if (checkQuery.exec() && checkQuery.next()) {
+            if (checkQuery.value(0).toInt() == 0) {
+                isUnique = true; // 0 matches found, so this code is perfectly unique!
+            }
+        } else {
+            // If the query fails for some reason, break out to avoid an infinite loop
+            qDebug() << "Uniqueness check failed:" << checkQuery.lastError().text();
+            break;
+        }
+    }
+
     QSqlQuery query;
-    query.prepare("INSERT INTO MACHINE (ID_MACHINE, NOM_MACHINE, TYPE_MACHINE, ETAT_MACHINE, DATEDERNIEREMAINTENANCE, HEURESFONCTIONNEMENT, SEUILMAINTENANCE, LOCALISATION) "
-                  "VALUES ((SELECT NVL(MAX(ID_MACHINE), 0) + 1 FROM MACHINE), :nom, :type, :etat, :dateM, :heures, :seuil, :loc)");
+    query.prepare("INSERT INTO MACHINE (ID_MACHINE, CODE, NOM_MACHINE, TYPE_MACHINE, ETAT_MACHINE, DATEDERNIEREMAINTENANCE, HEURESFONCTIONNEMENT, SEUILMAINTENANCE, LOCALISATION) "
+                  "VALUES ((SELECT NVL(MAX(ID_MACHINE), 0) + 1 FROM MACHINE), :code, :nom, :type, :etat, :dateM, :heures, :seuil, :loc)");
+    query.bindValue(":code", codeStr);
     query.bindValue(":nom", nom);
     query.bindValue(":type", type);
     query.bindValue(":etat", etat);
@@ -124,19 +151,20 @@ bool Machine::modifier()
 QSqlQueryModel* Machine::afficher()
 {
     QSqlQueryModel *model = new QSqlQueryModel();
-    model->setQuery("SELECT ID_MACHINE, NOM_MACHINE, TYPE_MACHINE, ETAT_MACHINE, HEURESFONCTIONNEMENT, SEUILMAINTENANCE, LOCALISATION FROM MACHINE");
+    model->setQuery("SELECT ID_MACHINE, CODE, NOM_MACHINE, TYPE_MACHINE, ETAT_MACHINE, HEURESFONCTIONNEMENT, SEUILMAINTENANCE, LOCALISATION FROM MACHINE");
 
     if (model->lastError().isValid()) {
         qDebug() << "Machine Afficher Error:" << model->lastError().text();
     }
 
     model->setHeaderData(0, Qt::Horizontal, QObject::tr("ID"));
-    model->setHeaderData(1, Qt::Horizontal, QObject::tr("Name"));
-    model->setHeaderData(2, Qt::Horizontal, QObject::tr("Type"));
-    model->setHeaderData(3, Qt::Horizontal, QObject::tr("Status"));
-    model->setHeaderData(4, Qt::Horizontal, QObject::tr("Hours"));
-    model->setHeaderData(5, Qt::Horizontal, QObject::tr("Threshold"));
-    model->setHeaderData(6, Qt::Horizontal, QObject::tr("Location"));
+    model->setHeaderData(1, Qt::Horizontal, QObject::tr("Code"));
+    model->setHeaderData(2, Qt::Horizontal, QObject::tr("Name"));
+    model->setHeaderData(3, Qt::Horizontal, QObject::tr("Type"));
+    model->setHeaderData(4, Qt::Horizontal, QObject::tr("Status"));
+    model->setHeaderData(5, Qt::Horizontal, QObject::tr("Hours"));
+    model->setHeaderData(6, Qt::Horizontal, QObject::tr("Threshold"));
+    model->setHeaderData(7, Qt::Horizontal, QObject::tr("Location"));
 
     return model;
 }
