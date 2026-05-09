@@ -1,0 +1,2 @@
+DESC MACHINE;
+EXIT;

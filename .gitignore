@@ -1,0 +1,23 @@
+# Qt/C++ Build artifacts
+build/
+build-*/
+debug/
+release/
+*.o
+*.obj
+Makefile
+*.Debug
+*.Release
+*.user
+.qtc_clangd/
+*.stash
+
+# Configuration (Sensitive)
+config.json
+*.env
+
+# Others
+aqtinstall.log
+machine_lines*.txt
+*.pdf
+.DS_Store

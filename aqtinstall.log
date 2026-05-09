@@ -1,0 +1,78 @@
+2026-04-20 23:06:27,007 - aqt.main - INFO - installer 20312 aqtinstall(aqt) v3.3.0 on Python 3.11.9 [CPython MSC v.1938 64 bit (AMD64)]
+2026-04-20 23:06:27,007 - aqt.helper - DEBUG - helper 20312 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/Updates.xml.sha256
+2026-04-20 23:06:28,742 - aqt.helper - DEBUG - helper 20312 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/extensions/qtwebengine/6101/mingw/Updates.xml.sha256
+2026-04-20 23:06:29,506 - aqt.helper - DEBUG - helper 20312 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/extensions/qtwebengine/6101/mingw/Updates.xml.sha256
+2026-04-20 23:06:30,276 - aqt.helper - DEBUG - helper 20312 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/extensions/qtwebengine/6101/mingw/Updates.xml.sha256
+2026-04-20 23:06:31,134 - aqt.helper - DEBUG - helper 20312 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/extensions/qtwebengine/6101/mingw/Updates.xml.sha256
+2026-04-20 23:06:31,949 - aqt.helper - DEBUG - helper 20312 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/extensions/qtwebengine/6101/mingw/Updates.xml.sha256
+2026-04-20 23:06:32,748 - aqt.helper - DEBUG - helper 20312 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/extensions/qtpdf/6101/mingw/Updates.xml.sha256
+2026-04-20 23:06:34,320 - aqt.archives - INFO - archives 20312 Found extension qtpdf
+2026-04-20 23:06:35,225 - aqt.helper - DEBUG - helper 2508 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.addons.qtserialport.win64_mingw/6.10.1-0-202511161843qtserialport-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z.sha256
+2026-04-20 23:06:35,227 - aqt.helper - DEBUG - helper 20420 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843qtbase-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z.sha256
+2026-04-20 23:06:35,229 - aqt.helper - DEBUG - helper 13888 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843qtsvg-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z.sha256
+2026-04-20 23:06:35,239 - aqt.helper - DEBUG - helper 17016 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843qtdeclarative-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z.sha256
+2026-04-20 23:06:36,087 - aqt.helper - INFO - helper 2508 Downloading qtserialport...
+2026-04-20 23:06:36,088 - aqt.installer - DEBUG - installer 2508 Download URL: https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.addons.qtserialport.win64_mingw/6.10.1-0-202511161843qtserialport-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z
+2026-04-20 23:06:36,138 - aqt.helper - INFO - helper 13888 Downloading qtsvg...
+2026-04-20 23:06:36,139 - aqt.installer - DEBUG - installer 13888 Download URL: https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843qtsvg-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z
+2026-04-20 23:06:36,164 - aqt.helper - INFO - helper 20420 Downloading qtbase...
+2026-04-20 23:06:36,165 - aqt.installer - DEBUG - installer 20420 Download URL: https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843qtbase-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z
+2026-04-20 23:06:36,167 - aqt.helper - INFO - helper 17016 Downloading qtdeclarative...
+2026-04-20 23:06:36,168 - aqt.installer - DEBUG - installer 17016 Download URL: https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843qtdeclarative-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z
+2026-04-20 23:06:37,005 - aqt.helper - DEBUG - helper 2508 Asked to redirect(302) to: https://qtproject.mirror.liquidtelecom.com/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.addons.qtserialport.win64_mingw/6.10.1-0-202511161843qtserialport-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z
+2026-04-20 23:06:37,005 - aqt.helper - INFO - helper 2508 Redirected: qtproject.mirror.liquidtelecom.com
+2026-04-20 23:06:37,062 - aqt.helper - DEBUG - helper 13888 Asked to redirect(302) to: https://qtproject.mirror.liquidtelecom.com/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843qtsvg-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z
+2026-04-20 23:06:37,063 - aqt.helper - INFO - helper 13888 Redirected: qtproject.mirror.liquidtelecom.com
+2026-04-20 23:06:37,076 - aqt.helper - DEBUG - helper 17016 Asked to redirect(302) to: https://qtproject.mirror.liquidtelecom.com/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843qtdeclarative-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z
+2026-04-20 23:06:37,076 - aqt.helper - DEBUG - helper 20420 Asked to redirect(302) to: https://qtproject.mirror.liquidtelecom.com/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843qtbase-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z
+2026-04-20 23:06:37,076 - aqt.helper - INFO - helper 17016 Redirected: qtproject.mirror.liquidtelecom.com
+2026-04-20 23:06:37,076 - aqt.helper - INFO - helper 20420 Redirected: qtproject.mirror.liquidtelecom.com
+2026-04-20 23:06:38,559 - aqt.installer - INFO - installer 2508 Finished installation of qtserialport-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z in 3.33575020
+2026-04-20 23:06:38,574 - aqt.helper - DEBUG - helper 2508 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843qttools-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z.sha256
+2026-04-20 23:06:39,006 - aqt.installer - INFO - installer 13888 Finished installation of qtsvg-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z in 3.77914890
+2026-04-20 23:06:39,025 - aqt.helper - DEBUG - helper 13888 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843qttranslations-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z.sha256
+2026-04-20 23:06:39,409 - aqt.helper - INFO - helper 2508 Downloading qttools...
+2026-04-20 23:06:39,410 - aqt.installer - DEBUG - installer 2508 Download URL: https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843qttools-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z
+2026-04-20 23:06:40,381 - aqt.helper - DEBUG - helper 2508 Asked to redirect(302) to: https://qtproject.mirror.liquidtelecom.com/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843qttools-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z
+2026-04-20 23:06:40,382 - aqt.helper - INFO - helper 2508 Redirected: qtproject.mirror.liquidtelecom.com
+2026-04-20 23:06:41,083 - aqt.helper - INFO - helper 13888 Downloading qttranslations...
+2026-04-20 23:06:41,083 - aqt.installer - DEBUG - installer 13888 Download URL: https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843qttranslations-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z
+2026-04-20 23:06:41,582 - aqt.helper - DEBUG - helper 17016 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843MinGW-w64-x86_64-13.1.0-release-posix-seh-msvcrt-rt_v11-rev1-runtime.7z.sha256
+2026-04-20 23:06:42,246 - aqt.helper - DEBUG - helper 13888 Asked to redirect(302) to: https://qtproject.mirror.liquidtelecom.com/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843qttranslations-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z
+2026-04-20 23:06:42,246 - aqt.helper - INFO - helper 13888 Redirected: qtproject.mirror.liquidtelecom.com
+2026-04-20 23:06:42,418 - aqt.helper - INFO - helper 17016 Downloading MinGW...
+2026-04-20 23:06:42,418 - aqt.installer - DEBUG - installer 17016 Download URL: https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843MinGW-w64-x86_64-13.1.0-release-posix-seh-msvcrt-rt_v11-rev1-runtime.7z
+2026-04-20 23:06:42,936 - aqt.helper - DEBUG - helper 20420 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843d3dcompiler_47-x64.7z.sha256
+2026-04-20 23:06:43,374 - aqt.helper - DEBUG - helper 17016 Asked to redirect(302) to: https://qtproject.mirror.liquidtelecom.com/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843MinGW-w64-x86_64-13.1.0-release-posix-seh-msvcrt-rt_v11-rev1-runtime.7z
+2026-04-20 23:06:43,375 - aqt.helper - INFO - helper 17016 Redirected: qtproject.mirror.liquidtelecom.com
+2026-04-20 23:06:43,574 - aqt.helper - DEBUG - helper 2508 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843opengl32sw-64-mesa_11_2_2-signed_sha256.7z.sha256
+2026-04-20 23:06:43,837 - aqt.helper - INFO - helper 20420 Downloading d3dcompiler_47...
+2026-04-20 23:06:43,837 - aqt.installer - DEBUG - installer 20420 Download URL: https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843d3dcompiler_47-x64.7z
+2026-04-20 23:06:44,334 - aqt.helper - INFO - helper 2508 Downloading opengl32sw...
+2026-04-20 23:06:44,335 - aqt.installer - DEBUG - installer 2508 Download URL: https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843opengl32sw-64-mesa_11_2_2-signed_sha256.7z
+2026-04-20 23:06:44,663 - aqt.helper - DEBUG - helper 20420 Asked to redirect(302) to: https://qtproject.mirror.liquidtelecom.com/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843d3dcompiler_47-x64.7z
+2026-04-20 23:06:44,663 - aqt.helper - INFO - helper 20420 Redirected: qtproject.mirror.liquidtelecom.com
+2026-04-20 23:06:45,146 - aqt.helper - DEBUG - helper 2508 Asked to redirect(302) to: https://qtproject.mirror.liquidtelecom.com/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.win64_mingw/6.10.1-0-202511161843opengl32sw-64-mesa_11_2_2-signed_sha256.7z
+2026-04-20 23:06:45,146 - aqt.helper - INFO - helper 2508 Redirected: qtproject.mirror.liquidtelecom.com
+2026-04-20 23:06:45,377 - aqt.installer - INFO - installer 17016 Finished installation of MinGW-w64-x86_64-13.1.0-release-posix-seh-msvcrt-rt_v11-rev1-runtime.7z in 3.79857970
+2026-04-20 23:06:46,850 - aqt.installer - INFO - installer 20420 Finished installation of d3dcompiler_47-x64.7z in 3.91742290
+2026-04-20 23:06:48,145 - aqt.installer - INFO - installer 2508 Finished installation of opengl32sw-64-mesa_11_2_2-signed_sha256.7z in 4.57484930
+2026-04-20 23:06:48,156 - aqt.installer - WARNING - installer 20312 Caught ArchiveDownloadError, terminating installer workers
+2026-04-20 23:06:48,173 - aqt.main - ERROR - installer 20312 Download of 6.10.1-0-202511161843qtdeclarative-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z has error: [SSL: DECRYPTION_FAILED_OR_BAD_RECORD_MAC] decryption failed or bad record mac (_ssl.c:2580)
+2026-04-20 23:07:29,252 - aqt.main - INFO - installer 10076 aqtinstall(aqt) v3.3.0 on Python 3.11.9 [CPython MSC v.1938 64 bit (AMD64)]
+2026-04-20 23:07:29,252 - aqt.helper - DEBUG - helper 10076 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/Updates.xml.sha256
+2026-04-20 23:07:30,964 - aqt.helper - DEBUG - helper 10076 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/extensions/qtwebengine/6101/mingw/Updates.xml.sha256
+2026-04-20 23:07:31,712 - aqt.helper - DEBUG - helper 10076 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/extensions/qtwebengine/6101/mingw/Updates.xml.sha256
+2026-04-20 23:07:32,439 - aqt.helper - DEBUG - helper 10076 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/extensions/qtwebengine/6101/mingw/Updates.xml.sha256
+2026-04-20 23:07:33,211 - aqt.helper - DEBUG - helper 10076 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/extensions/qtwebengine/6101/mingw/Updates.xml.sha256
+2026-04-20 23:07:33,968 - aqt.helper - DEBUG - helper 10076 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/extensions/qtwebengine/6101/mingw/Updates.xml.sha256
+2026-04-20 23:07:34,705 - aqt.helper - DEBUG - helper 10076 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/extensions/qtpdf/6101/mingw/Updates.xml.sha256
+2026-04-20 23:07:36,140 - aqt.archives - INFO - archives 10076 Found extension qtpdf
+2026-04-20 23:07:36,803 - aqt.helper - DEBUG - helper 20172 Attempt to download checksum at https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.addons.qtserialport.win64_mingw/6.10.1-0-202511161843qtserialport-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z.sha256
+2026-04-20 23:07:37,585 - aqt.helper - INFO - helper 20172 Downloading qtserialport...
+2026-04-20 23:07:37,585 - aqt.installer - DEBUG - installer 20172 Download URL: https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.addons.qtserialport.win64_mingw/6.10.1-0-202511161843qtserialport-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z
+2026-04-20 23:07:38,345 - aqt.helper - DEBUG - helper 20172 Asked to redirect(302) to: https://qtproject.mirror.liquidtelecom.com/online/qtsdkrepository/windows_x86/desktop/qt6_6101/qt6_6101/qt.qt6.6101.addons.qtserialport.win64_mingw/6.10.1-0-202511161843qtserialport-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z
+2026-04-20 23:07:38,345 - aqt.helper - INFO - helper 20172 Redirected: qtproject.mirror.liquidtelecom.com
+2026-04-20 23:07:39,688 - aqt.installer - INFO - installer 20172 Finished installation of qtserialport-Windows-Windows_11_24H2-Mingw-Windows-Windows_11_24H2-X86_64.7z in 2.88653460
+2026-04-20 23:07:39,867 - aqt.main - INFO - installer 10076 Finished installation
+2026-04-20 23:07:39,867 - aqt.main - INFO - installer 10076 Time elapsed: 10.61453530 second

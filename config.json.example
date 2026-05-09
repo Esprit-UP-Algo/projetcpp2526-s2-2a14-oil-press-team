@@ -1,0 +1,17 @@
+{
+  "api_keys": {
+    "brevo": "YOUR_BREVO_API_KEY_HERE",
+    "tunisie_sms": "YOUR_TUNISIE_SMS_TOKEN_HERE",
+    "gemini": "YOUR_GEMINI_API_KEY_HERE"
+  },
+  "email_settings": {
+    "sender_email": "your_verified_sender@email.com",
+    "admin_email": "admin@example.com",
+    "smtp_user": "your_smtp_user",
+    "smtp_pass": "your_smtp_pass"
+  },
+  "sms_config": {
+    "sender": "OilPressTeam",
+    "endpoint": "https://mystudents.tunisiesms.tn/api/sms"
+  }
+}

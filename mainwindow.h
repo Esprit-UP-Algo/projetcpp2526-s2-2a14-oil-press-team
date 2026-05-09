@@ -1,0 +1,55 @@
+#ifndef MAINWINDOW_H
+#define MAINWINDOW_H
+
+#include <QMainWindow>
+#include <QStackedWidget>
+#include <QPoint>
+#include <QPushButton>
+#include <QList>
+
+#include <QSystemTrayIcon>
+#include <QSerialPort>
+#include <QSerialPortInfo>
+#include <QDebug>
+#include <QDateTime>
+#include <QMap>
+class MainWindow : public QMainWindow
+{
+    Q_OBJECT
+public:
+    explicit MainWindow(QWidget *parent = nullptr);
+    void applyRole(int roleIndex);
+    void checkStockAlerts(bool silent = true);
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
+
+signals:
+    void logoutRequested();
+
+private slots:
+    void handleSerialDataReady();
+
+private:
+    QStackedWidget *stackedWidget;
+    QPoint m_dragPosition;
+    bool m_isResizing = false;
+    bool m_isMoving = false;
+    int m_edgeMargin = 8;
+    QSystemTrayIcon *trayIcon;
+    QSerialPort *serial;
+    QDateTime m_lastEmailTime;
+    QMap<QString, QDateTime> activeShifts;
+    bool m_isAlertShowing = false;
+    
+    QWidget* createTitleBar();
+    Qt::Edges getEdge(const QPoint &pos);
+
+    struct NavItem { QString title; QPushButton *btn; };
+    QList<NavItem> navItems;
+};
+
+#endif
