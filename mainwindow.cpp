@@ -1133,12 +1133,13 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
 
       QScrollArea *scrollArea = new QScrollArea();
       scrollArea->setWidgetResizable(true);
+      scrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
       scrollArea->setFrameShape(QFrame::NoFrame);
       scrollArea->setStyleSheet("QScrollArea { background: transparent; border: none; } QWidget { background: transparent; }");
       scrollArea->setWidget(formContent);
-      outerLayout->addWidget(scrollArea);
+      outerLayout->addWidget(scrollArea, 1); // added stretch factor 1
 
-      cLayout->addWidget(formContainer);
+      cLayout->addWidget(formContainer, 1);
 
       // Connect Button
       QObject::connect(btnSubmit, &QPushButton::clicked, [=]() {
@@ -1890,7 +1891,7 @@ static QWidget *createClientPage(QStackedWidget *&outNestedStack) {
       // Init
       updateTable();
 
-      cLayout->addWidget(historyContainer);
+      cLayout->addWidget(historyContainer, 1);
     } else if (name == "Analytics") {
       // Bar Chart Analytics
       QWidget *analyticsHeader = new QWidget();
