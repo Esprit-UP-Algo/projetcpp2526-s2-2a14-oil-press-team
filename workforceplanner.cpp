@@ -5,7 +5,7 @@
 #include <QDate>
 
 // --- API CONFIGURATION ---
-const QString GEMINI_API_KEY = "lAIzaSyCe4ervzsH47m3AbbTKEaHMHklAtMiW5tQ";
+const QString GEMINI_API_KEY = "KEYAIzaSyB3BrvNfwWKgNSCKncX9Hr29Ob-S3WwQ3I";
 
 WorkforcePlanner::WorkforcePlanner(QWidget *parent) : QWidget(parent) {
     selectedShift = -1;

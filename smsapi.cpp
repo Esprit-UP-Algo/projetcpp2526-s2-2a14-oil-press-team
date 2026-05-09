@@ -44,7 +44,7 @@ void SmsAPI::sendSMS(const QString &toNumber, const QString &messageBody)
     QString apiKey = ConfigManager::getInstance().getSmsToken();
     if (apiKey.isEmpty()) {
         // apiKey = "36qQASFUsnp6TEG7fPyId8v5j!G1XFPbatDnCL0xjcctcneBYSFAkNiNZ!Rkoy9b9dsSu2pKtcCCYtJLC2XBcqMOsLOzn06ka1SJAK55";
-        apiKey = "key36qQASFUsnp6TEG7fPyId8v5j!G1XFPbatDnCL0xjcctcneBYSFAkNiNZ!Rkoy9b9dsSu2pKtcCCYtJLC2XBcqMOsLOzn06ka1SJAK55"; // Provide a default or handle the error
+        apiKey = "36qQASFUsnp6TEG7fPyId8v5j!G1XFPbatDnCL0xjcctcneBYSFAkNiNZ!Rkoy9b9dsSu2pKtcCCYtJLC2XBcqMOsLOzn06ka1SJAK55"; // Provide a default or handle the error
     }
     request.setRawHeader("Authorization", "Bearer " + apiKey.trimmed().toUtf8());
 

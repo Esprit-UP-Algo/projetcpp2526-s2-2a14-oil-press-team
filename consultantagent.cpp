@@ -4,7 +4,7 @@
 #include <QSqlError>
 #include <QDebug>
 
-const QString GEMINI_API_KEY = "AIzaSyCe4ervzsH47m3AbbTKEaHMHklAtMiW5tQ";
+const QString GEMINI_API_KEY = "KEYAIzaSyB3BrvNfwWKgNSCKncX9Hr29Ob-S3WwQ3I";
 
 ConsultantAgent::ConsultantAgent(QObject *parent) : QObject(parent)
 {
