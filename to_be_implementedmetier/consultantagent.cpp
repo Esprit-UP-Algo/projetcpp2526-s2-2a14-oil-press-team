@@ -4,7 +4,7 @@
 #include <QSqlError>
 #include <QDebug>
 
-const QString GEMINI_API_KEY = "AIzaSyCe4ervzsH47m3AbbTKEaHMHklAtMiW5tQ";
+const QString GEMINI_API_KEY = "AIzaSyDbOIr6UUIBAn_bJCatS7b0itdMplbHJRo";
 
 ConsultantAgent::ConsultantAgent(QObject *parent) : QObject(parent)
 {
@@ -21,7 +21,7 @@ void ConsultantAgent::requestAiAdvice(const QString &userInput)
 {
     QString snapshot = getInventorySnapshot();
     
-    QString endpoint = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=" + GEMINI_API_KEY;
+    QString endpoint = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-latest:generateContent?key=" + GEMINI_API_KEY;
     QUrl url(endpoint);
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
@@ -42,42 +42,14 @@ void ConsultantAgent::requestAiAdvice(const QString &userInput)
     QJsonObject root; root["contents"] = contents;
     
     QJsonDocument doc(root);
-    QNetworkReply *reply = networkManager->post(request, doc.toJson());
-    reply->setProperty("type", "chat");
-}
-
-void ConsultantAgent::requestPriceForecast()
-{
-    QString endpoint = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=" + GEMINI_API_KEY;
-    QUrl url(endpoint);
-    QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    
-    QString prompt = "You are a highly advanced agricultural economic model forecasting olive oil prices. "
-                     "Generate a 6-month price forecast for Olive Oil in Tunisia (currency: DT/Liter) starting from next month. "
-                     "The current base price is 28.50 DT. Factor in typical seasonal weather trends and market variables. "
-                     "Return ONLY a valid JSON array of 6 objects. Do not include markdown formatting or explanation. "
-                     "Example format: [{\"date\":\"2024-06\", \"weather\":\"Hot and Dry\", \"price\":28.75}, ...]";
-    
-    QJsonObject textPart;
-    textPart["text"] = prompt;
-    QJsonArray parts; parts.append(textPart);
-    QJsonObject contentObj;
-    contentObj["role"] = "user";
-    contentObj["parts"] = parts;
-    QJsonArray contents; contents.append(contentObj);
-    QJsonObject root; root["contents"] = contents;
-    
-    QJsonDocument doc(root);
-    QNetworkReply *reply = networkManager->post(request, doc.toJson());
-    reply->setProperty("type", "forecast");
+    networkManager->post(request, doc.toJson());
 }
 
 void ConsultantAgent::auditInventory()
 {
     QString snapshot = getInventorySnapshot();
     
-    QString endpoint = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=" + GEMINI_API_KEY;
+    QString endpoint = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=" + GEMINI_API_KEY;
     QUrl url(endpoint);
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
@@ -101,15 +73,12 @@ void ConsultantAgent::auditInventory()
     QJsonObject root; root["contents"] = contents;
     
     QJsonDocument doc(root);
-    QNetworkReply *reply = networkManager->post(request, doc.toJson());
-    reply->setProperty("type", "chat");
+    networkManager->post(request, doc.toJson());
 }
 
 void ConsultantAgent::handleAiResponse(QNetworkReply *reply)
 {
-    QString type = reply->property("type").toString();
     QByteArray responseStr = reply->readAll();
-    
     if (reply->error() == QNetworkReply::NoError) {
         QJsonDocument doc = QJsonDocument::fromJson(responseStr);
         QJsonObject root = doc.object();
@@ -121,36 +90,19 @@ void ConsultantAgent::handleAiResponse(QNetworkReply *reply)
                 QJsonArray partsArray = contentObj["parts"].toArray();
                 if (!partsArray.isEmpty()) {
                     QString text = partsArray[0].toObject()["text"].toString();
-                    
-                    if (type == "forecast") {
-                        // Clean markdown and parse JSON array
-                        QString cleaned = text.replace("```json", "").replace("```", "").trimmed();
-                        QJsonDocument forecastDoc = QJsonDocument::fromJson(cleaned.toUtf8());
-                        if (forecastDoc.isArray()) {
-                            emit forecastReady(forecastDoc.array());
-                        } else {
-                            qDebug() << "Failed to parse forecast JSON:" << cleaned;
-                            emit forecastReady(QJsonArray());
-                        }
-                    } else {
-                        emit responseReady(text);
-                    }
+                    emit responseReady(text);
                     reply->deleteLater();
                     return;
                 }
             }
         }
-        
-        if (type == "forecast") emit forecastReady(QJsonArray());
-        else emit responseReady("Error: Unexpected API response format.");
+        emit responseReady("Error: Unexpected API response format.");
     } else {
         QString errorMsg = reply->errorString();
         if (!responseStr.isEmpty()) {
             errorMsg += "\nBody: " + QString(responseStr);
         }
-        
-        if (type == "forecast") emit forecastReady(QJsonArray());
-        else emit responseReady("API Error: " + errorMsg);
+        emit responseReady("API Error: " + errorMsg);
     }
     reply->deleteLater();
 }

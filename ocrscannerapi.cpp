@@ -14,7 +14,7 @@ void OCRScannerAPI::scanInvoice(const QString &imagePath) {
     // API Key (Using a public trial key provided by OCR.space for demo)
     QHttpPart keyPart;
     keyPart.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant("form-data; name=\"apikey\""));
-    keyPart.setBody("K81704964888957"); 
+    keyPart.setBody("keyK81704964888957");
     multiPart->append(keyPart);
 
     // Language

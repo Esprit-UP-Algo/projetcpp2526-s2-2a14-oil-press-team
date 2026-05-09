@@ -43,27 +43,39 @@ private:
     }
 
     void loadConfig() {
-        QString path = "config.json";
-        qDebug() << "Checking for config at current dir:" << QDir::currentPath() + "/" + path;
+        QString path = "";
+        QString absolutePath = "C:/Users/MSI/OneDrive - ESPRIT/Bureau/projetcpp2526-s2-2a14-oil-press-team - Copie/config.json";
         
-        if (!QFile::exists(path)) {
+        if (QFile::exists(absolutePath)) {
+            path = absolutePath;
+        } else if (QFile::exists(QCoreApplication::applicationDirPath() + "/config.json")) {
             path = QCoreApplication::applicationDirPath() + "/config.json";
-            qDebug() << "Not found. Checking app dir:" << path;
+        } else if (QFile::exists("config.json")) {
+            path = "config.json";
+        }
+
+        if (path.isEmpty()) {
+            QMessageBox::critical(nullptr, "Config Error", "Could not find config.json anywhere!\nTried: " + absolutePath);
+            return;
         }
 
         QFile file(path);
         if (!file.open(QIODevice::ReadOnly)) {
-            qWarning() << "CRITICAL: Could not open config.json at" << path;
-            qWarning() << "Please ensure config.json exists in either the working directory or the application directory.";
+            QMessageBox::critical(nullptr, "Config Error", "Found config.json but could not open it: " + path);
             return;
         }
-        qDebug() << "Successfully loaded config from:" << path;
 
         QByteArray data = file.readAll();
-        QJsonDocument doc = QJsonDocument::fromJson(data);
-        if (!doc.isNull()) {
-            configObject = doc.object();
+        QJsonParseError parseError;
+        QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
+        
+        if (doc.isNull()) {
+            QMessageBox::critical(nullptr, "Config Parse Error", "config.json has invalid JSON format!\nError: " + parseError.errorString());
+            file.close();
+            return;
         }
+        
+        configObject = doc.object();
         file.close();
     }
 

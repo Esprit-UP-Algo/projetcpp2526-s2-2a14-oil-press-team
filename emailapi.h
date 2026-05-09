@@ -18,6 +18,7 @@ public:
     
     // Replace with your real keys
     void setCredentials(const QString &apiKey);
+    void setSenderEmail(const QString &email);
     void sendEmail(const QString &to, const QString &subject, const QString &body);
 
 signals:

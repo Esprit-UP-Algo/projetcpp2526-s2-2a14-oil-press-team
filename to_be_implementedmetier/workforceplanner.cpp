@@ -5,7 +5,7 @@
 #include <QDate>
 
 // --- API CONFIGURATION ---
-const QString GEMINI_API_KEY = "lAIzaSyCe4ervzsH47m3AbbTKEaHMHklAtMiW5tQ";
+const QString GEMINI_API_KEY = "AIzaSyDbOIr6UUIBAn_bJCatS7b0itdMplbHJRo";
 
 WorkforcePlanner::WorkforcePlanner(QWidget *parent) : QWidget(parent) {
     selectedShift = -1;
@@ -563,7 +563,7 @@ void WorkforcePlanner::generateAiRecommendation() {
     
     QString snapshot = generateWorkforceSnapshotJson();
     
-    QString endpoint = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=" + GEMINI_API_KEY;
+    QString endpoint = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-latest:generateContent?key=" + GEMINI_API_KEY;
     QUrl url(endpoint);
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
@@ -663,7 +663,7 @@ void WorkforcePlanner::generateAiWeekRecommendation() {
     pendingAiJson = "";
     
     QString snapshot = generateWeeklyWorkforceSnapshotJson();
-    QString endpoint = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=" + GEMINI_API_KEY;
+    QString endpoint = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-latest:generateContent?key=" + GEMINI_API_KEY;
     QUrl url(endpoint);
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");

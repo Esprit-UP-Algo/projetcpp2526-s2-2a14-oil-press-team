@@ -130,10 +130,13 @@ bool Transaction::modifier() {
 // --- CRUD: Afficher (Read) ---
 QSqlQueryModel* Transaction::afficher() {
     QSqlQueryModel *model = new QSqlQueryModel();
+    // Join with COMMANDE to get the Reference string, but keep ID_COMMANDE for backend logic
     model->setQuery(
-        "SELECT ID_TRANSACTION, REF_TRANSACTION, MONTANT, DATE_TRANSACTION, TYPE_TRANSACTION, "
-        "MODE_PAIEMENT, DESCRIPTION, ID_COMMANDE FROM FINANCE "
-        "ORDER BY DATE_TRANSACTION DESC");
+        "SELECT F.ID_TRANSACTION, F.REF_TRANSACTION, F.MONTANT, F.DATE_TRANSACTION, F.TYPE_TRANSACTION, "
+        "F.MODE_PAIEMENT, F.DESCRIPTION, F.ID_COMMANDE, C.REFERENCE "
+        "FROM FINANCE F "
+        "LEFT JOIN COMMANDE C ON F.ID_COMMANDE = C.ID_COMMANDE "
+        "ORDER BY F.DATE_TRANSACTION DESC");
 
     if (model->lastError().isValid()) {
         qDebug() << "Transaction Afficher Error:" << model->lastError().text();
@@ -147,6 +150,7 @@ QSqlQueryModel* Transaction::afficher() {
     model->setHeaderData(5, Qt::Horizontal, QObject::tr("Payment Mode"));
     model->setHeaderData(6, Qt::Horizontal, QObject::tr("Description"));
     model->setHeaderData(7, Qt::Horizontal, QObject::tr("Order ID"));
+    model->setHeaderData(8, Qt::Horizontal, QObject::tr("Order Ref"));
 
     return model;
 }

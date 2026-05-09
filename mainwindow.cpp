@@ -10,14 +10,20 @@
 #include "produit.h"
 #include "personnel.h"
 #include "machine.h"
+#include "intervention.h"
 #include "smtp.h"
 #include "GasAlertWidget.h"
 #include "emailapi.h"
 #include "marketapi.h"
 #include "consultantagent.h"
+#include "workforceplanner.h"
 #include "dealgenerator.h"
 #include "anomalyapi.h"
 #include "ocrscannerapi.h"
+#include <QPdfWriter>
+#include <QStandardPaths>
+#include <QPageLayout>
+#include <QPageSize>
 #include <functional>
 #include <QComboBox>
 #include <QScrollBar>
@@ -34,6 +40,7 @@
 #include <QFormLayout>
 #include <QIntValidator>
 #include <QRadioButton>
+#include <QCheckBox>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QPrinter>
@@ -2094,10 +2101,15 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
       QLabel *errDesc = createErrLabel();
       addField("Description:", inputDesc, errDesc);
 
-      QLineEdit *inputCommande = new QLineEdit();
-      inputCommande->setPlaceholderText("0");
+      QComboBox *inputCommande = new QComboBox();
+      inputCommande->setObjectName("financeOrderCombo");
+      inputCommande->addItem("None", 0);
+      QSqlQuery cmdQuery("SELECT ID_COMMANDE, REFERENCE FROM COMMANDE");
+      while (cmdQuery.next()) {
+          inputCommande->addItem(cmdQuery.value(1).toString(), cmdQuery.value(0).toInt());
+      }
       QLabel *errCommande = createErrLabel();
-      addField("Order ID:", inputCommande, errCommande);
+      addField("Order Reference:", inputCommande, errCommande);
 
       // --- Submit Button ---
       outerLayout->addSpacing(10);
@@ -2162,14 +2174,12 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
               isValid = false;
             }
 
-            if (!inputCommande->text().trimmed().isEmpty()) {
-              bool cmdOk = false;
-              int cmdId = inputCommande->text().toInt(&cmdOk);
-              if (!cmdOk || cmdId < 0) {
-                errCommande->setText("Order ID must be a valid positive number.");
+            int resolvedOrderId = inputCommande->currentData().toInt();
+            if (resolvedOrderId == 0 && inputCommande->currentText() != "None") {
+                // This shouldn't happen with ComboBox, but just in case
+                errCommande->setText("Invalid selection.");
                 errCommande->show();
                 isValid = false;
-              }
             }
 
             if (!isValid) return;
@@ -2180,7 +2190,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
             t.setTypeTransaction(inputType->currentText());
             t.setModePaiement(inputMode->currentText());
             t.setDescription(inputDesc->text().trimmed());
-            t.setIdCommande(inputCommande->text().toInt());
+            t.setIdCommande(resolvedOrderId);
             t.setReference(Transaction::generateRandomRef());
 
             if (t.ajouter()) {
@@ -2323,14 +2333,14 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
 
       // 2. Table
       transTable = new QTableWidget();
-      QStringList headers = {"ID", "Ref", "Amount", "Date", "Type", "Payment Mode",
+      QStringList headers = {"ID", "Ref", "Order Ref", "Amount", "Date", "Type", "Payment Mode",
                              "Description", "Actions"};
       transTable->setColumnCount(headers.size());
       transTable->setHorizontalHeaderLabels(headers);
       transTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
       transTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
       transTable->horizontalHeader()->setSectionResizeMode(headers.size() - 1, QHeaderView::Fixed);
-      transTable->setColumnWidth(headers.size() - 1, 350);
+      transTable->setColumnWidth(headers.size() - 1, 380);
       transTable->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
       transTable->verticalHeader()->setVisible(false);
       transTable->setColumnHidden(0, true); // Hide ID column
@@ -2360,7 +2370,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
         // Read all into a local list for filtering/sorting
         struct Row {
           int id; QString reference; double montant; QString date; QString type;
-          QString mode; QString desc; int commande;
+          QString mode; QString desc; int commande; QString orderRef;
         };
         QList<Row> allRows;
         for (int i = 0; i < model->rowCount(); ++i) {
@@ -2373,6 +2383,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
           r.mode = model->data(model->index(i, 5)).toString();
           r.desc = model->data(model->index(i, 6)).toString();
           r.commande = model->data(model->index(i, 7)).toInt();
+          r.orderRef = model->data(model->index(i, 8)).toString();
           allRows.append(r);
         }
         delete model;
@@ -2402,11 +2413,12 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
           const auto &r = filtered[i];
           transTable->setItem(i, 0, new QTableWidgetItem(QString::number(r.id)));
           transTable->setItem(i, 1, new QTableWidgetItem(r.reference));
-          transTable->setItem(i, 2, new QTableWidgetItem(QString::number(r.montant, 'f', 2)));
-          transTable->setItem(i, 3, new QTableWidgetItem(r.date));
-          transTable->setItem(i, 4, new QTableWidgetItem(r.type));
-          transTable->setItem(i, 5, new QTableWidgetItem(r.mode));
-          transTable->setItem(i, 6, new QTableWidgetItem(r.desc));
+          transTable->setItem(i, 2, new QTableWidgetItem(r.orderRef.isEmpty() ? "None" : r.orderRef));
+          transTable->setItem(i, 3, new QTableWidgetItem(QString::number(r.montant, 'f', 2)));
+          transTable->setItem(i, 4, new QTableWidgetItem(r.date));
+          transTable->setItem(i, 5, new QTableWidgetItem(r.type));
+          transTable->setItem(i, 6, new QTableWidgetItem(r.mode));
+          transTable->setItem(i, 7, new QTableWidgetItem(r.desc));
 
           // --- Action Buttons (Edit + Delete) ---
           QWidget *actionWidget = new QWidget();
@@ -2457,7 +2469,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
           actionBtnLayout->addWidget(btnInvoice);
           actionBtnLayout->addWidget(btnModify);
           actionBtnLayout->addWidget(btnDelete);
-          transTable->setCellWidget(i, 7, actionWidget);
+          transTable->setCellWidget(i, 8, actionWidget);
 
           // --- ANOMALY DETECTION (METIER AVANCE) ---
           QString riskTip = "";
@@ -2564,29 +2576,38 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
                   w->setFixedHeight(35);
                 };
 
-                QLineEdit *editMontant = new QLineEdit(transTable->item(row, 1)->text());
+                QLineEdit *editMontant = new QLineEdit(transTable->item(row, 3)->text());
                 styleField(editMontant);
 
                 QDateEdit *editDate = new QDateEdit(
-                    QDate::fromString(transTable->item(row, 2)->text().left(10), "yyyy-MM-dd"));
+                    QDate::fromString(transTable->item(row, 4)->text().left(10), "yyyy-MM-dd"));
                 editDate->setCalendarPopup(true);
                 editDate->setDisplayFormat("yyyy-MM-dd");
                 styleField(editDate);
 
                 QComboBox *editType = new QComboBox();
                 editType->addItems({"Revenue", "Expense", "Refund", "Transfer"});
-                editType->setCurrentText(transTable->item(row, 3)->text());
+                editType->setCurrentText(transTable->item(row, 5)->text());
                 styleField(editType);
 
                 QComboBox *editMode = new QComboBox();
                 editMode->addItems({"Cash", "Card", "Bank Transfer", "Check"});
-                editMode->setCurrentText(transTable->item(row, 4)->text());
+                editMode->setCurrentText(transTable->item(row, 6)->text());
                 styleField(editMode);
 
-                QLineEdit *editDesc = new QLineEdit(transTable->item(row, 5)->text());
+                QLineEdit *editDesc = new QLineEdit(transTable->item(row, 7)->text());
                 styleField(editDesc);
 
-                QLineEdit *editCommande = new QLineEdit(transTable->item(row, 6)->text());
+                QComboBox *editCommande = new QComboBox();
+                editCommande->addItem("None", 0);
+                QSqlQuery cmdEditQuery("SELECT ID_COMMANDE, REFERENCE FROM COMMANDE");
+                QString currentRef = transTable->item(row, 2)->text();
+                while (cmdEditQuery.next()) {
+                    int id = cmdEditQuery.value(0).toInt();
+                    QString ref = cmdEditQuery.value(1).toString();
+                    editCommande->addItem(ref, id);
+                    if (ref == currentRef) editCommande->setCurrentText(ref);
+                }
                 styleField(editCommande);
 
                 auto createErrLabelDlg = []() {
@@ -2622,7 +2643,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
                 addRow("Type:", editType);
                 addRow("Payment Mode:", editMode);
                 addRow("Description:", editDesc, errDesc);
-                addRow("Order ID:", editCommande, errCommande);
+                addRow("Order Ref:", editCommande, errCommande);
 
                 mainV->addLayout(form);
                 mainV->addSpacing(10);
@@ -2642,6 +2663,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
                     "#f9fafb; }");
                 mainV->addWidget(bbox);
 
+                int resolvedOrderId = 0;
                 QObject::connect(bbox, &QDialogButtonBox::accepted, [&]() {
                   errMontant->hide();
                   errDate->hide();
@@ -2649,6 +2671,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
                   errDesc->hide();
 
                   bool isValid = true;
+                  resolvedOrderId = 0; // Reset for this attempt
                   if (editMontant->text().trimmed().isEmpty()) {
                     errMontant->setText("Amount is required.");
                     errMontant->show();
@@ -2676,15 +2699,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
                     isValid = false;
                   }
 
-                  if (!editCommande->text().trimmed().isEmpty()) {
-                    bool cmdOk = false;
-                    int cmdId = editCommande->text().toInt(&cmdOk);
-                    if (!cmdOk || cmdId < 0) {
-                      errCommande->setText("Order ID must be a valid positive number.");
-                      errCommande->show();
-                      isValid = false;
-                    }
-                  }
+                  resolvedOrderId = editCommande->currentData().toInt();
 
                   if (isValid) {
                       dlg.accept();
@@ -2701,7 +2716,7 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
                   t.setTypeTransaction(editType->currentText());
                   t.setModePaiement(editMode->currentText());
                   t.setDescription(editDesc->text().trimmed());
-                  t.setIdCommande(editCommande->text().toInt());
+                  t.setIdCommande(resolvedOrderId);
                   t.setReference(transTable->item(row, 1)->text());
 
                   if (t.modifier()) {
@@ -2792,14 +2807,19 @@ static QWidget *createFinancePage(QStackedWidget *&outNestedStack) {
 
             "<table width='100%' cellpadding='12' cellspacing='0' style='border: 1pt solid #eee;'>"
             "  <tr style='background-color: #2C3E1F; color: white;'>"
-            "    <td style='font-size: 11pt;'><b>Amount</b></td><td style='font-size: 11pt;'><b>Date</b></td><td style='font-size: 11pt;'><b>Type</b></td><td style='font-size: 11pt;'><b>Payment</b></td><td style='font-size: 11pt;'><b>Description</b></td>"
+            "    <td style='font-size: 11pt;'><b>Ref</b></td>"
+            "    <td style='font-size: 11pt;'><b>Order Ref</b></td>"
+            "    <td style='font-size: 11pt;'><b>Amount</b></td>"
+            "    <td style='font-size: 11pt;'><b>Date</b></td>"
+            "    <td style='font-size: 11pt;'><b>Type</b></td>"
+            "    <td style='font-size: 11pt;'><b>Payment</b></td>"
             "  </tr>";
 
         for (int r = 0; r < transTable->rowCount(); ++r) {
           html += "<tr>";
-          for (int c = 1; c <= 5; ++c) {
+          for (int c = 1; c <= 6; ++c) { // Columns: Ref, Order Ref, Amount, Date, Type, Payment
             QString val = transTable->item(r, c) ? transTable->item(r, c)->text() : "";
-            html += "<td style='border-bottom: 1pt solid #eee; font-size: 12pt;'>" + val + "</td>";
+            html += "<td style='border-bottom: 1pt solid #eee; font-size: 10pt;'>" + val + "</td>";
           }
           html += "</tr>";
         }
@@ -4037,13 +4057,16 @@ static QWidget *createInventoryPage(QStackedWidget *&outNestedStack) {
       chatTabLayout->addWidget(inputArea);
 
       ConsultantAgent *agent = new ConsultantAgent(chatTab);
+      QObject::connect(agent, &ConsultantAgent::responseReady, [addMessage](const QString &response) {
+          addMessage("MARKET IA", response, false);
+      });
+
       auto handleSend = [chatInput, agent, addMessage]() {
           QString text = chatInput->text().trimmed();
           if (text.isEmpty()) return;
           addMessage("YOU", text, true);
           chatInput->clear();
-          QString response = agent->getResponse(text);
-          QTimer::singleShot(500, [addMessage, response]() { addMessage("MARKET IA", response, false); });
+          agent->requestAiAdvice(text);
       };
 
       QObject::connect(btnSend, &QPushButton::clicked, handleSend);
@@ -4303,7 +4326,28 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           edHours->setValidator(new QIntValidator(0, 9999999, edHours));
           QLineEdit *edSeuil = addField("Threshold:", QString::number(currentSeuil));
           edSeuil->setValidator(new QIntValidator(0, 9999999, edSeuil));
-          QLineEdit *edLoc = addField("Location:", currentLoc);
+          mainV->addWidget(new QLabel("Location:"));
+          QWidget *locW = new QWidget();
+          QHBoxLayout *locL = new QHBoxLayout(locW);
+          locL->setContentsMargins(0, 0, 0, 0);
+          
+          QComboBox *edBlock = new QComboBox();
+          edBlock->addItems({"A", "B"});
+          QComboBox *edFloor = new QComboBox();
+          edFloor->addItems({"0", "1", "2"});
+          QComboBox *edPlace = new QComboBox();
+          edPlace->addItems({"1", "2", "3", "4", "5", "6"});
+
+          if (currentLoc.length() >= 3) {
+              edBlock->setCurrentText(currentLoc.left(1));
+              edFloor->setCurrentText(currentLoc.mid(1, 1));
+              edPlace->setCurrentText(currentLoc.mid(2, 1));
+          }
+          
+          locL->addWidget(new QLabel("Blc:")); locL->addWidget(edBlock);
+          locL->addWidget(new QLabel("Flr:")); locL->addWidget(edFloor);
+          locL->addWidget(new QLabel("Plc:")); locL->addWidget(edPlace);
+          mainV->addWidget(locW);
 
           QPushButton *btnSave = new QPushButton("Save Changes");
           btnSave->setStyleSheet("QPushButton { background-color: #3DDC84; color: white; border: none; border-radius: 8px; padding: 12px; font-weight: 700; }");
@@ -4338,7 +4382,19 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
                   return;
               }
 
-              Machine updateObj(mid, nom, edType->currentText(), edStatus->currentText(), heures, seuil, edLoc->text().trimmed());
+              QString loc = edBlock->currentText() + edFloor->currentText() + edPlace->currentText();
+
+              // Uniqueness check (excluding current machine)
+              QSqlQuery checkLoc;
+              checkLoc.prepare("SELECT COUNT(*) FROM MACHINE WHERE LOCALISATION = :loc AND ID_MACHINE <> :id");
+              checkLoc.bindValue(":loc", loc);
+              checkLoc.bindValue(":id", mid);
+              if (checkLoc.exec() && checkLoc.next() && checkLoc.value(0).toInt() > 0) {
+                  QMessageBox::warning(&dlg, "Location Taken", "The location " + loc + " is already occupied by another machine.");
+                  return;
+              }
+
+              Machine updateObj(mid, nom, edType->currentText(), edStatus->currentText(), heures, seuil, loc);
               if (updateObj.modifier()) {
                   dlg.accept();
                   (*refreshMachineTable)();
@@ -4397,7 +4453,24 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       hoursInput->setValidator(new QIntValidator(0, 9999999, hoursInput));
       QLineEdit *seuilInput = new QLineEdit("100");
       seuilInput->setValidator(new QIntValidator(0, 9999999, seuilInput));
-      QLineEdit *locInput = new QLineEdit();
+      // Structured Location selection
+      QWidget *locWidget = new QWidget();
+      QHBoxLayout *locLayout = new QHBoxLayout(locWidget);
+      locLayout->setContentsMargins(0, 0, 0, 0);
+      
+      QComboBox *comboBlock = new QComboBox();
+      comboBlock->addItems({"A", "B"});
+      QComboBox *comboFloor = new QComboBox();
+      comboFloor->addItems({"0", "1", "2"});
+      QComboBox *comboPlace = new QComboBox();
+      comboPlace->addItems({"1", "2", "3", "4", "5", "6"});
+      
+      locLayout->addWidget(new QLabel("Bloc:"));
+      locLayout->addWidget(comboBlock);
+      locLayout->addWidget(new QLabel("Floor:"));
+      locLayout->addWidget(comboFloor);
+      locLayout->addWidget(new QLabel("Place:"));
+      locLayout->addWidget(comboPlace);
 
       auto addInput = [&](const QString &txt, QWidget *le) {
           QLabel *l = new QLabel(txt);
@@ -4416,7 +4489,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       addInput("Machine Status:", statusInput);
       addInput("Operating Hours:", hoursInput);
       addInput("Maintenance Threshold:", seuilInput);
-      addInput("Machine Location:", locInput);
+      addInput("Machine Location (Bloc-Floor-Place):", locWidget);
 
       formLayout->addSpacing(20);
       QPushButton *btnAdd = new QPushButton("Add Machine");
@@ -4450,7 +4523,18 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
 
           int heures = heuresStr.toInt();
           int seuil = seuilStr.toInt();
-          QString loc = locInput->text().trimmed();
+          
+          // Generate the location string based on user selection
+          QString loc = comboBlock->currentText() + comboFloor->currentText() + comboPlace->currentText();
+
+          // Uniqueness check for location
+          QSqlQuery checkLoc;
+          checkLoc.prepare("SELECT COUNT(*) FROM MACHINE WHERE LOCALISATION = :loc");
+          checkLoc.bindValue(":loc", loc);
+          if (checkLoc.exec() && checkLoc.next() && checkLoc.value(0).toInt() > 0) {
+              QMessageBox::warning(nullptr, "Location Taken", "The location " + loc + " is already occupied by another machine.");
+              return;
+          }
 
           if (heures < 0) {
               QMessageBox::warning(nullptr, "Erreur de Saisie", "Les heures de fonctionnement doivent être positives ou nulles.");
@@ -4464,8 +4548,9 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
 
           Machine newM(0, nom, typeInput->currentText(), statusInput->currentText(), heures, seuil, loc);
           if (newM.ajouter()) {
-              QMessageBox::information(nullptr, "Success", "Machine added with location!");
-              nameInput->clear(); typeInput->setCurrentIndex(0); statusInput->setCurrentIndex(0); hoursInput->setText("0"); seuilInput->setText("100"); locInput->clear();
+              QMessageBox::information(nullptr, "Success", "Machine added to location " + loc + "!");
+              nameInput->clear(); typeInput->setCurrentIndex(0); statusInput->setCurrentIndex(0); hoursInput->setText("0"); seuilInput->setText("100"); 
+              comboBlock->setCurrentIndex(0); comboFloor->setCurrentIndex(0); comboPlace->setCurrentIndex(0);
 
               if (refreshMachineTable) {
                   (*refreshMachineTable)();
@@ -4581,10 +4666,10 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
 
              // Use model for reliable data extraction
              int id = table->model()->index(i, 0).data().toInt();
-             QString nom = table->model()->index(i, 1).data().toString();
-             int heures = table->model()->index(i, 4).data().toInt();
-             int seuil = table->model()->index(i, 5).data().toInt();
-             QString currentStatus = table->model()->index(i, 3).data().toString();
+             QString nom = table->model()->index(i, 2).data().toString();
+             int heures = table->model()->index(i, 5).data().toInt();
+             int seuil = table->model()->index(i, 6).data().toInt();
+             QString currentStatus = table->model()->index(i, 4).data().toString();
 
              if (id <= 0) continue;
 
@@ -4696,63 +4781,92 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           QTextStream out(&strStream);
 
           out << "<html><head><meta charset='utf-8'><style>"
-              << "body { font-family: sans-serif; }"
-              << ".header { background: #1D9E75; color: white; padding: 15px; text-align: center; }"
-              << "table { width: 100%; border-collapse: collapse; margin-top: 15px; }"
-              << "th { background: #eee; padding: 8px; border: 1px solid #ccc; font-size: 10px; }"
-              << "td { padding: 6px; border: 1px solid #ddd; text-align: center; font-size: 10px; }"
-              << ".title { font-weight: bold; margin-top: 20px; color: #1D9E75; border-bottom: 2px solid #1D9E75; padding-bottom: 5px; }"
-              << "</style></head><body>"
-              << "<div class='header'><h1>RAPPORT DE MAINTENANCE DÉTAILLÉ</h1></div>";
+              << "body { font-family: 'Segoe UI', Arial, sans-serif; color: #333; }"
+              << ".title-main { text-align: center; font-size: 20pt; font-weight: bold; color: #1f4e79; margin-bottom: 5px; }"
+              << ".subtitle { text-align: center; font-size: 10pt; color: #7f8c8d; margin-bottom: 20px; }"
+              << ".summary-box { background-color: #f8f9fa; padding: 10px; margin-bottom: 20px; }"
+              << ".summary-table td { font-size: 10pt; font-weight: bold; text-align: center; }"
+              << "th { background-color: #f2f2f2; color: #333; font-weight: bold; font-size: 10pt; border: 1px solid #bdc3c7; }"
+              << "td { font-size: 10pt; border: 1px solid #bdc3c7; text-align: center; }"
+              << ".section-title { font-size: 14pt; font-weight: bold; margin-top: 20px; margin-bottom: 5px; }"
+              << ".color-green { color: #27ae60; }"
+              << ".color-red { color: #c0392b; }"
+              << ".color-yellow { color: #f39c12; }"
+              << "</style></head><body>";
 
-          auto generateSection = [&](QString title, QStringList states) {
-              bool hasData = false;
-              QString html = QString("<div class='title'>%1</div><table><thead><tr>").arg(title);
-              html += "<th>ID</th><th>Nom</th><th>Type</th><th>État</th><th>Heures</th><th>Seuil</th><th>Localisation</th>";
-              html += "</tr></thead><tbody>";
+          out << "<div class='title-main'>Rapport d'État du Parc Machines</div>";
+          out << "<div class='subtitle'>Généré le : " << QDateTime::currentDateTime().toString("dd/MM/yyyy HH:mm") << "</div>";
 
-              for (int r = 0; r < table->rowCount(); ++r) {
-                  if (table->isRowHidden(r)) continue;
+          struct MachineData {
+              QString name, type, status, hours, threshold, location;
+          };
+          QList<MachineData> normalList, panneList, maintList;
+          
+          for (int r = 0; r < table->rowCount(); ++r) {
+              if (table->isRowHidden(r)) continue;
+              int id = table->model()->index(r, 0).data().toInt();
+              if (id <= 0) continue;
+              
+              QSqlQuery query;
+              query.prepare("SELECT NOM_MACHINE, TYPE_MACHINE, ETAT_MACHINE, HEURESFONCTIONNEMENT, SEUILMAINTENANCE, LOCALISATION FROM MACHINE WHERE ID_MACHINE = :id");
+              query.bindValue(":id", id);
+              if (query.exec() && query.next()) {
+                  MachineData md;
+                  md.name = query.value(0).toString().toHtmlEscaped();
+                  md.type = query.value(1).toString().toHtmlEscaped();
+                  QString s = query.value(2).toString().toHtmlEscaped();
+                  md.status = s;
+                  md.hours = query.value(3).toString();
+                  md.threshold = query.value(4).toString();
+                  md.location = query.value(5).toString().toHtmlEscaped();
                   
-                  // Get ID and Status from table (reliable)
-                  int id = table->model()->index(r, 0).data().toInt();
-                  QString s = table->model()->index(r, 3).data().toString().trimmed();
-                  
-                  bool match = false;
-                  for(const QString& target : states) if(s.compare(target, Qt::CaseInsensitive) == 0) match = true;
-                  
-                  if (match && id > 0) {
-                      // FETCH FRESH DATA FROM DB
-                      QSqlQuery query;
-                      query.prepare("SELECT NOM_MACHINE, TYPE_MACHINE, ETAT_MACHINE, HEURESFONCTIONNEMENT, SEUILMAINTENANCE, LOCALISATION FROM MACHINE WHERE ID_MACHINE = :id");
-                      query.bindValue(":id", id);
-                      
-                      if (query.exec() && query.next()) {
-                          hasData = true;
-                          html += "<tr>";
-                          html += QString("<td>%1</td>").arg(id);
-                          html += QString("<td>%1</td>").arg(query.value(0).toString().toHtmlEscaped());
-                          html += QString("<td>%1</td>").arg(query.value(1).toString().toHtmlEscaped());
-                          html += QString("<td>%1</td>").arg(query.value(2).toString().toHtmlEscaped());
-                          html += QString("<td>%1</td>").arg(query.value(3).toString());
-                          html += QString("<td>%1</td>").arg(query.value(4).toString());
-                          html += QString("<td>%1</td>").arg(query.value(5).toString().toHtmlEscaped());
-                          html += "</tr>";
-                      }
+                  if (s.compare("Normal", Qt::CaseInsensitive) == 0 || s.compare("En marche", Qt::CaseInsensitive) == 0) {
+                      normalList.append(md);
+                  } else if (s.compare("En panne", Qt::CaseInsensitive) == 0 || s.compare("En danger", Qt::CaseInsensitive) == 0 || s.compare("Critique", Qt::CaseInsensitive) == 0) {
+                      panneList.append(md);
+                  } else { // "En maintenance", etc.
+                      maintList.append(md);
                   }
               }
-              html += "</tbody></table>";
-              if (hasData) out << html;
-              else out << QString("<p>%1 : Aucun actif trouvé.</p>").arg(title);
+          }
+          
+          int total = normalList.size() + panneList.size() + maintList.size();
+
+          // Summary Section
+          out << "<div class='summary-box'><table class='summary-table' width='100%' cellpadding='5' cellspacing='0'><tr>";
+          out << "<td style='text-align: left; color: #333;'>Résumé du Parc<br>Total Machines : " << total << "</td>";
+          out << "<td class='color-green'>Opérationnelles : " << normalList.size() << "</td>";
+          out << "<td class='color-red'>En panne : " << panneList.size() << "</td>";
+          out << "<td class='color-yellow'>En maintenance : " << maintList.size() << "</td>";
+          out << "</tr></table></div>";
+
+          // Table Generator Lambda
+          auto printTable = [&](const QString& title, const QString& colorClass, const QList<MachineData>& list) {
+              if (list.isEmpty()) return;
+              out << "<div class='section-title " << colorClass << "'>" << title << " (" << list.size() << ")</div>";
+              out << "<table width='100%' cellpadding='8' cellspacing='0'><thead><tr>"
+                  << "<th>Name</th><th>Type</th><th>Status</th><th>Hours</th><th>Threshold</th><th>Location</th>"
+                  << "</tr></thead><tbody>";
+              for (const MachineData& md : list) {
+                  out << "<tr>"
+                      << "<td>" << md.name << "</td>"
+                      << "<td>" << md.type << "</td>"
+                      << "<td>" << md.status << "</td>"
+                      << "<td>" << md.hours << "</td>"
+                      << "<td>" << md.threshold << "</td>"
+                      << "<td>" << md.location << "</td>"
+                      << "</tr>";
+              }
+              out << "</tbody></table>";
           };
 
-          generateSection("ACTIFS OPÉRATIONNELS", {"Normal", "En marche", "Fonctionnel"});
-          generateSection("ACTIFS EN PANNE / DANGER", {"En panne", "Critique", "En danger"});
-          generateSection("ACTIFS EN MAINTENANCE", {"En maintenance", "Réparation"});
+          printTable("Normal", "color-green", normalList);
+          printTable("En panne", "color-red", panneList);
+          printTable("En maintenance", "color-yellow", maintList);
 
           out << "</body></html>";
 
-          QPrinter printer(QPrinter::HighResolution);
+          QPrinter printer(QPrinter::PrinterResolution);
           printer.setOutputFormat(QPrinter::PdfFormat);
           printer.setOutputFileName(fileName);
           printer.setPageSize(QPageSize(QPageSize::A4));
@@ -4768,6 +4882,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
       });
 
       (*refreshMachineTable)();
+
 
     } else if (name == "Analytics") {
       // --- Title ---
@@ -4798,7 +4913,7 @@ static QWidget *createMaintenancePage(QStackedWidget *&outNestedStack) {
           QSqlQueryModel *model = m.afficher();
           int normal = 0, panne = 0, maintenance = 0;
           for (int i = 0; i < model->rowCount(); ++i) {
-              QString status = model->data(model->index(i, 3)).toString();
+              QString status = model->data(model->index(i, 4)).toString();
               if (status == "Normal") normal++;
               else if (status == "En panne") panne++;
               else if (status == "En maintenance") maintenance++;
@@ -5163,53 +5278,66 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
           QTableWidget *table = *productTablePtr;
           if (!table) return;
 
+          int currentYear = QDate::currentDate().year();
+          QSqlQuery query;
+          query.prepare("SELECT TO_CHAR(DATE_PRESS, 'MM'), SUM(QUANTITE) "
+                        "FROM PRODUIT "
+                        "WHERE TO_CHAR(DATE_PRESS, 'YYYY') = :year "
+                        "GROUP BY TO_CHAR(DATE_PRESS, 'MM') "
+                        "ORDER BY TO_CHAR(DATE_PRESS, 'MM')");
+          query.bindValue(":year", QString::number(currentYear));
+          
+          if (!query.exec()) {
+              QMessageBox::critical(table->window(), "Database Error", query.lastError().text());
+              return;
+          }
+
           QString strStream;
           QTextStream out(&strStream);
 
-          const int rowCount = table->rowCount();
-          const int columnCount = table->columnCount() - 1; // Exclude Actions col
-
-          out <<  "<html>\n"
+          out << "<html>\n"
               "<head>\n"
               "<meta Content=\"Text/html; charset=utf-8\">\n"
-              <<  QString("<title>%1</title>\n").arg("Liste des Produits")
-              <<  "</head>\n"
-              "<body bgcolor=#ffffff link=#5000A0>\n"
-              "<h1 style=\"text-align: center; color: #3DDC84; font-family: Arial, sans-serif;\">Rapport des Produits</h1>\n"
-              "<p style=\"text-align: center; color: #7f8c8d;\">Généré le: " + QDateTime::currentDateTime().toString("dd/MM/yyyy hh:mm") + "</p>\n"
-              <<  "<table border=1 cellspacing=0 cellpadding=8 width=\"100%\" style=\"border-collapse: collapse; font-family: Arial, sans-serif;\">\n";
+              << QString("<title>%1</title>\n").arg("Production Mensuelle")
+              << "</head>\n"
+              "<body bgcolor=#ffffff>\n"
+              << QString("<h1 style=\"text-align: center; color: #3DDC84; font-family: Arial, sans-serif;\">Rapport de Production Mensuelle (%1)</h1>\n").arg(currentYear)
+              << "<p style=\"text-align: center; color: #7f8c8d;\">Généré le: " + QDateTime::currentDateTime().toString("dd/MM/yyyy hh:mm") + "</p>\n"
+              << "<table border=1 cellspacing=0 cellpadding=8 width=\"100%\" style=\"border-collapse: collapse; font-family: Arial, sans-serif; margin-top: 20px;\">\n"
+              << "<thead><tr bgcolor=#f0f0f0 style=\"color: #333;\">"
+              << "<th style=\"border: 1px solid #ddd;\">Mois</th>"
+              << "<th style=\"border: 1px solid #ddd;\">Quantité Totale Produite</th>"
+              << "</tr></thead>\n<tbody>\n";
 
-          // headers
-          out << "<thead><tr bgcolor=#f0f0f0 style=\"color: #333;\">";
-          for (int column = 0; column < columnCount; column++)
-              if (!table->isColumnHidden(column))
-                  out << QString("<th style=\"border: 1px solid #ddd;\">%1</th>").arg(table->horizontalHeaderItem(column)->text());
-          out << "</tr></thead>\n<tbody>\n";
+          QStringList monthNames = {"Janvier", "Février", "Mars", "Avril", "Mai", "Juin", 
+                                    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"};
 
-          // data
-          for (int row = 0; row < rowCount; row++) {
-              if (table->isRowHidden(row)) continue;
-              out << "<tr>";
-              for (int column = 0; column < columnCount; column++) {
-                  if (!table->isColumnHidden(column)) {
-                      QString data;
-                      if(table->item(row, column)) {
-                          data = table->item(row, column)->text();
-                          if(data.isEmpty()) data = table->item(row, column)->data(Qt::DisplayRole).toString();
-                      }
-                      out << QString("<td style=\"border: 1px solid #ddd; text-align: center;\">%1</td>").arg((!data.isEmpty()) ? data : QString("&nbsp;"));
-                  }
-              }
-              out << "</tr>\n";
+          bool hasData = false;
+          while (query.next()) {
+              hasData = true;
+              int monthIdx = query.value(0).toInt() - 1;
+              QString monthName = (monthIdx >= 0 && monthIdx < 12) ? monthNames[monthIdx] : "Inconnu";
+              double totalQty = query.value(1).toDouble();
+
+              out << "<tr>"
+                  << "<td style=\"border: 1px solid #ddd; text-align: center;\">" << monthName << "</td>"
+                  << "<td style=\"border: 1px solid #ddd; text-align: center; font-weight: bold;\">" << QString::number(totalQty, 'f', 2) << "</td>"
+                  << "</tr>\n";
           }
-          out <<  "</tbody></table>\n"
+
+          if (!hasData) {
+              out << "<tr><td colspan=\"2\" style=\"text-align: center; padding: 20px;\">Aucune donnée de production pour l'année en cours.</td></tr>\n";
+          }
+
+          out << "</tbody></table>\n"
+              "<div style=\"margin-top: 30px; text-align: right; color: #aaa; font-size: 10px;\">Oil Press Manager - Rapport de Production Officiel</div>"
               "</body>\n"
               "</html>\n";
 
           QTextDocument document;
           document.setHtml(strStream);
 
-          QString defaultName = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + "_Rapport_Produits.pdf";
+          QString defaultName = QString("Production_Mensuelle_%1.pdf").arg(currentYear);
           QString fileName = QFileDialog::getSaveFileName(table->window(), "Exporter en PDF", QDir::currentPath() + "/" + defaultName, "PDF Files (*.pdf)");
 
           if (fileName.isEmpty()) return;
@@ -5217,10 +5345,11 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
           QPrinter printer(QPrinter::PrinterResolution);
           printer.setOutputFormat(QPrinter::PdfFormat);
           printer.setOutputFileName(fileName);
-          printer.setPageMargins(QMarginsF(10, 10, 10, 10), QPageLayout::Millimeter);
+          printer.setPageMargins(QMarginsF(15, 15, 15, 15), QPageLayout::Millimeter);
 
           document.print(&printer);
-          QMessageBox::information(table->window(), "Succès", "Le PDF a été généré avec succès !\nEmplacement: " + fileName);
+          QMessageBox::information(table->window(), "Succès", "Le rapport de production mensuelle a été généré avec succès !");
+          QDesktopServices::openUrl(QUrl::fromLocalFile(fileName));
       });
 
     } else if (name == "Add Product") {
@@ -5389,79 +5518,44 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
           "QTableWidget::item { padding: 12px; border-bottom: 1px solid #f5f5f5; color: #333; }");
       estLayout->addWidget(predTable);
 
-      QNetworkAccessManager *manager = new QNetworkAccessManager(page);
+      ConsultantAgent *agent = new ConsultantAgent(page);
 
-      QObject::connect(btnPredict, &QPushButton::clicked, [manager, statusLabel, predTable]() {
+      QObject::connect(btnPredict, &QPushButton::clicked, [agent, statusLabel, predTable]() {
           statusLabel->setText("Status: Connecting to forecasting API...");
           statusLabel->setStyleSheet("color: #f39c12; font-weight: bold; font-size: 14px;");
           predTable->setRowCount(0);
+          agent->requestPriceForecast();
+      });
 
-          QString apiKey = "AIzaSyCYkAxn6q9Cg3N0Ay3zuUtau0OX2RTZvfY"; // Reusing the valid key provided
-          QUrl url("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey);
+      QObject::connect(agent, &ConsultantAgent::forecastReady, [statusLabel, predTable](const QJsonArray &forecastArray) {
+          if (!forecastArray.isEmpty()) {
+              predTable->setRowCount(forecastArray.size());
+              statusLabel->setText("Status: Prediction Complete (AI Forecast)");
+              statusLabel->setStyleSheet("color: #27ae60; font-weight: bold; font-size: 14px;");
 
-          QString prompt = "You are a highly advanced agricultural economic model forecasting olive oil prices. "
-                           "Generate a 6-month price forecast for Olive Oil in Tunisia (currency: DT/Liter) starting from next month. "
-                           "The current base price is 28.50 DT. Factor in typical seasonal weather trends and market variables. "
-                           "Return ONLY a valid JSON array of 6 objects. Do not include markdown formatting or explanation. "
-                           "Example format: [{\"date\":\"2024-06\", \"weather\":\"Hot and Dry\", \"price\":28.75}, ...]";
-
-          QNetworkRequest request(url);
-          request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-
-          QJsonObject part; part["text"] = prompt;
-          QJsonArray parts; parts.append(part);
-          QJsonObject contentObj; contentObj["parts"] = parts;
-          QJsonArray contents; contents.append(contentObj);
-          QJsonObject payload; payload["contents"] = contents;
-
-          QNetworkReply *reply = manager->post(request, QJsonDocument(payload).toJson());
-
-          QObject::connect(reply, &QNetworkReply::finished, [reply, statusLabel, predTable]() {
-              if (reply->error() == QNetworkReply::NoError) {
-                  QByteArray response = reply->readAll();
-                  QJsonDocument doc = QJsonDocument::fromJson(response);
-                  QJsonArray candidates = doc.object()["candidates"].toArray();
-                  if (!candidates.isEmpty()) {
-                      QString rawText = candidates[0].toObject()["content"].toObject()["parts"].toArray()[0].toObject()["text"].toString();
-                      rawText = rawText.replace("```json", "").replace("```", "").trimmed(); // Clean markdown if present
-                      
-                      QJsonDocument forecastDoc = QJsonDocument::fromJson(rawText.toUtf8());
-                      if (forecastDoc.isArray()) {
-                          QJsonArray forecastArray = forecastDoc.array();
-                          predTable->setRowCount(forecastArray.size());
-                          statusLabel->setText("Status: Prediction Complete (AI Forecast)");
-                          statusLabel->setStyleSheet("color: #27ae60; font-weight: bold; font-size: 14px;");
-
-                          for (int i = 0; i < forecastArray.size(); ++i) {
-                              QJsonObject item = forecastArray[i].toObject();
-                              predTable->setItem(i, 0, new QTableWidgetItem(item["date"].toString()));
-                              predTable->setItem(i, 1, new QTableWidgetItem(item["weather"].toString()));
-                              predTable->setItem(i, 2, new QTableWidgetItem(QString("%1 DT").arg(item["price"].toDouble(), 0, 'f', 2)));
-                          }
-                      } else {
-                          statusLabel->setText("Status: Forecasting Error (Invalid Model Output)");
-                          statusLabel->setStyleSheet("color: #e74c3c; font-weight: bold; font-size: 14px;");
-                      }
-                  }
-              } else {
-                  statusLabel->setText("Status: API Error (" + reply->errorString() + ") - Using Fallback Simulation");
-                  statusLabel->setStyleSheet("color: #e74c3c; font-weight: bold; font-size: 14px;");
-
-                  // Fallback Simulation logic if the network fails
-                  double basePrice = 28.50;
-                  predTable->setRowCount(6);
-                  QDate d = QDate::currentDate();
-                  for (int i = 0; i < 6; ++i) {
-                      d = d.addMonths(1);
-                      double factor = 1.0 + ((rand() % 200) - 50) / 1000.0;
-                      basePrice *= factor;
-                      predTable->setItem(i, 0, new QTableWidgetItem(d.toString("yyyy-MM")));
-                      predTable->setItem(i, 1, new QTableWidgetItem("Unknown Weather"));
-                      predTable->setItem(i, 2, new QTableWidgetItem(QString("%1 DT (Fallback)").arg(basePrice, 0, 'f', 2)));
-                  }
+              for (int i = 0; i < forecastArray.size(); ++i) {
+                  QJsonObject item = forecastArray[i].toObject();
+                  predTable->setItem(i, 0, new QTableWidgetItem(item["date"].toString()));
+                  predTable->setItem(i, 1, new QTableWidgetItem(item["weather"].toString()));
+                  predTable->setItem(i, 2, new QTableWidgetItem(QString("%1 DT").arg(item["price"].toDouble(), 0, 'f', 2)));
               }
-              reply->deleteLater();
-          });
+          } else {
+              statusLabel->setText("Status: Forecasting Error - Using Fallback Simulation");
+              statusLabel->setStyleSheet("color: #e74c3c; font-weight: bold; font-size: 14px;");
+
+              // Fallback Simulation logic
+              double basePrice = 28.50;
+              predTable->setRowCount(6);
+              QDate d = QDate::currentDate();
+              for (int i = 0; i < 6; ++i) {
+                  d = d.addMonths(1);
+                  double factor = 1.0 + ((rand() % 200) - 50) / 1000.0;
+                  basePrice *= factor;
+                  predTable->setItem(i, 0, new QTableWidgetItem(d.toString("yyyy-MM")));
+                  predTable->setItem(i, 1, new QTableWidgetItem("Unknown Weather"));
+                  predTable->setItem(i, 2, new QTableWidgetItem(QString("%1 DT (Fallback)").arg(basePrice, 0, 'f', 2)));
+              }
+          }
       });
 
       scrollArea->setWidget(estWidget);
@@ -5514,109 +5608,119 @@ static QWidget *createProductPage(QStackedWidget *&outNestedStack) {
       aiLayout->setContentsMargins(20, 20, 20, 20);
       aiLayout->setSpacing(15);
 
-      // Chat history area
-      QTextEdit *chatHistory = new QTextEdit();
-      chatHistory->setReadOnly(true);
-      chatHistory->setStyleSheet("QTextEdit { background-color: #fcfcfc; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px; font-size: 14px; color: #333; }");
-      chatHistory->append("<b>System:</b> Hello! I am the Oil Press AI Advisor. Ask me anything about improving your oil products.");
+      // --- Header with Audit Button ---
+      QWidget *header = new QWidget();
+      QHBoxLayout *hl = new QHBoxLayout(header);
+      hl->setContentsMargins(0, 0, 0, 0);
+      
+      QLabel *title = new QLabel("Oil Quality AI Advisor");
+      title->setStyleSheet("font-size: 20px; font-weight: 800; color: #1a1a1a;");
+      
+      QPushButton *btnAudit = new QPushButton("Run Quality Audit ✨");
+      btnAudit->setStyleSheet("background: #8b5cf6; color: white; padding: 10px 20px; border-radius: 8px; font-weight: 800;");
+      btnAudit->setCursor(Qt::PointingHandCursor);
+      
+      hl->addWidget(title);
+      hl->addStretch();
+      hl->addWidget(btnAudit);
+      aiLayout->addWidget(header);
 
-      // Input area
-      QHBoxLayout *inputLayout = new QHBoxLayout();
-      QLineEdit *userInput = new QLineEdit();
-      userInput->setPlaceholderText("Ask for advice to improve oil grade...");
-      userInput->setStyleSheet(getInputStyle());
-      QPushButton *sendBtn = new QPushButton("Ask AI");
-      sendBtn->setCursor(Qt::PointingHandCursor);
-      sendBtn->setStyleSheet(getButtonStyle());
+      // --- Chat Area (Scrollable Bubbles) ---
+      QScrollArea *chatScroll = new QScrollArea();
+      chatScroll->setWidgetResizable(true);
+      chatScroll->setFrameShape(QFrame::NoFrame);
+      chatScroll->setStyleSheet("background: transparent;");
+      
+      QWidget *chatContent = new QWidget();
+      chatContent->setStyleSheet("background: transparent;");
+      QVBoxLayout *chatList = new QVBoxLayout(chatContent);
+      chatList->setSpacing(12);
+      chatList->addStretch();
+      chatScroll->setWidget(chatContent);
+      aiLayout->addWidget(chatScroll, 1);
 
-      inputLayout->addWidget(userInput);
-      inputLayout->addWidget(sendBtn);
-
-      aiLayout->addWidget(chatHistory, 1);
-      aiLayout->addLayout(inputLayout);
-
-      cLayout->addWidget(aiContainer);
-
-      QNetworkAccessManager *netManager = new QNetworkAccessManager(aiContainer);
-
-      auto askGemini = [=]() {
-          QString apiKey = "AIzaSyCYkAxn6q9Cg3N0Ay3zuUtau0OX2RTZvfY";
-          QString query = userInput->text().trimmed();
-          if (query.isEmpty()) return;
-
-          chatHistory->append("<b>You:</b> " + query.toHtmlEscaped() + "<br/>");
-          userInput->clear();
-
-          // Build context from DB
-          QString dbContext = "Here is the current relevant stock in the oil press:\n";
-          QSqlQuery q("SELECT CAPACITE, QUANTITE, COULEUR, VISCOSITE FROM PRODUIT ORDER BY ID_CONTENAIR DESC LIMIT 10");
-          int count = 0;
-          while (q.next() && count < 10) {
-              dbContext += QString("- Olives/Oil capacity %1, qty %2, color %3, viscosity %4\n")
-                            .arg(q.value(0).toString())
-                            .arg(q.value(1).toString())
-                            .arg(q.value(2).toString())
-                            .arg(q.value(3).toString());
-              count++;
-          }
-          if (count == 0) dbContext += "No recent products found.\n";
-
-          QString fullPrompt = "You are an expert olive oil press consultant. Act as an advisor.\n" + dbContext + "\nUser question: " + query;
-
-          QUrl url("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey);
-          QNetworkRequest request(url);
-          request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-
-          QJsonObject part;
-          part["text"] = fullPrompt;
-          QJsonArray parts;
-          parts.append(part);
-          QJsonObject contentObj;
-          contentObj["parts"] = parts;
-          QJsonArray contents;
-          contents.append(contentObj);
-          QJsonObject payload;
-          payload["contents"] = contents;
-
-          QNetworkReply *reply = netManager->post(request, QJsonDocument(payload).toJson());
-          sendBtn->setEnabled(false);
-
-          QObject::connect(reply, &QNetworkReply::finished, [reply, chatHistory, sendBtn]() {
-              sendBtn->setEnabled(true);
-              if (reply->error() == QNetworkReply::NoError) {
-                  QByteArray response = reply->readAll();
-                  QJsonDocument doc = QJsonDocument::fromJson(response);
-                  QJsonObject obj = doc.object();
-                  QJsonArray candidates = obj["candidates"].toArray();
-                  if (!candidates.isEmpty()) {
-                      QJsonObject firstCandidate = candidates[0].toObject();
-                      QJsonObject content = firstCandidate["content"].toObject();
-                      QJsonArray parts = content["parts"].toArray();
-                      if (!parts.isEmpty()) {
-                          QString botText = parts[0].toObject()["text"].toString();
-                          QString formattedText = botText.toHtmlEscaped();
-                          
-                          // Convert Markdown-like syntax to HTML
-                          formattedText.replace(QRegularExpression("\\*\\*(.*?)\\*\\*"), "<b>\\1</b>"); // Bold
-                          formattedText.replace(QRegularExpression("\\*(?!\\s)(.*?)(?<!\\s)\\*"), "<i>\\1</i>"); // Italic
-                          formattedText.replace(QRegularExpression("(^|\n)[\\*\\-]\\s"), "\\1&bull; "); // Bullets
-                          formattedText.replace("\n", "<br/>").replace("\r", ""); // Newlines
-                          
-                          chatHistory->append("<b>AI Advisor:</b><br/>" + formattedText + "<br/>");
-                      }
-                  } else {
-                      chatHistory->append("<span style='color: orange;'><b>AI Advisor:</b> Received empty response.</span><br/>");
-                  }
-              } else {
-                  chatHistory->append("<span style='color: red;'><b>Error:</b> " + reply->errorString() + "</span><br/>");
-              }
-              reply->deleteLater();
+      // --- Helper: Add Chat Bubble ---
+      auto addMessage = [chatList, chatScroll](const QString &sender, const QString &text, bool isUser) {
+          QWidget *bubbleContainer = new QWidget();
+          QHBoxLayout *bl = new QHBoxLayout(bubbleContainer);
+          bl->setContentsMargins(0, 0, 0, 0);
+          
+          QWidget *bubble = new QWidget();
+          bubble->setMaximumWidth(500);
+          bubble->setStyleSheet(isUser ? 
+              "background: #3DDC84; color: white; border-radius: 18px; border-bottom-right-radius: 4px;" : 
+              "background: #f1f3f5; color: #1a1a1a; border-radius: 18px; border-bottom-left-radius: 4px;");
+          
+          QVBoxLayout *ml = new QVBoxLayout(bubble);
+          ml->setContentsMargins(15, 10, 15, 10);
+          
+          QLabel *s = new QLabel(sender);
+          s->setStyleSheet(QString("font-weight: 900; font-size: 10px; text-transform: uppercase; color: %1;").arg(isUser ? "#ffffff" : "#666666"));
+          
+          QLabel *t = new QLabel(text);
+          t->setWordWrap(true);
+          t->setTextFormat(Qt::MarkdownText);
+          t->setStyleSheet(QString("font-size: 14px; line-height: 1.4; color: %1;").arg(isUser ? "#ffffff" : "#1a1a1a"));
+          
+          ml->addWidget(s);
+          ml->addWidget(t);
+          
+          if (isUser) bl->addStretch();
+          bl->addWidget(bubble);
+          if (!isUser) bl->addStretch();
+          
+          chatList->insertWidget(chatList->count() - 1, bubbleContainer);
+          
+          // Auto-scroll to bottom
+          QTimer::singleShot(50, [chatScroll]() {
+              chatScroll->verticalScrollBar()->setValue(chatScroll->verticalScrollBar()->maximum());
           });
       };
 
-      QObject::connect(sendBtn, &QPushButton::clicked, askGemini);
-      QObject::connect(userInput, &QLineEdit::returnPressed, askGemini);
+      // --- Input Area ---
+      QWidget *inputArea = new QWidget();
+      inputArea->setStyleSheet("background: white; border: 1px solid #eee; border-radius: 12px;");
+      QHBoxLayout *il = new QHBoxLayout(inputArea);
+      il->setContentsMargins(10, 10, 10, 10);
+      
+      QLineEdit *userInput = new QLineEdit();
+      userInput->setPlaceholderText("Ask about viscosity, color, or batch quality...");
+      userInput->setStyleSheet("border: none; padding: 10px; font-size: 14px; background: transparent;");
+      
+      QPushButton *sendBtn = new QPushButton("Send");
+      sendBtn->setCursor(Qt::PointingHandCursor);
+      sendBtn->setStyleSheet(getButtonStyle() + " padding: 8px 20px;");
+      
+      il->addWidget(userInput, 1);
+      il->addWidget(sendBtn);
+      aiLayout->addWidget(inputArea);
 
+      // --- Logic: ConsultantAgent Integration ---
+      ConsultantAgent *agent = new ConsultantAgent(aiContainer);
+      
+      auto handleSend = [userInput, agent, addMessage]() {
+          QString query = userInput->text().trimmed();
+          if (query.isEmpty()) return;
+          addMessage("You", query, true);
+          userInput->clear();
+          agent->requestAiAdvice(query);
+      };
+
+      QObject::connect(agent, &ConsultantAgent::responseReady, [addMessage](const QString &response) {
+          addMessage("AI Advisor", response, false);
+      });
+
+      QObject::connect(btnAudit, &QPushButton::clicked, [agent, addMessage]() {
+          addMessage("System", "Starting comprehensive quality audit of current inventory...", true);
+          agent->auditInventory();
+      });
+
+      QObject::connect(sendBtn, &QPushButton::clicked, handleSend);
+      QObject::connect(userInput, &QLineEdit::returnPressed, handleSend);
+
+      addMessage("AI Advisor", "Hello! I'm your **Oil Quality Consultant**. I can analyze your batch data, perform quality audits, and suggest improvements. How can I help you today?", false);
+
+      cLayout->addWidget(aiContainer);
     }
     if (name != "Add Product" && name != "Estimation" && name != "AI Advisor") {
     }
@@ -5645,7 +5749,7 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
 
   outNestedStack = new QStackedWidget();
   QStringList tabNames = {"Staff Hub",   "Add Staff", "Payroll",
-                          "Request Hub", "Analytics", "PDF Printing"};
+                          "Capacity Planner", "Request Hub", "Analytics", "PDF Printing"};
   QList<QPushButton *> tabButtons;
 
   // Shared pointer for the table
@@ -5674,66 +5778,69 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
       controlLayout->setContentsMargins(0, 0, 0, 0);
 
       QLineEdit *searchEdit = new QLineEdit();
-      searchEdit->setPlaceholderText("Search Employee...");
+      searchEdit->setPlaceholderText(" 🔍  Search by Name, CIN, or Role...");
       searchEdit->setStyleSheet(getInputStyle());
-      searchEdit->setFixedWidth(200);
+      searchEdit->setFixedWidth(280);
 
-      QPushButton *btnRefresh = new QPushButton("Refresh");
+      QComboBox *statusCombo = new QComboBox();
+      statusCombo->addItems({"Filter: All Status", "Filter: Active Only", "Filter: Inactive Only"});
+      statusCombo->setStyleSheet("QComboBox { background: white; border: 1px solid #d1d5db; border-radius: 6px; padding: 5px 10px; font-weight: 600; min-width: 150px; } QComboBox::drop-down { border: none; }");
+
+      QPushButton *btnRefresh = new QPushButton("Refresh List");
       btnRefresh->setObjectName("btnRefreshPersonnel");
-      btnRefresh->setStyleSheet(getButtonStyle());
+      btnRefresh->setStyleSheet("QPushButton { background-color: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 15px; font-weight: bold; } QPushButton:hover { background-color: #e5e7eb; }");
       btnRefresh->setCursor(Qt::PointingHandCursor);
-      btnRefresh->setFixedWidth(100);
 
       controlLayout->addWidget(searchEdit);
       controlLayout->addSpacing(10);
-      controlLayout->addWidget(btnRefresh);
+      controlLayout->addWidget(statusCombo);
       controlLayout->addStretch();
+      controlLayout->addWidget(btnRefresh);
       listPageLayout->addWidget(controlBar);
 
       // Table
       personnelTable = new QTableWidget();
-      personnelTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
-      personnelTable->horizontalHeader()->setStretchLastSection(true);
+      QStringList headers = {"CIN", "Name", "Salary", "Address", "Phone", "Exp", "Grade", "Role", "Email", "Status", "Actions"};
+      personnelTable->setColumnCount(headers.size());
+      personnelTable->setHorizontalHeaderLabels(headers);
+      personnelTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+      personnelTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
       personnelTable->verticalHeader()->setVisible(false);
       personnelTable->verticalHeader()->setDefaultSectionSize(60);
       personnelTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
       personnelTable->setSelectionBehavior(QAbstractItemView::SelectRows);
       personnelTable->setAlternatingRowColors(true);
       personnelTable->setStyleSheet(
-          "QTableWidget { border: 1px solid #eaeaea; background-color: #ffffff; "
-          "gridline-color: transparent; border-radius: 8px; "
-          "alternate-background-color: #f9fafb; }"
-          "QHeaderView::section { background-color: #ffffff; padding: 12px; "
-          "border: none; border-bottom: 2px solid #f0f0f0; font-weight: 700; "
-          "color: #666; text-transform: uppercase; font-size: 12px; }"
-          "QTableWidget::item { padding: 12px; border-bottom: 1px solid #f5f5f5; "
-          "color: #333; }"
-          "QTableWidget::item:selected { background-color: #e6f9ef; color: #1a1a1a; }");
+          "QTableWidget { border: 1px solid #eaeaea; background-color: #ffffff; gridline-color: transparent; border-radius: 8px; alternate-background-color: #f9fafb; }"
+          "QHeaderView::section { background-color: #ffffff; padding: 12px; border: none; border-bottom: 2px solid #f0f0f0; font-weight: 700; color: #666; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }"
+          "QTableWidget::item { padding: 12px; border-bottom: 1px solid #f5f5f5; color: #333; }"
+          "QTableWidget::item:selected { background-color: #ecfdf5; color: #065f46; }"
+      );
 
       listPageLayout->addWidget(personnelTable);
       cLayout->addWidget(listPageWidget);
 
-      auto refreshTable = [personnelTable]() {
-          Personnel p;
-          QSqlQueryModel *model = p.afficher();
-          personnelTable->setRowCount(0);
-          int rowCount = model->rowCount();
-          int colCount = model->columnCount();
-
-          personnelTable->setColumnCount(colCount + 1); // +1 for Actions
-          QStringList headers;
-          for (int j = 0; j < colCount; ++j) {
-              headers << model->headerData(j, Qt::Horizontal).toString();
+      auto refreshTable = [personnelTable, searchEdit, statusCombo, outNestedStack]() {
+          personnelTable->setSortingEnabled(false); 
+          QString filter = searchEdit->text().trimmed();
+          int statusIdx = statusCombo->currentIndex();
+          
+          QString queryStr = "SELECT ID_PERSONNEL, NOM_PERSONNEL, SALAIRE_BRUT, ADRESSE, TEL, EXPERIENCE, GRADE, ROLE, EMAIL, STATUS FROM PERSONNEL WHERE 1=1";
+          if (!filter.isEmpty()) {
+              queryStr += QString(" AND (NOM_PERSONNEL LIKE '%%1%' OR ROLE LIKE '%%1%' OR CAST(ID_PERSONNEL AS VARCHAR(255)) LIKE '%%1%')").arg(filter);
           }
-          headers << "Actions";
-          personnelTable->setHorizontalHeaderLabels(headers);
-          personnelTable->setColumnHidden(0, true); // Hide ID (CIN)
-
-          personnelTable->setRowCount(rowCount);
-
-          for (int i = 0; i < rowCount; ++i) {
-              for (int j = 0; j < colCount; ++j) {
-                  personnelTable->setItem(i, j, new QTableWidgetItem(model->data(model->index(i, j)).toString()));
+          if (statusIdx == 1) queryStr += " AND STATUS = 'Active'";
+          else if (statusIdx == 2) queryStr += " AND STATUS != 'Active'";
+          
+          queryStr += " ORDER BY NOM_PERSONNEL ASC";
+          
+          QSqlQuery q(queryStr);
+          personnelTable->setRowCount(0);
+          int row = 0;
+          while(q.next()) {
+              personnelTable->insertRow(row);
+              for (int j = 0; j < 10; ++j) {
+                  personnelTable->setItem(row, j, new QTableWidgetItem(q.value(j).toString()));
               }
 
               // Action Buttons
@@ -5742,145 +5849,99 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
               actionBtnLayout->setContentsMargins(10, 0, 10, 0);
               actionBtnLayout->setSpacing(10);
               actionBtnLayout->setAlignment(Qt::AlignCenter);
+              
               QPushButton *btnModify = new QPushButton("Edit");
-              btnModify->setCursor(Qt::PointingHandCursor);
-              btnModify->setMinimumWidth(70);
-              btnModify->setFixedHeight(28);
-              btnModify->setStyleSheet("QPushButton { background-color: #ffffff; color: #333; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; font-weight: 600; } QPushButton:hover { background-color: #f6f6f6; }");
-
+              btnModify->setStyleSheet("QPushButton { background-color: white; color: #374151; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; font-weight: 600; } QPushButton:hover { background-color: #f9fafb; }");
               QPushButton *btnDelete = new QPushButton("Remove");
-              btnDelete->setCursor(Qt::PointingHandCursor);
-              btnDelete->setMinimumWidth(70);
-              btnDelete->setFixedHeight(28);
-              btnDelete->setStyleSheet("QPushButton { background-color: #ffffff; color: #d32f2f; border: 1px solid #d32f2f; border-radius: 6px; font-size: 13px; font-weight: 600; } QPushButton:hover { background-color: #ffebee; }");
-
+              btnDelete->setStyleSheet("QPushButton { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 6px; padding: 4px 8px; font-weight: 600; } QPushButton:hover { background-color: #fecaca; }");
+              
               actionBtnLayout->addWidget(btnModify);
               actionBtnLayout->addWidget(btnDelete);
-
-              QObject::connect(btnDelete, &QPushButton::clicked, [personnelTable, i]() {
-                  int cin = personnelTable->item(i, 0)->text().toInt();
-                  if (QMessageBox::question(nullptr, "Confirm Deletion", "Are you sure you want to delete this employee?") == QMessageBox::Yes) {
-                      Personnel p;
-                      if (p.supprimer(cin)) {
-                         QMessageBox::information(nullptr, "Deleted", "Employee removed successfully.");
-                         QPushButton *btn = personnelTable->window()->findChild<QPushButton*>("btnRefreshPersonnel");
-                         if (btn) btn->click();
+              
+              int currentCin = q.value(0).toInt();
+              QObject::connect(btnDelete, &QPushButton::clicked, [currentCin, outNestedStack]() {
+                  if (QMessageBox::question(nullptr, "Confirm Deletion", QString("Permanently delete Employee %1?").arg(currentCin)) == QMessageBox::Yes) {
+                      QSqlQuery del; del.prepare("DELETE FROM PERSONNEL WHERE ID_PERSONNEL = :cin");
+                      del.bindValue(":cin", currentCin);
+                      if (del.exec()) {
+                          QPushButton *btn = outNestedStack->window()->findChild<QPushButton*>("btnRefreshPersonnel");
+                          if (btn) btn->click();
                       }
                   }
               });
 
-              QObject::connect(btnModify, &QPushButton::clicked, [personnelTable, i]() {
-                  QDialog *dialog = new QDialog();
-                  dialog->setWindowTitle("Modify Personnel");
-                  dialog->setMinimumWidth(450);
-                  dialog->setStyleSheet("QDialog { background-color: #f4f6f8; }");
+              QObject::connect(btnModify, &QPushButton::clicked, [currentCin, outNestedStack, personnelTable]() {
+                  QSqlQuery mq;
+                  mq.prepare("SELECT * FROM PERSONNEL WHERE ID_PERSONNEL = :id");
+                  mq.bindValue(":id", currentCin);
+                  if (mq.exec() && mq.next()) {
+                      QDialog *dialog = new QDialog();
+                      dialog->setWindowTitle("Modify Employee Information");
+                      dialog->setMinimumWidth(450);
+                      QVBoxLayout *dLayout = new QVBoxLayout(dialog);
+                      dLayout->setContentsMargins(25, 25, 25, 25);
+                      dLayout->setSpacing(12);
 
-                  QVBoxLayout *dLayout = new QVBoxLayout(dialog);
-                  dLayout->setContentsMargins(25, 25, 25, 25);
-                  dLayout->setSpacing(12);
+                      auto inputStyle = getInputStyle();
+                      auto addField = [&](QString label, QWidget *w) {
+                          dLayout->addWidget(new QLabel(label));
+                          w->setStyleSheet(inputStyle);
+                          if (qobject_cast<QLineEdit*>(w) || qobject_cast<QComboBox*>(w)) w->setFixedHeight(40);
+                          dLayout->addWidget(w);
+                      };
 
-                  QLabel *title = new QLabel("Update Employee Record");
-                  title->setStyleSheet("font-size: 20px; font-weight: 700; color: #1a1a1a; margin-bottom: 15px;");
-                  dLayout->addWidget(title);
+                      QLineEdit *nameIn = new QLineEdit(mq.value("NOM_PERSONNEL").toString());
+                      QLineEdit *salIn = new QLineEdit(mq.value("SALAIRE_BRUT").toString());
+                      QLineEdit *addrIn = new QLineEdit(mq.value("ADRESSE").toString());
+                      QLineEdit *telIn = new QLineEdit(mq.value("TEL").toString());
+                      QLineEdit *emailIn = new QLineEdit(mq.value("EMAIL").toString());
+                      QComboBox *statusIn = new QComboBox(); statusIn->addItems({"Active", "Inactive", "On Leave"});
+                      statusIn->setCurrentText(mq.value("STATUS").toString());
 
-                  QString inputStyle = getInputStyle();
+                      addField("Full Name:", nameIn);
+                      addField("Salary:", salIn);
+                      addField("Address:", addrIn);
+                      addField("Phone:", telIn);
+                      addField("Email:", emailIn);
+                      addField("Status:", statusIn);
 
-                  QLineEdit *cinInput = new QLineEdit(personnelTable->item(i, 0)->text());
-                  cinInput->setEnabled(false);
-                  QLineEdit *nameInput = new QLineEdit(personnelTable->item(i, 1)->text());
-                  QLineEdit *salInput = new QLineEdit(personnelTable->item(i, 2)->text());
-                  QLineEdit *addrInput = new QLineEdit(personnelTable->item(i, 3)->text());
-                  QLineEdit *telInput = new QLineEdit(personnelTable->item(i, 4)->text());
-                  QLineEdit *expInput = new QLineEdit(personnelTable->item(i, 5)->text());
+                      QPushButton *btnSave = new QPushButton("Save Changes");
+                      btnSave->setStyleSheet(getButtonStyle());
+                      btnSave->setFixedHeight(45);
+                      dLayout->addWidget(btnSave);
 
-                  QComboBox *gradeInput = new QComboBox();
-                  gradeInput->addItems({"Junior", "Senior", "Lead", "Principal", "Chief"});
-                  gradeInput->setCurrentText(personnelTable->item(i, 6)->text());
-
-                  QComboBox *roleInput = new QComboBox();
-                  roleInput->addItems({"Stock Management", "Product Management", "Maintenance Management", "Personnel Management", "Order Management", "Financial Management"});
-                  roleInput->setCurrentText(personnelTable->item(i, 7)->text());
-
-                  auto addField = [&](QString label, QWidget *w) {
-                      QLabel *lbl = new QLabel(label);
-                      lbl->setStyleSheet("color: #555; font-weight: 600; font-size: 13px;");
-                      dLayout->addWidget(lbl);
-                      w->setStyleSheet(inputStyle);
-                      if (qobject_cast<QLineEdit*>(w) || qobject_cast<QComboBox*>(w)) {
-                          w->setFixedHeight(42);
-                      }
-                      dLayout->addWidget(w);
-                  };
-
-                  addField("CIN (Identifier - Cannot be changed):", cinInput);
-                  addField("Full Name:", nameInput);
-                  addField("Salary (Gross):", salInput);
-                  addField("Address:", addrInput);
-                  addField("Phone Number:", telInput);
-                  addField("Experience (Years):", expInput);
-                  addField("Grade:", gradeInput);
-                  addField("Role:", roleInput);
-
-                  dLayout->addSpacing(15);
-
-                  QHBoxLayout *btnLayout = new QHBoxLayout();
-                  QPushButton *btnCancel = new QPushButton("Cancel");
-                  btnCancel->setStyleSheet("QPushButton { background-color: #ffffff; color: #333; border: 1px solid #ccc; border-radius: 8px; font-weight: bold; } QPushButton:hover { background-color: #f6f6f6; }");
-                  btnCancel->setCursor(Qt::PointingHandCursor);
-                  btnCancel->setFixedHeight(45);
-
-                  QPushButton *btnSave = new QPushButton("Update Record");
-                  btnSave->setStyleSheet(getButtonStyle());
-                  btnSave->setCursor(Qt::PointingHandCursor);
-                  btnSave->setFixedHeight(45);
-
-                  btnLayout->addWidget(btnCancel);
-                  btnLayout->addWidget(btnSave);
-                  dLayout->addLayout(btnLayout);
-
-                  QObject::connect(btnCancel, &QPushButton::clicked, dialog, &QDialog::reject);
-
-                  QObject::connect(btnSave, &QPushButton::clicked, [=]() {
-                      Personnel p;
-                      p.setCin(cinInput->text().toInt());
-                      p.setNom(nameInput->text());
-                      p.setSalaire(salInput->text().toDouble());
-                      p.setAdresse(addrInput->text());
-                      p.setTel(telInput->text());
-                      p.setExperience(expInput->text().toInt());
-                      p.setGrade(gradeInput->currentText());
-                      p.setRole(roleInput->currentText());
-
-                      if (p.modifier()) {
-                          QMessageBox::information(dialog, "Success", "Record updated successfully.");
-                          dialog->accept();
-                          QPushButton *btnRef = personnelTable->window()->findChild<QPushButton*>("btnRefreshPersonnel");
-                          if (btnRef) btnRef->click();
-                      } else {
-                          QMessageBox::critical(dialog, "Database Error", p.getLastError());
-                      }
-                  });
-                  dialog->exec();
+                      QObject::connect(btnSave, &QPushButton::clicked, [=]() {
+                          QSqlQuery up;
+                          up.prepare("UPDATE PERSONNEL SET NOM_PERSONNEL=:n, SALAIRE_BRUT=:s, ADRESSE=:a, TEL=:t, EMAIL=:e, STATUS=:st WHERE ID_PERSONNEL=:id");
+                          up.bindValue(":n", nameIn->text());
+                          up.bindValue(":s", salIn->text().toDouble());
+                          up.bindValue(":a", addrIn->text());
+                          up.bindValue(":t", telIn->text());
+                          up.bindValue(":e", emailIn->text());
+                          up.bindValue(":st", statusIn->currentText());
+                          up.bindValue(":id", currentCin);
+                          if (up.exec()) {
+                              dialog->accept();
+                              QPushButton *btn = outNestedStack->window()->findChild<QPushButton*>("btnRefreshPersonnel");
+                              if (btn) btn->click();
+                          }
+                      });
+                      dialog->exec();
+                  }
               });
-
-              personnelTable->setCellWidget(i, colCount, actionWidget);
+              
+              personnelTable->setCellWidget(row, 10, actionWidget);
+              row++;
           }
+          personnelTable->setSortingEnabled(true);
       };
 
-      QObject::connect(btnRefresh, &QPushButton::clicked, refreshTable);
+      QObject::connect(searchEdit, &QLineEdit::textChanged, refreshTable);
+      QObject::connect(statusCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [refreshTable](){ refreshTable(); });
+      QObject::connect(btnRefresh, &QPushButton::clicked, [=](){ searchEdit->clear(); statusCombo->setCurrentIndex(0); refreshTable(); });
+      
+      
       refreshTable(); // Initial load
-
-      // Search Logic
-      QObject::connect(searchEdit, &QLineEdit::textChanged, [personnelTable](const QString &text) {
-          QString query = text.toLower();
-          for (int i = 0; i < personnelTable->rowCount(); ++i) {
-              bool match = false;
-              if (personnelTable->item(i, 1))
-                  match = personnelTable->item(i, 1)->text().toLower().contains(query);
-              personnelTable->setRowHidden(i, !match);
-          }
-      });
-
     } else if (name == "Add Staff") {
       // ========== AJOUTER (CREATE) ==========
       QWidget *formContainer = new QWidget();
@@ -5900,9 +5961,9 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
               bool valid = true;
               if (le->validator()) valid = le->hasAcceptableInput();
               if (valid && !le->text().trimmed().isEmpty()) {
-                  le->setStyleSheet("QLineEdit { background-color: #fcfcfc; border: 1px solid #3DDC84; border-radius: 8px; padding: 10px 14px; font-size: 14px; min-height: 45px; }");
+                  le->setStyleSheet("QLineEdit { background-color: #fcfcfc; border: 1px solid #3DDC84; border-radius: 6px; padding: 6px 10px; font-size: 13px; min-height: 35px; }");
               } else {
-                  le->setStyleSheet("QLineEdit { background-color: #fcfcfc; border: 1px solid #d32f2f; border-radius: 8px; padding: 10px 14px; font-size: 14px; min-height: 45px; }");
+                  le->setStyleSheet("QLineEdit { background-color: #fcfcfc; border: 1px solid #d32f2f; border-radius: 6px; padding: 6px 10px; font-size: 13px; min-height: 35px; }");
               }
           });
       };
@@ -5936,6 +5997,13 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
       QComboBox *roleInput = new QComboBox();
       roleInput->addItems({"Stock Management", "Product Management", "Maintenance Management", "Personnel Management", "Order Management", "Financial Management"});
 
+      QLineEdit *emailInput = new QLineEdit(); emailInput->setPlaceholderText("Email Address");
+      emailInput->setValidator(new QRegularExpressionValidator(QRegularExpression("^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$"), emailInput));
+      attachVisualValidation(emailInput);
+
+      QComboBox *statusInput = new QComboBox();
+      statusInput->addItems({"Active", "Inactive", "On Leave"});
+
       auto addField = [&](QString label, QWidget *w) {
         formLayout->addWidget(new QLabel(label));
         w->setStyleSheet(inputStyle);
@@ -5952,6 +6020,8 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
       addField("Experience:", expInput);
       addField("Grade:", gradeInput);
       addField("Role:", roleInput);
+      addField("Email:", emailInput);
+      addField("Status:", statusInput);
 
       QPushButton *btnHire = new QPushButton("Hire Employee");
       btnHire->setStyleSheet(getButtonStyle());
@@ -5960,9 +6030,9 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
       formLayout->addStretch();
 
       QObject::connect(btnHire, &QPushButton::clicked, [=]() {
-          if (!cinInput->hasAcceptableInput() || !nameInput->hasAcceptableInput() ||
-              !salInput->hasAcceptableInput() || !telInput->hasAcceptableInput() ||
-              !expInput->hasAcceptableInput() || addrInput->text().trimmed().isEmpty()) {
+          if (!cinInput->hasAcceptableInput() || !nameInput->hasAcceptableInput() || 
+              !salInput->hasAcceptableInput() || !telInput->hasAcceptableInput() || 
+              !expInput->hasAcceptableInput() || !emailInput->hasAcceptableInput() || addrInput->text().trimmed().isEmpty()) {
               QMessageBox::warning(nullptr, "Error Validation", "Please fill out all fields correctly. Check the red outlines for invalid elements.");
               return;
           }
@@ -5976,13 +6046,15 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
           p.setExperience(expInput->text().toInt());
           p.setGrade(gradeInput->currentText());
           p.setRole(roleInput->currentText());
+          p.setEmail(emailInput->text());
+          p.setStatus(statusInput->currentText());
 
           if (p.ajouter()) {
               QMessageBox::information(nullptr, "Success", "Employee added successfully.");
               cinInput->clear(); nameInput->clear(); salInput->clear(); addrInput->clear();
-              telInput->clear(); expInput->clear();
+              telInput->clear(); expInput->clear(); emailInput->clear();
               outNestedStack->setCurrentIndex(0);
-
+              
               QPushButton *btn = outNestedStack->window()->findChild<QPushButton*>("btnRefreshPersonnel");
               if (btn) btn->click();
           } else {
@@ -5992,114 +6064,248 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
 
       cLayout->addWidget(formContainer);
 
+    } else if (name == "Capacity Planner") {
+      WorkforcePlanner *planner = new WorkforcePlanner();
+      cLayout->addWidget(planner);
     } else if (name == "Payroll") {
       QWidget *payrollWidget = new QWidget();
       QVBoxLayout *payrollLayout = new QVBoxLayout(payrollWidget);
       payrollLayout->setContentsMargins(0, 0, 0, 0);
       payrollLayout->setSpacing(20);
 
-      QLabel *title = new QLabel("Monthly Payroll Overview");
-      title->setStyleSheet("font-size: 22px; font-weight: 700; color: #1a1a1a;");
-      payrollLayout->addWidget(title);
-
-      QWidget *summaryCard = new QWidget();
-      summaryCard->setStyleSheet(getCardStyle());
-      QVBoxLayout *cardLayout = new QVBoxLayout(summaryCard);
-      cardLayout->setSpacing(10);
-
-      QLabel *lblTotal = new QLabel("Loading...");
-      lblTotal->setStyleSheet("font-size: 32px; font-weight: 900; color: #2ecc71;");
-
-      QLabel *lblCount = new QLabel("Loading...");
-      lblCount->setStyleSheet("font-size: 16px; color: #7f8c8d; font-weight: 700;");
-
-      cardLayout->addWidget(lblTotal);
-      cardLayout->addWidget(lblCount);
-      payrollLayout->addWidget(summaryCard);
-
-      QTableWidget *breakdownTable = new QTableWidget();
-      breakdownTable->setColumnCount(4);
-      breakdownTable->setHorizontalHeaderLabels({"CIN", "Employee Name", "Role", "Monthly Salary"});
-      breakdownTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-      breakdownTable->verticalHeader()->setVisible(false);
-      breakdownTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-      breakdownTable->setStyleSheet(
-          "QTableWidget { border: 1px solid #eaeaea; background-color: #ffffff; gridline-color: transparent; border-radius: 8px; alternate-background-color: #f9fafb; }"
-          "QHeaderView::section { background-color: #ffffff; padding: 12px; border: none; border-bottom: 2px solid #f0f0f0; font-weight: 700; color: #666; text-transform: uppercase; font-size: 12px; }"
-          "QTableWidget::item { padding: 12px; border-bottom: 1px solid #f5f5f5; color: #333; }"
-      );
-      payrollLayout->addWidget(breakdownTable);
-
-      QPushButton *btnRefreshPayroll = new QPushButton("Recalculate Current Payroll");
-      btnRefreshPayroll->setStyleSheet(getButtonStyle());
+      QWidget *headerWidget = new QWidget();
+      QHBoxLayout *headerLayout = new QHBoxLayout(headerWidget);
+      headerLayout->setContentsMargins(0, 0, 0, 5);
+      
+      QLabel *title = new QLabel("Global Payroll & Operational Burn");
+      title->setStyleSheet("font-size: 26px; font-weight: 800; color: #111827; letter-spacing: -0.5px;");
+      
+      QPushButton *btnRefreshPayroll = new QPushButton("    Sync Week %1 Analytics    ");
+      btnRefreshPayroll->setText(btnRefreshPayroll->text().arg(QDate::currentDate().weekNumber()));
+      btnRefreshPayroll->setStyleSheet("QPushButton { background-color: #1D9E75; color: white; font-weight: bold; font-size: 13px; border-radius: 8px; padding: 10px 20px; border: none; } QPushButton:hover { background-color: #147b5b; }");
       btnRefreshPayroll->setCursor(Qt::PointingHandCursor);
-      btnRefreshPayroll->setFixedWidth(250);
-      btnRefreshPayroll->setFixedHeight(45);
+      btnRefreshPayroll->setFixedHeight(42);
+      
+      headerLayout->addWidget(title);
+      headerLayout->addStretch();
+      headerLayout->addWidget(btnRefreshPayroll);
+      payrollLayout->addWidget(headerWidget);
 
-      QHBoxLayout *btnLayout = new QHBoxLayout();
-      btnLayout->addStretch();
-      btnLayout->addWidget(btnRefreshPayroll);
-      payrollLayout->addLayout(btnLayout);
+      QWidget *kpiRow = new QWidget();
+      QHBoxLayout *kpiLayout = new QHBoxLayout(kpiRow);
+      kpiLayout->setContentsMargins(0, 0, 0, 0);
+      kpiLayout->setSpacing(15);
 
-      auto refreshPayrollData = [lblTotal, lblCount, breakdownTable]() {
-          double nTotal = 0.0;
-          int nCount = 0;
-          QSqlQuery q("SELECT COUNT(ID_PERSONNEL), SUM(SALAIRE_BRUT) FROM PERSONNEL");
-          if (q.next()) {
-              nCount = q.value(0).toInt();
-              nTotal = q.value(1).toDouble();
+      auto createKpi = [](const QString &label, const QString &gradient) -> QPair<QWidget*, QLabel*> {
+          QWidget *card = new QWidget();
+          card->setStyleSheet(QString("QWidget { background: %1; border-radius: 12px; }").arg(gradient));
+          QVBoxLayout *l = new QVBoxLayout(card);
+          l->setContentsMargins(20, 15, 20, 15);
+          QLabel *title = new QLabel(label);
+          title->setStyleSheet("font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.8); text-transform: uppercase; border: none; background: transparent;");
+          QLabel *val = new QLabel("...");
+          val->setStyleSheet("font-size: 24px; font-weight: 900; color: white; border: none; background: transparent;");
+          l->addWidget(title);
+          l->addWidget(val);
+          return {card, val};
+      };
+
+      auto kpiTotal = createKpi("Projected Weekly Burn", "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #111827, stop:1 #374151)");
+      auto kpiStaff = createKpi("Active Human Capital", "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #10b981, stop:1 #059669)");
+      auto kpiEfficiency = createKpi("Cost Per Shift", "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #3b82f6, stop:1 #2563eb)");
+
+      kpiLayout->addWidget(kpiTotal.first);
+      kpiLayout->addWidget(kpiStaff.first);
+      kpiLayout->addWidget(kpiEfficiency.first);
+      payrollLayout->addWidget(kpiRow);
+
+      QLabel *lblTotal = kpiTotal.second;
+      QLabel *lblCount = kpiStaff.second;
+      QLabel *lblEfficiency = kpiEfficiency.second;
+
+      QHBoxLayout *tablesLayout = new QHBoxLayout();
+      tablesLayout->setSpacing(20);
+
+      QWidget *activeContainer = new QWidget();
+      QVBoxLayout *activeLayout = new QVBoxLayout(activeContainer);
+      activeLayout->setContentsMargins(0, 0, 0, 0);
+      QLabel *activeTitle = new QLabel("Active Personnel");
+      activeTitle->setStyleSheet("font-weight: 800; font-size: 16px; color: #1f2937; margin-bottom: 5px;");
+      
+      QTableWidget *activeTable = new QTableWidget();
+      activeTable->setColumnCount(4);
+      activeTable->setHorizontalHeaderLabels({"CIN", "Employee Name", "Role", "Gross Salary"});
+      activeTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+      activeTable->verticalHeader()->setVisible(false);
+      activeTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+      activeTable->setStyleSheet(
+          "QTableWidget { border: 1px solid #e5e7eb; border-radius: 8px; background-color: #ffffff; gridline-color: #f3f4f6; alternate-background-color: #fafaf9; }"
+          "QHeaderView::section { background-color: #f9fafb; padding: 14px 12px; border: none; border-bottom: 2px solid #e5e7eb; font-weight: 700; color: #4b5563; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; border-top-left-radius: 8px; border-top-right-radius: 8px; }"
+          "QTableWidget::item { padding: 8px 12px; border-bottom: 1px solid #f3f4f6; color: #1f2937; font-size: 13px; }"
+          "QTableWidget::item:selected { background-color: #ecfdf5; color: #065f46; }"
+      );
+      activeLayout->addWidget(activeTitle);
+      activeLayout->addWidget(activeTable);
+
+      QWidget *inactiveContainer = new QWidget();
+      QVBoxLayout *inactiveLayout = new QVBoxLayout(inactiveContainer);
+      inactiveLayout->setContentsMargins(0, 0, 0, 0);
+      QLabel *inactiveTitle = new QLabel("Inactive / On Leave");
+      inactiveTitle->setStyleSheet("font-weight: 800; font-size: 16px; color: #1f2937; margin-bottom: 5px;");
+      
+      QTableWidget *inactiveTable = new QTableWidget();
+      inactiveTable->setColumnCount(4);
+      inactiveTable->setHorizontalHeaderLabels({"CIN", "Employee Name", "Role", "Gross Salary"});
+      inactiveTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+      inactiveTable->verticalHeader()->setVisible(false);
+      inactiveTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+      inactiveTable->setStyleSheet(activeTable->styleSheet());
+      
+      inactiveLayout->addWidget(inactiveTitle);
+      inactiveLayout->addWidget(inactiveTable);
+
+      tablesLayout->addWidget(activeContainer);
+      tablesLayout->addWidget(inactiveContainer);
+      
+      payrollLayout->addLayout(tablesLayout);
+
+      auto refreshPayrollData = [lblTotal, lblCount, lblEfficiency, activeTable, inactiveTable]() {
+          int cw = QDate::currentDate().weekNumber();
+          int cy = QDate::currentDate().year();
+          
+          double weekTotal = 0.0;
+          int activeCount = 0;
+          int totalShifts = 0;
+
+          // 1. Identify everyone who has APPROVED leave this week
+          QSet<int> onLeaveIds;
+          QSqlQuery lq;
+          lq.prepare("SELECT DISTINCT ID_PERSONNEL FROM SHIFT_SCHEDULE WHERE WEEK_NUMBER = :wk AND YEAR = :yr AND LEAVE_APPROVED = 'Approved'");
+          lq.bindValue(":wk", cw);
+          lq.bindValue(":yr", cy);
+          lq.exec();
+          while(lq.next()) onLeaveIds.insert(lq.value(0).toInt());
+
+          // 2. Count total planned shifts for efficiency ratio
+          QSqlQuery sq;
+          sq.prepare("SELECT COUNT(*) FROM SHIFT_SCHEDULE WHERE WEEK_NUMBER = :wk AND YEAR = :yr AND LEAVE_START IS NULL");
+          sq.bindValue(":wk", cw);
+          sq.bindValue(":yr", cy);
+          sq.exec();
+          if (sq.next()) totalShifts = sq.value(0).toInt();
+
+          activeTable->setRowCount(0);
+          inactiveTable->setRowCount(0);
+
+          QSqlQuery q("SELECT ID_PERSONNEL, NOM_PERSONNEL, ROLE, SALAIRE_BRUT, STATUS FROM PERSONNEL");
+          int aRow = 0, iRow = 0;
+          while(q.next()) {
+              int id = q.value(0).toInt();
+              QString name = q.value(1).toString();
+              QString role = q.value(2).toString();
+              double salary = q.value(3).toDouble();
+              QString status = q.value(4).toString();
+              
+              bool currentlyOnLeave = onLeaveIds.contains(id) || (status != "Active");
+              QTableWidget *target = currentlyOnLeave ? inactiveTable : activeTable;
+              int row = currentlyOnLeave ? iRow++ : aRow++;
+              
+              target->insertRow(row);
+              target->setItem(row, 0, new QTableWidgetItem(QString::number(id)));
+              target->setItem(row, 1, new QTableWidgetItem(name));
+              target->setItem(row, 2, new QTableWidgetItem(role));
+              
+              double weeklyShare = salary / 4.0;
+              QTableWidgetItem *valItem = new QTableWidgetItem(QString("%1 TND").arg(weeklyShare, 0, 'f', 2));
+              valItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+              target->setItem(row, 3, valItem);
+              
+              if (!currentlyOnLeave) {
+                  weekTotal += weeklyShare;
+                  activeCount++;
+              }
           }
-          lblTotal->setText(QString("%1 TND / Month").arg(nTotal, 0, 'f', 2));
-          lblCount->setText(QString("Active Staff Contributing to Payroll: %1").arg(nCount));
 
-          breakdownTable->setRowCount(0);
-          QSqlQuery lq("SELECT ID_PERSONNEL, NOM_PERSONNEL, ROLE, SALAIRE_BRUT FROM PERSONNEL");
-          int row = 0;
-          while (lq.next()) {
-              breakdownTable->insertRow(row);
-              breakdownTable->setItem(row, 0, new QTableWidgetItem(lq.value(0).toString()));
-              breakdownTable->setItem(row, 1, new QTableWidgetItem(lq.value(1).toString()));
-              breakdownTable->setItem(row, 2, new QTableWidgetItem(lq.value(2).toString()));
-
-              QTableWidgetItem *moneyItem = new QTableWidgetItem(QString("%1 TND").arg(lq.value(3).toDouble(), 0, 'f', 2));
-              moneyItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-              breakdownTable->setItem(row, 3, moneyItem);
-
-              row++;
-          }
+          lblTotal->setText(QString("%1 TND").arg(weekTotal, 0, 'f', 2));
+          lblCount->setText(QString("%1 Staff Scheduled").arg(activeCount));
+          
+          double costPerShift = (totalShifts > 0) ? (weekTotal / totalShifts) : 0.0;
+          lblEfficiency->setText(QString("%1 TND").arg(costPerShift, 0, 'f', 2));
       };
 
       QObject::connect(btnRefreshPayroll, &QPushButton::clicked, refreshPayrollData);
-      refreshPayrollData();
-
+      refreshPayrollData(); 
+      
       cLayout->addWidget(payrollWidget);
     } else if (name == "Analytics") {
-      QScrollArea *scrollArea = new QScrollArea();
-      scrollArea->setWidgetResizable(true);
-      scrollArea->setFrameShape(QFrame::NoFrame);
-      scrollArea->setStyleSheet("QScrollArea { background-color: transparent; } QWidget#StatsContainer { background-color: transparent; }");
-
       QWidget *statsContainer = new QWidget();
       statsContainer->setObjectName("StatsContainer");
+      statsContainer->setStyleSheet("QWidget#StatsContainer { background-color: transparent; }");
       QVBoxLayout *statsLayout = new QVBoxLayout(statsContainer);
-      statsLayout->setSpacing(30);
+      statsLayout->setSpacing(20);
 
-      QPushButton *btnRefreshAnalytics = new QPushButton("Refresh Analytics");
-      btnRefreshAnalytics->setStyleSheet(getButtonStyle());
+      QWidget *headerWidget = new QWidget();
+      QHBoxLayout *headerLayout = new QHBoxLayout(headerWidget);
+      headerLayout->setContentsMargins(0, 0, 0, 10);
+      
+      QLabel *title = new QLabel("Executive Dashboard");
+      title->setStyleSheet("font-size: 26px; font-weight: 800; color: #111827; letter-spacing: -0.5px;");
+      
+      QPushButton *btnRefreshAnalytics = new QPushButton("    Refresh Analytics    ");
+      btnRefreshAnalytics->setStyleSheet("QPushButton { background-color: #f3f4f6; color: #374151; font-weight: bold; font-size: 13px; border-radius: 8px; padding: 10px 20px; border: 1px solid #d1d5db; } QPushButton:hover { background-color: #e5e7eb; border-color: #9ca3af; }");
       btnRefreshAnalytics->setCursor(Qt::PointingHandCursor);
-      btnRefreshAnalytics->setFixedWidth(200);
-      btnRefreshAnalytics->setFixedHeight(45);
+      btnRefreshAnalytics->setFixedHeight(42);
+      
+      headerLayout->addWidget(title);
+      headerLayout->addStretch();
+      headerLayout->addWidget(btnRefreshAnalytics);
+      statsLayout->addWidget(headerWidget);
 
-      QHBoxLayout *btnLayout = new QHBoxLayout();
-      btnLayout->addStretch();
-      btnLayout->addWidget(btnRefreshAnalytics);
-      statsLayout->addLayout(btnLayout);
+      QWidget *kpiContainer = new QWidget();
+      QHBoxLayout *kpiLayout = new QHBoxLayout(kpiContainer);
+      kpiLayout->setSpacing(15);
+      kpiLayout->setContentsMargins(0, 0, 0, 0);
 
-      QVBoxLayout *chartsLayout = new QVBoxLayout();
+      auto createKpiCard = [](const QString &label, QLabel*& valLabelRef) -> QWidget* {
+          QWidget *card = new QWidget();
+          card->setStyleSheet("QWidget { background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; }");
+          QVBoxLayout *l = new QVBoxLayout(card);
+          l->setContentsMargins(20, 20, 20, 20);
+          
+          QLabel *lbl = new QLabel(label);
+          lbl->setStyleSheet("font-weight: 700; color: #6b7280; font-size: 12px; text-transform: uppercase; border: none;");
+          valLabelRef = new QLabel("...");
+          valLabelRef->setStyleSheet("font-weight: 900; color: #111827; font-size: 24px; border: none;");
+          
+          l->addWidget(lbl);
+          l->addWidget(valLabelRef);
+          return card;
+      };
+
+      QLabel *lblTotalHeadcount, *lblActiveRatio, *lblAvgSalary;
+      kpiLayout->addWidget(createKpiCard("Total Directory Headcount", lblTotalHeadcount));
+      kpiLayout->addWidget(createKpiCard("Active Personnel Ratio", lblActiveRatio));
+      kpiLayout->addWidget(createKpiCard("Global Average Salary", lblAvgSalary));
+      
+      statsLayout->addWidget(kpiContainer);
+
+      QGridLayout *chartsLayout = new QGridLayout();
+      chartsLayout->setSpacing(20);
       statsLayout->addLayout(chartsLayout);
+      
+      auto refreshAnalytics = [lblTotalHeadcount, lblActiveRatio, lblAvgSalary, chartsLayout]() {
+          QSqlQuery kpiQ("SELECT COUNT(*), SUM(CASE WHEN STATUS = 'Active' THEN 1 ELSE 0 END), AVG(SALAIRE_BRUT) FROM PERSONNEL");
+          if (kpiQ.next()) {
+              int totalCount = kpiQ.value(0).toInt();
+              int activeCount = kpiQ.value(1).toInt();
+              double avgSal = kpiQ.value(2).toDouble();
+              
+              lblTotalHeadcount->setText(QString::number(totalCount));
+              double ratio = totalCount > 0 ? (double)activeCount / totalCount * 100.0 : 0.0;
+              lblActiveRatio->setText(QString("%1% (%2 Active)").arg(ratio, 0, 'f', 1).arg(activeCount));
+              lblAvgSalary->setText(QString("%1 TND").arg(avgSal, 0, 'f', 2));
+          }
 
-      auto refreshAnalytics = [chartsLayout]() {
-          // Clear old charts cleanly
           QLayoutItem *child;
           while ((child = chartsLayout->takeAt(0)) != nullptr) {
               if (child->widget()) {
@@ -6107,40 +6313,61 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
               }
               delete child;
           }
+          
+          QList<QColor> colors = {QColor(59, 130, 246), QColor(16, 185, 129), QColor(245, 158, 11), QColor(139, 92, 246), QColor(239, 68, 68), QColor(14, 165, 233)};
+          
+          auto wrapChart = [](QWidget* chart) -> QWidget* {
+              QWidget *w = new QWidget();
+              w->setStyleSheet("QWidget { background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; }");
+              QVBoxLayout *v = new QVBoxLayout(w);
+              v->setContentsMargins(15, 15, 15, 15);
+              v->addWidget(chart);
+              return w;
+          };
 
           GenericBarChart *chart1 = new GenericBarChart("Employee Headcount by Role");
           QSqlQuery q1("SELECT ROLE, COUNT(*) FROM PERSONNEL GROUP BY ROLE");
-          QList<QColor> colors = {QColor(52, 152, 219), QColor(46, 204, 113), QColor(241, 196, 15), QColor(155, 89, 182), QColor(231, 76, 60), QColor(26, 188, 156)};
           int cIdx = 0;
           while (q1.next()) {
               chart1->addBar(q1.value(0).toString(), q1.value(1).toInt(), colors[cIdx % colors.size()]);
               cIdx++;
           }
-          QWidget *c1Wrapper = new QWidget();
-          c1Wrapper->setStyleSheet(getCardStyle());
-          QVBoxLayout *v1 = new QVBoxLayout(c1Wrapper);
-          v1->addWidget(chart1);
-          chartsLayout->addWidget(c1Wrapper);
+          chartsLayout->addWidget(wrapChart(chart1), 0, 0);
 
-          GenericBarChart *chart2 = new GenericBarChart("Average Salary by Role");
-          QSqlQuery q2("SELECT ROLE, AVG(SALAIRE_BRUT) FROM PERSONNEL GROUP BY ROLE");
+          GenericBarChart *chart2 = new GenericBarChart("Active Monthly Expense by Role");
+          QSqlQuery q2("SELECT ROLE, SUM(SALAIRE_BRUT) FROM PERSONNEL WHERE STATUS = 'Active' GROUP BY ROLE");
           cIdx = 0;
           while (q2.next()) {
-              chart2->addBar(q2.value(0).toString(), q2.value(1).toInt(), colors[(cIdx+3) % colors.size()]);
+              chart2->addBar(q2.value(0).toString(), q2.value(1).toInt(), colors[(cIdx+1) % colors.size()]);
               cIdx++;
           }
-          QWidget *c2Wrapper = new QWidget();
-          c2Wrapper->setStyleSheet(getCardStyle());
-          QVBoxLayout *v2 = new QVBoxLayout(c2Wrapper);
-          v2->addWidget(chart2);
-          chartsLayout->addWidget(c2Wrapper);
+          chartsLayout->addWidget(wrapChart(chart2), 0, 1);
+
+          GenericBarChart *chart3 = new GenericBarChart("Personnel by Employment Status");
+          QSqlQuery q3("SELECT COALESCE(STATUS, 'Unknown'), COUNT(*) FROM PERSONNEL GROUP BY STATUS");
+          cIdx = 0;
+          while (q3.next()) {
+              QString statusName = q3.value(0).toString();
+              if (statusName.trimmed().isEmpty()) statusName = "Unknown";
+              chart3->addBar(statusName, q3.value(1).toInt(), colors[(cIdx+2) % colors.size()]);
+              cIdx++;
+          }
+          chartsLayout->addWidget(wrapChart(chart3), 1, 0);
+
+          GenericBarChart *chart4 = new GenericBarChart("Average Active Salary by Role");
+          QSqlQuery q4("SELECT ROLE, AVG(SALAIRE_BRUT) FROM PERSONNEL WHERE STATUS = 'Active' GROUP BY ROLE");
+          cIdx = 0;
+          while (q4.next()) {
+              chart4->addBar(q4.value(0).toString(), q4.value(1).toInt(), colors[(cIdx+3) % colors.size()]);
+              cIdx++;
+          }
+          chartsLayout->addWidget(wrapChart(chart4), 1, 1);
       };
 
       QObject::connect(btnRefreshAnalytics, &QPushButton::clicked, refreshAnalytics);
       refreshAnalytics();
 
-      scrollArea->setWidget(statsContainer);
-      cLayout->addWidget(scrollArea);
+      cLayout->addWidget(statsContainer);
 
     } else if (name == "PDF Printing") {
       QWidget *formContainer = new QWidget();
@@ -6155,17 +6382,24 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
       QString labelStyle = getLabelStyle();
       QString inputStyle = getInputStyle();
 
-      vbox->addWidget(new QLabel("Employee Name:"));
-      QLineEdit *eName = new QLineEdit();
-      eName->setStyleSheet(inputStyle);
-      vbox->addWidget(eName);
-      vbox->addWidget(new QLabel("Start Date:"));
+      vbox->addWidget(new QLabel("Employee CIN (ID):"));
+      QLineEdit *eCin = new QLineEdit();
+      eCin->setStyleSheet(inputStyle);
+      eCin->setPlaceholderText("Enter Employee ID (e.g. 1001)");
+      vbox->addWidget(eCin);
+      
+      vbox->addWidget(new QLabel("Start Date (YYYY-MM-DD):"));
       QLineEdit *sDate = new QLineEdit();
       sDate->setStyleSheet(inputStyle);
+      sDate->setInputMask("0000-00-00");
+      sDate->setText(QDate::currentDate().toString("yyyy-MM-dd"));
       vbox->addWidget(sDate);
-      vbox->addWidget(new QLabel("End Date:"));
+      
+      vbox->addWidget(new QLabel("End Date (YYYY-MM-DD):"));
       QLineEdit *eDate = new QLineEdit();
       eDate->setStyleSheet(inputStyle);
+      eDate->setInputMask("0000-00-00");
+      eDate->setText(QDate::currentDate().toString("yyyy-MM-dd"));
       vbox->addWidget(eDate);
       vbox->addWidget(new QLabel("Reason:"));
       QLineEdit *reason = new QLineEdit();
@@ -6174,27 +6408,269 @@ static QWidget *createPersonnelPage(QStackedWidget *&outNestedStack) {
 
       vbox->addSpacing(30);
 
+      QPushButton *btnSubmit = new QPushButton("Submit Leave Request \u2705");
+      btnSubmit->setStyleSheet("QPushButton { background-color: #1D9E75; color: white; border-radius: 6px; padding: 12px; font-weight: bold; font-size: 14px; border: none; } QPushButton:hover { background-color: #147b5b; }");
+      btnSubmit->setCursor(Qt::PointingHandCursor);
+      btnSubmit->setFixedHeight(50);
+      vbox->addWidget(btnSubmit);
+      
+      vbox->addSpacing(10);
+
       QPushButton *btnPrint = new QPushButton("Print Request to PDF");
-      btnPrint->setStyleSheet(getButtonStyle());
+      btnPrint->setStyleSheet("QPushButton { background-color: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 6px; padding: 10px; font-weight: bold; } QPushButton:hover { background-color: #e5e7eb; }");
       btnPrint->setCursor(Qt::PointingHandCursor);
-      btnPrint->setFixedHeight(45);
       vbox->addWidget(btnPrint);
       vbox->addStretch();
 
       cLayout->addWidget(formContainer);
 
+      QObject::connect(btnSubmit, &QPushButton::clicked, [=]() {
+          QString cin = eCin->text().trimmed();
+          QDate start = QDate::fromString(sDate->text(), "yyyy-MM-dd");
+          QDate end = QDate::fromString(eDate->text(), "yyyy-MM-dd");
+          QString note = reason->text().trimmed();
+          
+          if (cin.isEmpty() || !start.isValid() || !end.isValid()) {
+              QMessageBox::warning(nullptr, "Error", "Please provide a valid CIN and Dates (YYYY-MM-DD)");
+              return;
+          }
+          
+          // Verify Personnel exists
+          QSqlQuery v;
+          v.prepare("SELECT NOM_PERSONNEL FROM PERSONNEL WHERE ID_PERSONNEL = :id");
+          v.bindValue(":id", cin);
+          v.exec();
+          if (!v.next()) {
+              QMessageBox::warning(nullptr, "Error", "Employee ID " + cin + " not found!");
+              return;
+          }
+          
+          QSqlQuery q;
+          q.prepare("INSERT INTO SHIFT_SCHEDULE (ID, ID_PERSONNEL, WEEK_NUMBER, YEAR, SHIFT_TYPE, DAY_OF_WEEK, LEAVE_START, LEAVE_END, LEAVE_APPROVED) "
+                    "VALUES (NVL((SELECT MAX(ID) FROM SHIFT_SCHEDULE), 0) + 1, :id, :wk, :yr, 0, 0, :ls, :le, 'Pending')");
+          q.bindValue(":id", cin);
+          q.bindValue(":wk", start.weekNumber());
+          q.bindValue(":yr", start.year());
+          q.bindValue(":ls", start);
+          q.bindValue(":le", end);
+          
+          if (q.exec()) {
+              QMessageBox::information(nullptr, "Success", "Leave request for " + v.value(0).toString() + " submitted successfully!");
+              eCin->clear();
+              reason->clear();
+          } else {
+              QMessageBox::critical(nullptr, "Database Error", q.lastError().text());
+          }
+      });
+
       QObject::connect(btnPrint, &QPushButton::clicked, [=]() {
-        QMessageBox::information(nullptr, "Info",
-                                 "PDF Generation Service Started...");
+          QString cin = eCin->text().trimmed();
+          if (cin.isEmpty()) {
+              QMessageBox::warning(nullptr, "Incomplete Data", "Please enter a CIN before printing.");
+              return;
+          }
+
+          // Fetch Employee Details for the PDF
+          QString name = "Unknown", phone = "N/A", email = "N/A";
+          QSqlQuery detailQuery;
+          detailQuery.prepare("SELECT NOM_PERSONNEL, TEL, EMAIL FROM PERSONNEL WHERE ID_PERSONNEL = :id");
+          detailQuery.bindValue(":id", cin);
+          if (detailQuery.exec() && detailQuery.next()) {
+              name = detailQuery.value(0).toString();
+              phone = detailQuery.value(1).toString();
+              email = detailQuery.value(2).toString();
+          }
+
+          // 1. Resolve Path (Desktop)
+          QString desktopPath = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+          QString fileName = QString("%1/Leave_Request_%2.pdf").arg(desktopPath, name.replace(" ", "_"));
+          
+          // 2. Setup PDF Writer
+          QPdfWriter pdf(fileName);
+          pdf.setPageSize(QPageSize(QPageSize::A4));
+          pdf.setPageMargins(QMargins(30, 30, 30, 30));
+          
+          QPainter painter(&pdf);
+          if (!painter.isActive()) {
+              QMessageBox::critical(nullptr, "Error", "Failed to initialize PDF writer. Possible permission issue.");
+              return;
+          }
+
+          // 3. Draw Content
+          int y = 100;
+          
+          // Header / Branding
+          painter.setPen(QPen(QColor("#1D9E75"), 5));
+          painter.setFont(QFont("Arial", 24, QFont::Bold));
+          painter.drawText(QRect(0, y, 9000, 500), Qt::AlignCenter, "OIL PRESS TEAM");
+          y += 600;
+          
+          painter.setPen(QPen(Qt::black, 2));
+          painter.setFont(QFont("Arial", 16, QFont::DemiBold));
+          painter.drawText(QRect(0, y, 9000, 300), Qt::AlignCenter, "OFFICIAL LEAVE APPLICATION FORM");
+          y += 800;
+
+          // Body Content
+          auto drawLine = [&](QString label, QString val) {
+              painter.setFont(QFont("Arial", 11, QFont::Bold));
+              painter.drawText(500, y, label);
+              painter.setFont(QFont("Arial", 11, QFont::Normal));
+              painter.drawText(3000, y, val);
+              y += 400;
+          };
+
+          drawLine("EMPLOYEE ID (CIN):", cin);
+          drawLine("EMPLOYEE NAME:", name);
+          drawLine("PHONE CONTACT:", phone);
+          drawLine("EMAIL ADDRESS:", email);
+          drawLine("REQUEST DATE:", QDate::currentDate().toString("MMMM d, yyyy"));
+          drawLine("LEAVE START:", sDate->text());
+          drawLine("LEAVE END:", eDate->text());
+          drawLine("REASON / NOTES:", reason->text().isEmpty() ? "Standard Absence" : reason->text());
+          
+          y += 1000;
+          
+          // Guidelines
+          painter.setPen(QPen(Qt::gray));
+          QFont italicFont("Arial", 9);
+          italicFont.setItalic(true);
+          painter.setFont(italicFont);
+          painter.drawText(500, y, "NOTE: This request is subject to administrative approval via the Request Hub.");
+          y += 1200;
+
+          // Signature Area
+          painter.setPen(QPen(Qt::black, 2));
+          painter.drawLine(500, y, 4000, y);
+          painter.drawLine(5000, y, 8500, y);
+          y += 200;
+          painter.setFont(QFont("Arial", 10));
+          painter.drawText(500, y, "Employee Signature");
+          painter.drawText(5000, y, "Authorized Admin Signature");
+
+          painter.end();
+          
+          QMessageBox::information(nullptr, "PDF Generated", QString("Success! Document saved to your desktop:\n%1").arg(fileName));
+          QDesktopServices::openUrl(QUrl::fromLocalFile(desktopPath));
       });
 
     } else if (name == "Request Hub") {
-      cLayout->addWidget(createStyledTable(
-          "Pending Absence Requests",
-          {"Staff Member", "Type", "Duration", "Status"},
-          {{"Jane Smith", "Vacation", "Nov 5 - Nov 12", "Pending Approval"},
-           {"Robert Brown", "Sick Leave", "Oct 26", "Approved"}},
-          true, false, true));
+      QWidget *reqPage = new QWidget();
+      QVBoxLayout *reqLayout = new QVBoxLayout(reqPage);
+      reqLayout->setSpacing(15);
+      
+      QHBoxLayout *headerLine = new QHBoxLayout();
+      QLabel *reqTitle = new QLabel("Global Absence & Leave Database");
+      reqTitle->setStyleSheet("font-size: 20px; font-weight: 700; color: #1a1a1a;");
+      
+      QPushButton *btnRefresh = new QPushButton("Refresh List");
+      btnRefresh->setFixedWidth(120);
+      btnRefresh->setStyleSheet("QPushButton { background-color: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 4px; padding: 5px; font-weight: bold; } QPushButton:hover { background-color: #e5e7eb; }");
+      
+      headerLine->addWidget(reqTitle);
+      headerLine->addStretch();
+      headerLine->addWidget(btnRefresh);
+      reqLayout->addLayout(headerLine);
+      
+      QTableWidget *reqTable = new QTableWidget();
+      reqTable->setColumnCount(5);
+      reqTable->setHorizontalHeaderLabels({"Employee CIN", "Year / Week", "Leave Date", "Status", "Actions"});
+      reqTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+      reqTable->verticalHeader()->setVisible(false);
+      reqTable->setStyleSheet(
+          "QTableWidget { border: 1px solid #e5e7eb; border-radius: 8px; background: white; gridline-color: #f3f4f6; }"
+          "QHeaderView::section { background-color: #f9fafb; padding: 12px; border: none; border-bottom: 2px solid #e5e7eb; font-weight: bold; color: #4b5563; }"
+      );
+      
+      std::function<void()> refreshRequests;
+      refreshRequests = [reqTable, btnRefresh]() {
+          reqTable->setRowCount(0);
+          QSqlQuery qr("SELECT ID, ID_PERSONNEL, YEAR, WEEK_NUMBER, LEAVE_START, LEAVE_APPROVED, LEAVE_END FROM SHIFT_SCHEDULE WHERE LEAVE_START IS NOT NULL ORDER BY YEAR DESC, WEEK_NUMBER DESC, LEAVE_START DESC");
+          int r = 0;
+          while(qr.next()){
+              reqTable->insertRow(r);
+              reqTable->setItem(r, 0, new QTableWidgetItem(qr.value(1).toString()));
+              reqTable->setItem(r, 1, new QTableWidgetItem(qr.value(2).toString() + " / Week " + qr.value(3).toString()));
+              
+              QDate startDate = qr.value(4).toDate();
+              QDate endDate = qr.value(6).isNull() ? startDate : qr.value(6).toDate();
+              QString dateDisplay;
+              if (startDate != endDate) {
+                  dateDisplay = startDate.toString("MMM d") + " - " + endDate.toString("MMM d, yyyy");
+              } else {
+                  dateDisplay = startDate.toString("ddd, MMM d, yyyy");
+              }
+              reqTable->setItem(r, 2, new QTableWidgetItem(dateDisplay));
+              
+              QString statusText = qr.value(5).toString().isEmpty() ? "PENDING" : qr.value(5).toString().toUpper();
+              QTableWidgetItem *statusItem = new QTableWidgetItem(statusText);
+              statusItem->setTextAlignment(Qt::AlignCenter);
+              if (statusText == "APPROVED") statusItem->setForeground(QColor("#1D9E75"));
+              else if (statusText == "REJECTED") statusItem->setForeground(QColor("#E24B4A"));
+              else statusItem->setForeground(QColor("#EF9F27"));
+              reqTable->setItem(r, 3, statusItem);
+              
+              QWidget *actionGroup = new QWidget();
+              QHBoxLayout *aLayout = new QHBoxLayout(actionGroup);
+              aLayout->setContentsMargins(4,4,4,4);
+              aLayout->setSpacing(4);
+              
+              auto createActionBtn = [&](QString text, QString color, QString hover) {
+                  QPushButton *b = new QPushButton(text);
+                  b->setStyleSheet(QString("QPushButton { background: %1; color: white; border-radius: 4px; padding: 4px 8px; font-weight: bold; font-size: 11px; } QPushButton:hover { background: %2; }").arg(color, hover));
+                  b->setCursor(Qt::PointingHandCursor);
+                  return b;
+              };
+
+              QPushButton *btnApprove = createActionBtn("Approve", "#1D9E75", "#147b5b");
+              QPushButton *btnReject = createActionBtn("Reject", "#EF9F27", "#d98e1f");
+              QPushButton *btnDelete = createActionBtn("Delete", "#E24B4A", "#c53030");
+
+              int id = qr.value(0).toInt();
+              int cinId = qr.value(1).toInt();
+
+              QObject::connect(btnApprove, &QPushButton::clicked, [id, cinId, startDate, endDate, btnRefresh](){
+                  QSqlQuery up; up.prepare("UPDATE SHIFT_SCHEDULE SET LEAVE_APPROVED = 'Approved' WHERE ID = :id");
+                  up.bindValue(":id", id); up.exec(); 
+                  
+                  // Enforce conflict removal: cancel all actual assigned shifts taking place within the approved leave window
+                  QDate current = startDate;
+                  while (current <= endDate) {
+                      int cw = current.weekNumber();
+                      int cy = current.year();
+                      int cd = current.dayOfWeek() - 1; // Qt 1-7 (Mon-Sun) -> Database 0-6
+                      QSqlQuery del; del.prepare("DELETE FROM SHIFT_SCHEDULE WHERE ID_PERSONNEL = :cin AND WEEK_NUMBER = :wk AND YEAR = :yr AND DAY_OF_WEEK = :day AND LEAVE_START IS NULL");
+                      del.bindValue(":cin", cinId);
+                      del.bindValue(":wk", cw);
+                      del.bindValue(":yr", cy);
+                      del.bindValue(":day", cd);
+                      del.exec();
+                      current = current.addDays(1);
+                  }
+                  btnRefresh->click();
+              });
+              QObject::connect(btnReject, &QPushButton::clicked, [id, btnRefresh](){
+                  QSqlQuery up; up.prepare("UPDATE SHIFT_SCHEDULE SET LEAVE_APPROVED = 'Rejected' WHERE ID = :id");
+                  up.bindValue(":id", id); up.exec(); btnRefresh->click();
+              });
+              QObject::connect(btnDelete, &QPushButton::clicked, [id, btnRefresh](){
+                  if (QMessageBox::question(nullptr, "Confirm", "Delete this leave record permanently?") == QMessageBox::Yes) {
+                      QSqlQuery del; del.prepare("DELETE FROM SHIFT_SCHEDULE WHERE ID = :id");
+                      del.bindValue(":id", id); del.exec(); btnRefresh->click();
+                  }
+              });
+
+              aLayout->addWidget(btnApprove);
+              aLayout->addWidget(btnReject);
+              aLayout->addWidget(btnDelete);
+              reqTable->setCellWidget(r, 4, actionGroup);
+              r++;
+          }
+      };
+      
+      QObject::connect(btnRefresh, &QPushButton::clicked, refreshRequests);
+      refreshRequests();
+      reqLayout->addWidget(reqTable);
+      cLayout->addWidget(reqPage);
     }
     cLayout->addStretch();
     outNestedStack->addWidget(content);
@@ -6258,6 +6734,28 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   } else {
       qDebug() << "Failed to open Serial Port.";
   }
+
+  // --- Arduino Hardware Synchronization Polling (Global Alarm) ---
+  QTimer *dbPollTimer = new QTimer(this);
+  static QString lastSentState = "";
+  QObject::connect(dbPollTimer, &QTimer::timeout, [this]() {
+      if (!serial || !serial->isOpen()) return;
+
+      // Check if ANY machine is in danger
+      QSqlQuery q("SELECT COUNT(*) FROM MACHINE WHERE ETAT_MACHINE = 'En danger'");
+      if (q.next()) {
+          int dangerCount = q.value(0).toInt();
+          QString commandToSend = (dangerCount > 0) ? "DANGER\n" : "SAFE\n";
+          
+          if (commandToSend != lastSentState) {
+              serial->write(commandToSend.toUtf8());
+              serial->flush();
+              qDebug() << "[SERIAL SYNC] Global state changed to" << (dangerCount > 0 ? "DANGER" : "SAFE") << "- Sent command:" << commandToSend.trimmed();
+              lastSentState = commandToSend;
+          }
+      }
+  });
+  dbPollTimer->start(2000);
 
   // --- Main Application UI ---
   QWidget *mainAppWidget = new QWidget(this);
@@ -6483,6 +6981,23 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     stackedWidget->setCurrentIndex(index);
     for (auto &item : navItems)
       item.btn->setChecked(item.btn == activeBtn);
+
+    // Refresh Financial Management Order Combo if switching to Finance (index 2)
+    if (index == 2) {
+        QComboBox *combo = stackedWidget->widget(2)->findChild<QComboBox*>("financeOrderCombo");
+        if (combo) {
+            int currentId = combo->currentData().toInt();
+            combo->clear();
+            combo->addItem("None", 0);
+            QSqlQuery q("SELECT ID_COMMANDE, REFERENCE FROM COMMANDE");
+            while (q.next()) {
+                int id = q.value(0).toInt();
+                QString ref = q.value(1).toString();
+                combo->addItem(ref, id);
+                if (id == currentId) combo->setCurrentIndex(combo->count() - 1);
+            }
+        }
+    }
   };
 
   connect(btnHome, &QPushButton::clicked, this,
@@ -6592,7 +7107,8 @@ void MainWindow::handleSerialDataReady()
             
             int machineId = -1;
             QSqlQuery findId;
-            findId.prepare("SELECT ID_MACHINE FROM MACHINE WHERE CODE = :code");
+            // Use TRIM() because Oracle TO_CHAR pads positive numbers with a leading space.
+            findId.prepare("SELECT ID_MACHINE FROM MACHINE WHERE CODE = :code OR TRIM(TO_CHAR(ID_MACHINE)) = :code");
             findId.bindValue(":code", machineCodeStr);
             if (findId.exec() && findId.next()) {
                 machineId = findId.value(0).toInt();
@@ -6601,6 +7117,7 @@ void MainWindow::handleSerialDataReady()
                 m_isAlertShowing = false;
                 return;
             }
+
             // User requested Smoke as default even for generic Gas messages
             QString typeStr = "Smoke"; 
             qDebug() << "[SERIAL] " << typeStr << " Alert for Machine ID:" << machineId;
@@ -6625,6 +7142,7 @@ void MainWindow::handleSerialDataReady()
                     QString adminEmail = emailQuery.value(0).toString();
                     EmailAPI* emailApi = new EmailAPI(this);
                     emailApi->setCredentials(ConfigManager::getInstance().getBrevoKey());
+                    emailApi->setSenderEmail(ConfigManager::getInstance().getSenderEmail());
                     
                     QString subject = QString("URGENT: %1 Detected on Machine %2").arg(typeStr).arg(machineId);
                     QString body = QString("A %1 leak has been detected on Machine ID %2.\n\nThe machine status is set to 'En danger'.").arg(typeStr.toLower()).arg(machineId);

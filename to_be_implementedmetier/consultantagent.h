@@ -18,11 +18,9 @@ public:
     explicit ConsultantAgent(QObject *parent = nullptr);
     void requestAiAdvice(const QString &userInput);
     void auditInventory();
-    void requestPriceForecast();
 
 signals:
     void responseReady(const QString &response);
-    void forecastReady(const QJsonArray &forecast);
 
 private slots:
     void handleAiResponse(QNetworkReply *reply);

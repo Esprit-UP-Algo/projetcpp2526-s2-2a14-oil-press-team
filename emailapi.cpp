@@ -12,6 +12,13 @@ void EmailAPI::setCredentials(const QString &apiKey)
     m_apiKey = apiKey;
 }
 
+void EmailAPI::setSenderEmail(const QString &email)
+{
+    if (!email.isEmpty()) {
+        m_senderEmail = email;
+    }
+}
+
 void EmailAPI::sendEmail(const QString &to, const QString &subject, const QString &body)
 {
     QUrl url("https://api.brevo.com/v3/smtp/email");

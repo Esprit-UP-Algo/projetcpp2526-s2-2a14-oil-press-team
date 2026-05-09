@@ -74,6 +74,25 @@ bool Connection::createconnect()
             updateCode.exec("UPDATE MACHINE SET CODE = TO_CHAR(MOD(ABS(DBMS_RANDOM.RANDOM), 9000) + 1000) WHERE CODE IS NULL");
             qDebug() << "Migration: added CODE column to MACHINE";
         }
+
+        // --- Auto-migration: ensure SHIFT_SCHEDULE table exists ---
+        QSqlQuery checkShiftTable;
+        checkShiftTable.exec("SELECT COUNT(*) FROM USER_TABLES WHERE TABLE_NAME='SHIFT_SCHEDULE'");
+        if (checkShiftTable.next() && checkShiftTable.value(0).toInt() == 0) {
+            QSqlQuery createShift;
+            createShift.exec("CREATE TABLE SHIFT_SCHEDULE ("
+                             "ID NUMBER PRIMARY KEY, "
+                             "ID_PERSONNEL NUMBER, "
+                             "WEEK_NUMBER NUMBER, "
+                             "YEAR NUMBER, "
+                             "SHIFT_TYPE NUMBER, "
+                             "DAY_OF_WEEK NUMBER, "
+                             "LEAVE_START DATE, "
+                             "LEAVE_END DATE, "
+                             "LEAVE_APPROVED VARCHAR2(50), "
+                             "CONSTRAINT fk_personnel_shift FOREIGN KEY (ID_PERSONNEL) REFERENCES PERSONNEL(ID_PERSONNEL) ON DELETE CASCADE)");
+            qDebug() << "Migration: created SHIFT_SCHEDULE table";
+        }
     } else {
         lastError = db.lastError().text();
     }

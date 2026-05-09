@@ -9,7 +9,7 @@ void MarketAPI::fetchNews(const QString &query)
 {
     // NewsAPI.org URL - Everything about olive oil market
     // IMPORTANT: Visit https://newsapi.org to get your own FREE API key
-    QString apiKey = "18b5988d0c2347fcbd1d03032530c2c3"; 
+    QString apiKey = "key18b5988d0c2347fcbd1d03032530c2c3";
     
     QUrl url(QString("https://newsapi.org/v2/everything?q=%1&sortBy=publishedAt&pageSize=12")
              .arg(query));

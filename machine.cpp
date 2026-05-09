@@ -97,24 +97,30 @@ bool Machine::ajouter()
 bool Machine::supprimer(int id)
 {
     QSqlQuery query;
-    
-    // 1. Delete linked records to avoid ORA-02292 (Foreign Key constraints)
-    // Clear production records
+
+    // 1. Delete all child records to avoid FK constraint violations (ORA-02292)
+
+    // Clear alert records referencing this machine
+    query.prepare("DELETE FROM ALERT WHERE ID_MACHINE = :id");
+    query.bindValue(":id", id);
+    query.exec();
+
+    // Clear PRODUIRE records (junction table: machine <-> article)
     query.prepare("DELETE FROM PRODUIRE WHERE ID_MACHINE = :id");
     query.bindValue(":id", id);
     query.exec();
 
-    // Clear interventions
+    // Clear interventions (junction table: machine <-> personnel)
     query.prepare("DELETE FROM INTERVENIR WHERE ID_MACHINE = :id");
     query.bindValue(":id", id);
     query.exec();
 
-    // Clear linked products (orphaned batches)
+    // Clear linked product batches
     query.prepare("DELETE FROM PRODUIT WHERE ID_MACHINE = :id");
     query.bindValue(":id", id);
     query.exec();
 
-    // 2. Finally delete the machine
+    // 2. Finally delete the machine itself
     query.prepare("DELETE FROM MACHINE WHERE ID_MACHINE = :id");
     query.bindValue(":id", id);
 

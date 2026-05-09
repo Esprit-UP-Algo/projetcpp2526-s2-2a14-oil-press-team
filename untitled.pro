@@ -29,7 +29,8 @@ SOURCES += \
     dealgenerator.cpp \
     workforceplanner.cpp \
     anomalyapi.cpp \
-    ocrscannerapi.cpp
+    ocrscannerapi.cpp \
+    intervention.cpp
 
 HEADERS += \
     article.h \
@@ -53,7 +54,8 @@ HEADERS += \
     workforceplanner.h \
     anomalyapi.h \
     ocrscannerapi.h \
-    GasAlertWidget.h
+    GasAlertWidget.h \
+    intervention.h
 
 FORMS += \
     mainwindow.ui
